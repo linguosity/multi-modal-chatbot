@@ -12,20 +12,26 @@ export default function AboutCard() {
     <div className="max-w-xl mx-auto mt-10">
       <Card>
         <CardHeader>
-          <CardTitle>Next AI SDK Lite</CardTitle>
-          <CardDescription>A no bells or whistles AI starter kit</CardDescription>
+          <CardTitle>Linguosity AI Assistant</CardTitle>
+          <CardDescription>Your speech-language pathology companion</CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground/90 leading-normal prose"> 
-          <p className="mb-3">A simplified Next.js AI starter kit designed with simplicity and speed in mind.</p>
-          <p className="mb-3">Built with Next.js, AI SDK, Tailwind, Typescript and shadcn you can build a bare minimum AI Chatbot with only an environment variable. Based off the popular <Link href="https://chat.vercel.ai/">Next AI Chatbot</Link> the aim for this project is to remove any dependency outside of basic functionality and examples with an emphasis on making changes and experimenting with the AI SDK. </p>
-          <p className="mb-3 font-semibold">Big Opinions:</p>
-          <ul className="flex flex-col mb-2">
-            <li>→ Speed to learning and experimenting AI SDK</li>
-            <li>→ App Router, Server Actions, React Server Components</li>
-            <li>→ No auth, storage or sharing</li>
-            <li></li>
+          <p className="mb-3">Welcome to your specialized SLP AI assistant. Ask me anything related to speech and language pathology!</p>
+          <p className="mb-3">I can help you with:</p>
+          <ul className="flex flex-col mb-4 space-y-2">
+            <li>→ Report writing suggestions and templates</li>
+            <li>→ Evidence-based intervention strategies</li>
+            <li>→ Eligibility criteria interpretation</li>
+            <li>→ Therapy activity ideas for specific goals</li>
+            <li>→ Professional development resources</li>
           </ul>
-          <p><Link href="https://github.com/mattjared/nextjs-ai-lite" className="underline">Fork the repo and get hacking</Link> </p>
+          <p className="mb-3">Try asking:</p>
+          <ul className="flex flex-col mb-4 space-y-2">
+            <li>• "Help me write a goal for a 5-year-old with apraxia"</li>
+            <li>• "What assessments are recommended for bilingual students?"</li>
+            <li>• "Generate a paragraph about articulation progress for my report"</li>
+          </ul>
+          <p><Link href="/dashboard" className="underline">Return to dashboard</Link></p>
         </CardContent>
       </Card>
     </div>

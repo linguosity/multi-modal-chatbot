@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Text Editor Tool Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.5;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: #333;
+        }
+        h1 {
+            color: #6366f1;
+            margin-bottom: 1rem;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+        .card {
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            background-color: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .card-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .form-control {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 0.25rem;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+        textarea {
+            min-height: 100px;
+        }
+        button {
+            background-color: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 0.25rem;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #4f46e5;
+        }
+        button:disabled {
+            background-color: #cbd5e0;
+            cursor: not-allowed;
+        }
+        .error {
+            background-color: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #b91c1c;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+        }
+        .success {
+            background-color: #d1fae5;
+            border: 1px solid #6ee7b7;
+            color: #047857;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+        }
+        .hidden {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border-left-color: #6366f1;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        code {
+            background-color: #f1f5f9;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        pre {
+            background-color: #f1f5f9;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Claude Text Editor Tool Test</h1>
+    <p class="description">
+        This page demonstrates Claude's text editor tool making precise edits to text. 
+        Enter your API key and then enter the new text you want to incorporate.
+    </p>
+
+    <div class="card">
+        <div class="card-title">API Settings</div>
+        <div class="form-control">
+            <label for="api-key">Anthropic API Key</label>
+            <input type="password" id="api-key" placeholder="sk-ant-..." />
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Text Editor</div>
+        <div class="form-control">
+            <label for="sample-text">Sample Text</label>
+            <textarea id="sample-text" readonly>This is sample text that will be modified by Claude's text editor tool. It demonstrates the surgical precision of Claude's text editing capabilities.</textarea>
+        </div>
+        <div class="form-control">
+            <label for="new-text">New Text to Incorporate</label>
+            <input type="text" id="new-text" placeholder="Enter text to add or modify..." />
+        </div>
+        <button id="update-btn" onclick="updateText()">Update Text</button>
+        <div id="loading" class="hidden">
+            <span class="spinner"></span> Processing...
+        </div>
+    </div>
+
+    <div id="error-message" class="error hidden"></div>
+    <div id="success-message" class="success hidden"></div>
+    
+    <div id="response-details" class="card hidden">
+        <div class="card-title">Claude Response Details</div>
+        <pre id="response-json"></pre>
+    </div>
+    
+    <script>
+        // Helper function to count occurrences of a substring in a string
+        function countOccurrences(str, subStr) {
+            // Escape special regex characters to avoid issues with regex parsing
+            const escapedSubStr = subStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escapedSubStr, 'g');
+            const matches = str.match(regex);
+            return matches ? matches.length : 0;
+        }
+        
+        // Helper function to escape HTML for safe display
+        function htmlEscape(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        
+        // Helper function to truncate text with ellipsis
+        function truncateText(str, maxLength) {
+            if (str.length <= maxLength) return str;
+            return str.slice(0, maxLength - 3) + '...';
+        }
+        
+        // Mock function to simulate two-way conversation with Claude
+        async function continueConversationWithClaude(claudeResponse, toolResult) {
+            console.log('Continuing conversation with Claude', {
+                claudeResponse,
+                toolResult
+            });
+            
+            // In a real implementation, you would send the tool result back to Claude
+            // and get a new response, but for this demo we just log the information
+            return {
+                message: "Tool result received by Claude"
+            };
+        }
+        
+        // Main function to update text using Claude's text editor tool
+        async function updateText() {
+            const apiKey = document.getElementById('api-key').value;
+            const sampleText = document.getElementById('sample-text').value;
+            const newText = document.getElementById('new-text').value;
+            const errorMessage = document.getElementById('error-message');
+            const successMessage = document.getElementById('success-message');
+            const loading = document.getElementById('loading');
+            const updateBtn = document.getElementById('update-btn');
+            const responseDetails = document.getElementById('response-details');
+            const responseJson = document.getElementById('response-json');
+            
+            // Hide any previous messages and details
+            errorMessage.classList.add('hidden');
+            successMessage.classList.add('hidden');
+            responseDetails.classList.add('hidden');
+            
+            // Validate inputs
+            if (!apiKey) {
+                errorMessage.textContent = 'Please enter your Anthropic API key';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+            
+            if (!newText) {
+                errorMessage.textContent = 'Please enter text to incorporate';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+            
+            // Show loading state
+            loading.classList.remove('hidden');
+            updateBtn.disabled = true;
+            
+            try {
+                // Call Claude API with the text editor tool
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-3-7-sonnet-20250219',
+                        max_tokens: 1024,
+                        tools: [
+                            {
+                                type: 'text_editor_20250124',
+                                name: 'str_replace_editor'
+                            }
+                        ],
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'You are an expert text editor that specializes in making precise edits to text. Your task is to incorporate the user\'s input text in a natural way into the original text. Use the text editor tool to make surgical replacements that integrate the new text seamlessly.'
+                            },
+                            {
+                                role: 'user',
+                                content: `I have this original text:
+"${sampleText}"
+
+I want to incorporate this new text:
+"${newText}"
+
+Please use the text editor tool to modify the original text to incorporate my new text in a natural way.
+Make minimal changes and ensure the result reads naturally.`
+                            }
+                        ]
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || `API error: ${response.status}`);
+                }
+                
+                const claudeResponse = await response.json();
+                console.log('Claude response:', claudeResponse);
+                
+                // Display raw response in details section
+                responseJson.textContent = JSON.stringify(claudeResponse, null, 2);
+                responseDetails.classList.remove('hidden');
+                
+                // Extract tool use from Claude's response
+                const toolUseBlock = claudeResponse.content.find(block => 
+                    block.type === 'tool_use' && 
+                    block.name === 'str_replace_editor'
+                );
+                
+                if (toolUseBlock && toolUseBlock.input) {
+                    const command = toolUseBlock.input;
+                    
+                    if (command.command === 'str_replace') {
+                        // Check if the text to replace exists exactly once in the original text
+                        const occurrences = countOccurrences(sampleText, command.old_str);
+                        
+                        if (occurrences === 0) {
+                            // Handle "No matches for replacement" error
+                            throw new Error("No match found for replacement. The text Claude tried to replace doesn't exist in the original text.");
+                        } else if (occurrences > 1) {
+                            // Handle "Multiple matches for replacement" error
+                            throw new Error(`Found ${occurrences} matches for replacement text. Claude's edit couldn't be applied uniquely.`);
+                        }
+                        
+                        // Process the str_replace command
+                        const updatedText = sampleText.replace(command.old_str, command.new_str);
+                        
+                        // Update the sample text
+                        document.getElementById('sample-text').value = updatedText;
+                        
+                        // Show success message with details
+                        successMessage.innerHTML = `
+                            <strong>Text updated successfully using Claude's text editor tool:</strong><br>
+                            Command: ${command.command}<br>
+                            Old text: <code>${htmlEscape(truncateText(command.old_str, 50))}</code><br>
+                            New text: <code>${htmlEscape(truncateText(command.new_str, 50))}</code>
+                        `;
+                        successMessage.classList.remove('hidden');
+                        
+                        // Clear the new text input
+                        document.getElementById('new-text').value = '';
+                        
+                        // Simulate sending tool result back to Claude
+                        const toolResult = {
+                            type: "tool_result",
+                            tool_use_id: toolUseBlock.id,
+                            content: "Successfully replaced text at exactly one location."
+                        };
+                        
+                        // In a real implementation, you would continue the conversation with Claude
+                        await continueConversationWithClaude(claudeResponse, toolResult);
+                    } else if (command.command === 'insert') {
+                        // Handle insert command for demonstration
+                        let updatedText = sampleText;
+                        const position = command.position || 'end';
+                        
+                        if (position === 'start') {
+                            updatedText = command.text + updatedText;
+                        } else if (position === 'end') {
+                            updatedText = updatedText + command.text;
+                        } else {
+                            const index = parseInt(position, 10);
+                            if (isNaN(index) || index < 0 || index > sampleText.length) {
+                                throw new Error(`Invalid position for insert: ${position}`);
+                            }
+                            updatedText = updatedText.slice(0, index) + command.text + updatedText.slice(index);
+                        }
+                        
+                        // Update the sample text
+                        document.getElementById('sample-text').value = updatedText;
+                        
+                        // Show success message
+                        successMessage.innerHTML = `
+                            <strong>Text updated successfully using Claude's text editor tool:</strong><br>
+                            Command: ${command.command}<br>
+                            Position: ${position}<br>
+                            Inserted text: <code>${htmlEscape(truncateText(command.text, 50))}</code>
+                        `;
+                        successMessage.classList.remove('hidden');
+                        
+                        // Clear the new text input
+                        document.getElementById('new-text').value = '';
+                        
+                        // Simulate sending tool result back to Claude
+                        const toolResult = {
+                            type: "tool_result",
+                            tool_use_id: toolUseBlock.id,
+                            content: `Successfully inserted text at position: ${position}`
+                        };
+                        
+                        // In a real implementation, you would continue the conversation with Claude
+                        await continueConversationWithClaude(claudeResponse, toolResult);
+                    } else if (command.command === 'create') {
+                        // For demonstration only - in reality we'd create a file
+                        // Show success message
+                        successMessage.innerHTML = `
+                            <strong>Create command received (for demonstration):</strong><br>
+                            Command: ${command.command}<br>
+                            Path: ${command.path}<br>
+                            Text length: ${command.text?.length || 0} characters
+                        `;
+                        successMessage.classList.remove('hidden');
+                        
+                        // Simulate sending tool result back to Claude
+                        const toolResult = {
+                            type: "tool_result",
+                            tool_use_id: toolUseBlock.id,
+                            content: `Successfully created file: ${command.path}`
+                        };
+                        
+                        // In a real implementation, you would continue the conversation with Claude
+                        await continueConversationWithClaude(claudeResponse, toolResult);
+                    } else if (command.command === 'view') {
+                        // For demonstration only - in reality we'd read a file
+                        // Show success message
+                        successMessage.innerHTML = `
+                            <strong>View command received (for demonstration):</strong><br>
+                            Command: ${command.command}<br>
+                            Path: ${command.path}<br>
+                        `;
+                        successMessage.classList.remove('hidden');
+                        
+                        // Simulate sending tool result back to Claude
+                        const toolResult = {
+                            type: "tool_result",
+                            tool_use_id: toolUseBlock.id,
+                            content: sampleText
+                        };
+                        
+                        // In a real implementation, you would continue the conversation with Claude
+                        await continueConversationWithClaude(claudeResponse, toolResult);
+                    } else {
+                        throw new Error(`Unsupported command: ${command.command}`);
+                    }
+                    
+                    // Log the successful operation for verification
+                    console.log('Tool command successfully executed:', command);
+                } else {
+                    throw new Error('Claude did not provide a text edit command');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                errorMessage.textContent = error.message || 'An error occurred while processing your request';
+                errorMessage.classList.remove('hidden');
+            } finally {
+                // Hide loading state
+                loading.classList.add('hidden');
+                updateBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

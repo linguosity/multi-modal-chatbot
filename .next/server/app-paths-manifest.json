@@ -1,0 +1,4 @@
+{
+  "/api/text-editor-test/route": "app/api/text-editor-test/route.js",
+  "/reports/text-editor-test/page": "app/reports/text-editor-test/page.js"
+}
