@@ -9,6 +9,7 @@ interface DomainSection {
   needs: string[];
   impactStatement: string;
   lastUpdated?: string;
+  assessmentTools?: string[]; // Domain-specific assessment tools list
 }
 
 // Define sections of the speech-language report
@@ -490,6 +491,10 @@ For domain sections, maintain these guidelines:
 - strengths: Array of specific skills and abilities the student demonstrates
 - needs: Array of specific difficulties the student exhibits
 - impactStatement: How challenges affect educational performance
+- assessmentTools: Array of assessment tools used to evaluate this specific domain (full names, not IDs)
+
+IMPORTANT: When processing standardized tests, add the assessment tool name directly to the domain.assessmentTools array. For example:
+"assessmentTools": ["Goldman-Fristoe Test of Articulation-3 (GFTA-3)"]
 
 DO NOT respond with a direct text answer. ALWAYS respond with a JSON command as shown above.`;
 
@@ -502,7 +507,7 @@ DO NOT respond with a direct text answer. ALWAYS respond with a JSON command as 
         userContent = [
           {
             type: "text",
-            text: `I need to update the speech-language report based on the content in this PDF document. ${sectionToUpdate !== 'auto-detect' ? `Please focus on updating the ${sectionToUpdate} section.` : 'Please analyze the PDF and determine which section of the report to update.'}\n\nHere is the current report structure:\n\`\`\`json\n${viewContent}\n\`\`\`\n\nFor standardized tests like GFTA, CELF, etc., identify key scores and findings, and update the appropriate domain section. Extract any relevant phonological processes, error patterns, or specific strengths/needs.\n\nRespond with an update_key JSON command as described in the system prompt.`
+            text: `I need to update the speech-language report based on the content in this PDF document. ${sectionToUpdate !== 'auto-detect' ? `Please focus on updating the ${sectionToUpdate} section.` : 'Please analyze the PDF and determine which section of the report to update.'}\n\nHere is the current report structure:\n\`\`\`json\n${viewContent}\n\`\`\`\n\nFor standardized tests like GFTA, CELF, etc., identify key scores and findings, and update the appropriate domain section. Extract any relevant phonological processes, error patterns, or specific strengths/needs.\n\nIMPORTANT: When extracting data from standardized tests, be sure to add the test's full name to the domain.assessmentTools array using the update_key command. For example, if analyzing GFTA-3 results for articulation, include "assessmentTools": ["Goldman-Fristoe Test of Articulation, Third Edition (GFTA-3)"] in your update. This helps track which tools were used for each domain.\n\nRespond with an update_key JSON command as described in the system prompt.`
           },
           {
             type: "document",
@@ -532,13 +537,16 @@ ${sectionToUpdate === 'auto-detect'
 
 DO NOT use the text editor tool. Instead, respond with an update_key JSON command.
 
-For example, if updating pragmatic domain strengths, respond with:
+For example, if updating pragmatic domain strengths and adding assessment tools, respond with:
 \`\`\`json
 {
   "command": "update_key",
-  "path": "assessmentResults.domains.pragmatic.strengths",
-  "action": "append",
-  "value": ["Student maintains eye contact during conversations"]
+  "path": "assessmentResults.domains.pragmatic",
+  "action": "merge",
+  "value": {
+    "strengths": ["Student maintains eye contact during conversations"],
+    "assessmentTools": ["Clinical Evaluation of Language Fundamentals-5 (CELF-5)"]
+  }
 }
 \`\`\`
 

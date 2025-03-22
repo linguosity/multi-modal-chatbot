@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PdfUploader } from "@/components/reports/PdfUploader";
+import { ExportDocxButton } from "@/components/reports/ExportDocxButton";
 
 /**
  * Create a default report skeleton
@@ -59,35 +60,40 @@ function createReportSkeleton() {
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         },
         expressive: {
           isConcern: false,
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         },
         pragmatic: {
           isConcern: false,
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         },
         articulation: {
           isConcern: false,
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         },
         voice: {
           isConcern: false,
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         },
         fluency: {
           isConcern: false,
@@ -147,6 +153,7 @@ interface DomainSection {
   needs: string[];
   impactStatement: string;
   lastUpdated?: string;
+  assessmentTools?: string[]; // Domain-specific assessment tools list
 }
 
 // Define assessment tool structure
@@ -347,42 +354,48 @@ export default function TextEditorTestPage() {
           topicSentence: 'Student demonstrates age-appropriate receptive language skills.',
           strengths: ['Follows 2-step directions consistently'],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: ["Clinical Evaluation of Language Fundamentals-5 (CELF-5)"]
         },
         expressive: {
           isConcern: true,
           topicSentence: 'Student shows mild deficits in expressive language.',
           strengths: ['Uses simple sentences to communicate needs'],
           needs: ['Difficulty with complex sentence structures', 'Limited vocabulary for academic concepts'],
-          impactStatement: "Expressive language difficulties impact the student's ability to fully participate in classroom discussions"
+          impactStatement: "Expressive language difficulties impact the student's ability to fully participate in classroom discussions",
+          assessmentTools: ["Clinical Evaluation of Language Fundamentals-5 (CELF-5)"]
         },
         pragmatic: {
           isConcern: false,
           topicSentence: '',
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         },
         articulation: {
           isConcern: true,
           topicSentence: 'Student presents with multiple articulation errors affecting intelligibility.',
           strengths: [],
           needs: ['Produces /s/ and /z/ with lateral distortion', 'Fronting of velar sounds /k/ and /g/'],
-          impactStatement: 'These errors significantly impact intelligibility in the classroom.'
+          impactStatement: 'These errors significantly impact intelligibility in the classroom.',
+          assessmentTools: ["Goldman-Fristoe Test of Articulation-3 (GFTA-3)"]
         },
         voice: {
           isConcern: false,
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         },
         fluency: {
           isConcern: false,
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         }
       }
     },
@@ -748,6 +761,26 @@ export default function TextEditorTestPage() {
         <CardHeader className="bg-white border-b flex flex-row justify-between items-center">
           <CardTitle className="text-xl font-medium">Speech-Language Report</CardTitle>
           <div className="flex gap-2">
+            <ExportDocxButton 
+              reportData={report} 
+              className="text-xs h-8"
+            />
+            <Button
+              variant="outline"
+              className="text-xs h-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
+              onClick={() => {
+                // Import and use on demand to avoid potential import issues
+                import('@/lib/las-report-generator').then(module => {
+                  module.exportLASReport(report);
+                  setSuccess("Generated HTML report as a temporary solution");
+                }).catch(error => {
+                  console.error('Error loading LAS report generator:', error);
+                  setError('Failed to load LAS report generator. Please try again.');
+                });
+              }}
+            >
+              Export as HTML
+            </Button>
             <Button
               variant="outline"
               className="text-xs h-8 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
@@ -939,6 +972,38 @@ export default function TextEditorTestPage() {
                                 <div>
                                   <h5 className="text-xs font-semibold mb-1 text-gray-600">Educational Impact</h5>
                                   <p className="text-gray-800">{domainData.impactStatement}</p>
+                                </div>
+                              )}
+                              
+                              {/* Domain-specific assessment tools */}
+                              {domainData.assessmentTools && domainData.assessmentTools.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                  <h5 className="text-xs font-semibold mb-1 text-gray-600">Assessment Tools</h5>
+                                  <ul className="list-disc pl-4 space-y-0.5">
+                                    {domainData.assessmentTools.map((tool, index) => (
+                                      <li key={index} className="text-gray-800">
+                                        {tool}
+                                        <button 
+                                          className="ml-2 text-xs text-blue-600 hover:text-blue-800" 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Add to global assessment tools if not already included
+                                            if (!report.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.includes(tool)) {
+                                              const updatedReport = { ...report };
+                                              updatedReport.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.push(tool);
+                                              setReport(updatedReport);
+                                              setSuccess(`Added ${tool} to global assessment tools list`);
+                                            }
+                                          }}
+                                        >
+                                          {report.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.includes(tool) 
+                                            ? "✓ In global list" 
+                                            : "+ Add to global list"
+                                          }
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
                                 </div>
                               )}
                             </div>

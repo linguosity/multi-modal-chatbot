@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Template Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    h1 {
+      color: #444;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 0.5rem;
+    }
+    h2 {
+      color: #666;
+      margin-top: 2rem;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    code {
+      font-family: monospace;
+    }
+    .note {
+      background-color: #fffde7;
+      border-left: 4px solid #ffd54f;
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+    button {
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 1rem 0;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <h1>DOCX Template Generator for Reports</h1>
+  
+  <div class="note">
+    <strong>Note:</strong> This page helps you generate a template file for docxtemplater to use when creating DOCX reports.
+  </div>
+  
+  <h2>Steps to Generate a Template</h2>
+  <ol>
+    <li>Open Microsoft Word or another word processor</li>
+    <li>Create a new document with the desired structure and formatting</li>
+    <li>Add placeholders using the {placeholder} syntax where you want to insert dynamic content</li>
+    <li>Save the file as a .docx file named "basic-template.docx" in the /public/templates/ directory</li>
+    <li>Run the template generator using the button below</li>
+  </ol>
+  
+  <h2>Sample Content Structure</h2>
+  <pre><code>
+# Speech-Language Assessment Report
+
+## Student Information
+Name: {header.studentInformation.fullName}
+DOB: {header.studentInformation.DOB}
+Report Date: {header.studentInformation.reportDate}
+
+## Reason for Referral
+{header.reasonForReferral}
+
+## Background Information
+{background.studentDemographicsAndBackground.educationalHistory}
+
+## Assessment Results
+
+### Receptive Language
+{assessmentResults.domains.receptive.topicSentence}
+
+Strengths:
+{#assessmentResults.domains.receptive.strengthsList}
+- {text}
+{/assessmentResults.domains.receptive.strengthsList}
+
+Needs:
+{#assessmentResults.domains.receptive.needsList}
+- {text}
+{/assessmentResults.domains.receptive.needsList}
+
+Educational Impact:
+{assessmentResults.domains.receptive.impactStatement}
+
+### Expressive Language
+{assessmentResults.domains.expressive.topicSentence}
+
+Strengths:
+{#assessmentResults.domains.expressive.strengthsList}
+- {text}
+{/assessmentResults.domains.expressive.strengthsList}
+
+Needs:
+{#assessmentResults.domains.expressive.needsList}
+- {text}
+{/assessmentResults.domains.expressive.needsList}
+
+Educational Impact:
+{assessmentResults.domains.expressive.impactStatement}
+
+## Conclusion
+{conclusion.conclusion.summary}
+
+## Recommendations
+Service Type: {conclusion.recommendations.services.typeOfService}
+Frequency: {conclusion.recommendations.services.frequency}
+Setting: {conclusion.recommendations.services.setting}
+
+Accommodations:
+{#conclusion.recommendations.accommodationsList}
+- {text}
+{/conclusion.recommendations.accommodationsList}
+
+Facilitation Strategies:
+{#conclusion.recommendations.facilitationStrategiesList}
+- {text}
+{/conclusion.recommendations.facilitationStrategiesList}
+  </code></pre>
+  
+  <h2>Generate Template</h2>
+  <p>After creating your basic-template.docx file, click the button below to generate the final template with appropriate tags:</p>
+  
+  <button id="generateTemplate">Generate Template</button>
+  
+  <div id="result" style="display: none; margin-top: 1rem; padding: 1rem; background-color: #e8f5e9; border-radius: 4px;">
+    Template generated successfully! You can now use the Export DOCX button in the report interface.
+  </div>
+  
+  <script>
+    document.getElementById('generateTemplate').addEventListener('click', async () => {
+      try {
+        // Execute the template generator script
+        const response = await fetch('/api/generate-template', {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to generate template');
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          document.getElementById('result').style.display = 'block';
+        } else {
+          alert('Error: ' + result.error);
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    });
+  </script>
+</body>
+</html>

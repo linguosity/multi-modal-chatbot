@@ -1,5 +1,20 @@
 
+# Linguosity - AI-Powered Speech-Language Assessment Tool
+
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app) and designed to be fun and easy to get your hands dirty with the AI SDK.
+
+## Project Overview
+
+Linguosity is an AI-powered application designed to assist Speech-Language Pathologists (SLPs) in creating comprehensive assessment reports. The application leverages Claude's capabilities to process and analyze assessment data, generate professional reports, and export them in various formats.
+
+### Key Features
+
+- **Intelligent Report Generation**: Create professional speech-language assessment reports with AI assistance
+- **PDF Document Processing**: Upload assessment PDFs for automatic data extraction
+- **DOCX Export**: Export reports as Microsoft Word documents with customizable templates
+- **Interactive Editing**: Modify report sections with real-time AI feedback
+- **Domain-Specific Tools**: Organize assessment tools by language domain (receptive, expressive, etc.)
+- **Multi-format Export**: Export reports as DOCX or HTML
 
 ## Claude Integration Notes
 
@@ -61,6 +76,127 @@ During implementation, we encountered several issues that may be helpful for fut
 - Validate edits before applying them (checking for unique matches)
 - Include a fallback mechanism for when the API is unavailable
 - Log Claude's responses for debugging purposes
+
+## March 22, 2025 Update: Project Structure and Technical Architecture
+
+### Project Structure
+- `/src/app` - Next.js app router pages and API routes
+  - `/api` - API endpoints for Claude text editor, report generation, etc.
+  - `/reports` - Report-related routes including the text editor test implementation
+- `/src/components` - React components organized by functionality:
+  - `/reports` - Components for report editing, PDF processing, and DOCX export
+  - `/ui` - Reusable UI components built with Tailwind and Radix UI
+- `/src/lib` - Library code and utilities:
+  - `docx-generator.ts` - DOCX file generation using docxtemplater
+  - `las-report-generator.js` - Specialized LAS report generation
+  - `claudeProvider.ts` - Claude API integration
+
+### Technology Stack
+- **Frontend**: Next.js 15, React 18, TypeScript
+- **UI**: Tailwind CSS, ShadCN/UI (Radix-based components)
+- **State Management**: React context and hooks
+- **Document Processing**: 
+  - docxtemplater & pizzip (DOCX generation)
+  - File-saver (client-side file downloads)
+- **AI Integration**:
+  - Claude API with text editor tool support
+  - MCP-server-text-editor for text editing capabilities
+
+## March 22, 2025 Update: DOCX Export Bugfixes
+
+Today we fixed two critical issues with the DOCX export functionality:
+
+### 1. DOCX Template File Issue
+We identified and resolved an issue where the main template file (`report-template.docx`) in the `/public/templates/` directory was not a valid DOCX file but a text file with a .docx extension. This was causing errors like:
+- "Can't find end of central directory: is this a zip file?"
+- "Invalid DOCX file signature. First bytes: [...]"
+- "The file does not appear to be a valid DOCX file (missing PK signature)"
+
+**Root cause**: DOCX files are ZIP archives containing XML content and must start with the "PK" file signature (bytes [0x50, 0x4B]). The main template was mistakenly saved as a plain text file.
+
+**Solution**: 
+1. Updated the application to use the valid DOCX template (`las-assessment-report-template.docx`) instead
+2. Added signature validation to verify template files have the correct ZIP/DOCX headers
+3. Implemented multiple fallback mechanisms:
+   - Try alternative template if the primary one fails
+   - Generate a simple HTML report if all DOCX templates fail
+
+### 2. Template Tag Notation Issue
+We fixed a second issue with Docxtemplater throwing "Multi error" exceptions when trying to render DOCX files with mismatched data formats.
+
+**Root cause**: The DOCX templates were using underscore notation for tags (e.g., `{header_studentInformation_firstName}`), but our data was in nested object format using dot notation (e.g., `header.studentInformation.firstName`), causing Docxtemplater to fail finding matching data fields.
+
+**Solution**:
+1. Implemented a data transformation function in `docx-generator.ts` that flattens nested objects to underscore notation
+2. Updated the code to support both dot and underscore notation in templates
+3. Added comprehensive error diagnostics to help identify template tag issues:
+   - Extracts and logs all tags found in templates
+   - Detects whether templates use dot or underscore notation
+   - Provides detailed error information for template rendering failures
+4. Enhanced the JSON data preparation to ensure compatibility with Docxtemplater's loop syntax for arrays
+
+## March 17, 2025 Update: DOCX Export & PDF Processing Enhancements
+
+Earlier we implemented several significant improvements to the speech-language report editor:
+
+### 1. DOCX Export Functionality
+We've added the ability to export reports as Microsoft Word (.docx) documents:
+- Used docxtemplater and pizzip libraries for report generation
+- Created customizable template system for consistent document formatting
+- Added a template creation tool for users to define their own report formats
+- Implemented proper formatting of arrays (strengths, needs, recommendations) as bulleted lists
+- Added export button to the report interface for one-click document creation
+- **NEW**: Added specialized LAS Assessment Report template with appropriate tags and formatting
+
+### 2. PDF Upload & Processing
+We added PDF upload capability, allowing users to submit assessment test results directly from PDFs. Key features:
+- Drag-and-drop interface for PDF uploads using ShadCN components
+- Base64 encoding of PDFs for direct processing by Claude
+- Custom prompting to extract relevant information from standardized tests
+- Automatic update of report domains based on extracted data
+
+### 3. Domain-Specific Assessment Tools
+We solved a key workflow issue by implementing domain-specific assessment tools:
+- Added `assessmentTools` array to each domain section
+- Modified Claude's prompts to place extracted tool names directly in relevant domains
+- Created UI to display domain-specific tools with "Add to global list" functionality
+- Implemented visual feedback showing which tools are already in the global list
+
+### 4. User Experience Improvements
+We enhanced usability with several quality-of-life features:
+- Added a "Clear Report" button with confirmation dialog
+- Implemented tabbed interface for switching between text and PDF input methods
+- Added success/error feedback for all operations
+- Optimized token usage by targeting specific report sections
+
+### Technical Challenges Overcome
+1. **DOCX Template System**: Creating a flexible template system required careful consideration of:
+   - How to handle array data in docxtemplater (converting arrays to special format for loops)
+   - Properly structuring document templates for professional reports
+   - Creating a user-friendly template creation process
+
+2. **Binary File Handling**: We encountered and resolved several issues with DOCX file handling:
+   - Ensuring templates are properly loaded as binary data, not text files
+   - Adding validation for DOCX file signatures to detect invalid templates
+   - Implementing multiple fallback mechanisms for template failures
+   - Understanding the ZIP file format that underlies DOCX files
+
+3. **Template Tag Formatting**: We solved issues with Docxtemplater tag notation:
+   - Created a data transformation system that converts nested objects to flattened underscore notation
+   - Implemented support for both dot notation (`{header.studentInformation.firstName}`) and underscore notation (`{header_studentInformation_firstName}`)
+   - Added template analysis to detect which notation is being used in templates
+   - Developed better diagnostics to pinpoint problematic tags in templates
+
+4. **PDF Processing**: We needed to properly handle PDF data through the entire pipeline - from client-side upload to base64 encoding to Claude's document processing capabilities.
+
+5. **Assessment Tool Integration**: Initially, Claude correctly extracted test names but placed them in a non-standard location within the domain objects. We solved this by:
+   - Defining a clear schema for domain-specific assessment tools
+   - Updating system prompts to guide Claude in placing tools correctly
+   - Creating a UI for promoting domain tools to the global tools list
+
+6. **Multi-stage API Interactions**: The solution required careful handling of the multi-stage conversation with Claude, ensuring proper context is maintained when processing PDFs.
+
+This implementation provides a much more intuitive workflow for speech-language pathologists, allowing them to directly upload test materials and have relevant information automatically extracted, organized within the report structure, and exported to standard document formats.
 
 ## Getting Started
 

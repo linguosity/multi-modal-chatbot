@@ -1,0 +1,35 @@
+Speech-Language Assessment Report
+
+Student Name: {header.studentInformation.firstName} {header.studentInformation.lastName}
+Date of Birth: {header.studentInformation.DOB}
+Report Date: {header.studentInformation.reportDate}
+Evaluation Date: {header.studentInformation.evaluationDate}
+
+Reason for Referral:
+{header.reasonForReferral}
+
+Background:
+{background.studentDemographicsAndBackground.educationalHistory}
+
+Assessment Results:
+
+Expressive Language:
+{assessmentResults.domains.expressive.topicSentence}
+
+Strengths:
+{#assessmentResults.domains.expressive.strengthsList}
+• {text}
+{/assessmentResults.domains.expressive.strengthsList}
+
+Needs:
+{#assessmentResults.domains.expressive.needsList}
+• {text}
+{/assessmentResults.domains.expressive.needsList}
+
+Conclusion:
+{conclusion.conclusion.summary}
+
+Recommendations:
+{#conclusion.recommendations.accommodationsList}
+• {text}
+{/conclusion.recommendations.accommodationsList}

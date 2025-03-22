@@ -18,6 +18,34 @@ const nextConfig = {
     // Disable automatic static optimization for pages that need getStaticProps
     optimizeServerReact: true,
   },
+  
+  // Ensure proper MIME types are set for DOCX files
+  async headers() {
+    return [
+      {
+        source: '/templates/:path*',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          },
+        ],
+      },
+    ];
+  },
+  
+  // Explicitly include static files in the output
+  output: 'standalone',
+  
+  // Exclude templates from output compression to avoid file corruption
+  compress: true,
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.(docx|dotx)$/,
+      type: 'asset/resource',
+    });
+    return config;
+  },
 };
 
 module.exports = nextConfig;
