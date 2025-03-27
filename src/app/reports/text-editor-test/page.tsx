@@ -101,7 +101,8 @@ function createReportSkeleton() {
           topicSentence: "",
           strengths: [],
           needs: [],
-          impactStatement: ""
+          impactStatement: "",
+          assessmentTools: []
         }
       }
     },
@@ -1042,30 +1043,49 @@ export default function TextEditorTestPage() {
                               {domainData.assessmentTools && domainData.assessmentTools.length > 0 && (
                                 <div className="mt-2 pt-2 border-t border-gray-200">
                                   <h5 className="text-xs font-semibold mb-1 text-gray-600">Assessment Tools</h5>
-                                  <ul className="list-disc pl-4 space-y-0.5">
-                                    {domainData.assessmentTools.map((tool, index) => (
-                                      <li key={index} className="text-gray-800">
-                                        {tool}
-                                        <button 
-                                          className="ml-2 text-xs text-blue-600 hover:text-blue-800" 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            // Add to global assessment tools if not already included
-                                            if (!report.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.includes(tool)) {
-                                              const updatedReport = { ...report };
-                                              updatedReport.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.push(tool);
-                                              setReport(updatedReport);
-                                              setSuccess(`Added ${tool} to global assessment tools list`);
+                                  <ul className="list-disc pl-4 space-y-2">
+                                    {domainData.assessmentTools.map((tool, index) => {
+                                      // Extract additional information if available (assuming format like "Tool Name (SST-4)")
+                                      const nameMatch = tool.match(/(.*?)\s*(?:\(([^)]+)\))?$/);
+                                      const fullName = nameMatch ? nameMatch[1].trim() : tool;
+                                      const shortName = nameMatch && nameMatch[2] ? nameMatch[2].trim() : '';
+                                      
+                                      // Basic tool info extraction
+                                      let toolInfo = '';
+                                      if (tool.toLowerCase().includes('sst-4') || tool.toLowerCase().includes('stuttering severity instrument')) {
+                                        toolInfo = 'Assesses stuttering severity on a standardized scale. Appropriate for children and adults.';
+                                      } else if (tool.toLowerCase().includes('celf-5') || tool.toLowerCase().includes('clinical evaluation of language fundamentals')) {
+                                        toolInfo = 'Assesses language skills across multiple domains. Ages 5-21 years.';
+                                      } else if (tool.toLowerCase().includes('gfta-3') || tool.toLowerCase().includes('goldman-fristoe')) {
+                                        toolInfo = 'Measures articulation of consonant sounds. Ages 2-21 years.';
+                                      }
+                                      
+                                      return (
+                                        <li key={index} className="text-gray-800">
+                                          <div className="font-medium">{fullName}</div>
+                                          {shortName && <div className="text-xs text-gray-500 mt-0.5">({shortName})</div>}
+                                          {toolInfo && <div className="text-xs text-gray-600 mt-1 italic">{toolInfo}</div>}
+                                          <button 
+                                            className="mt-1 text-xs text-blue-600 hover:text-blue-800" 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              // Add to global assessment tools if not already included
+                                              if (!report.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.includes(tool)) {
+                                                const updatedReport = { ...report };
+                                                updatedReport.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.push(tool);
+                                                setReport(updatedReport);
+                                                setSuccess(`Added ${fullName} to global assessment tools list`);
+                                              }
+                                            }}
+                                          >
+                                            {report.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.includes(tool) 
+                                              ? "✓ In global list" 
+                                              : "+ Add to global list"
                                             }
-                                          }}
-                                        >
-                                          {report.assessmentResults.assessmentProceduresAndTools.assessmentToolsUsed.includes(tool) 
-                                            ? "✓ In global list" 
-                                            : "+ Add to global list"
-                                          }
-                                        </button>
-                                      </li>
-                                    ))}
+                                          </button>
+                                        </li>
+                                      );
+                                    })}
                                   </ul>
                                 </div>
                               )}

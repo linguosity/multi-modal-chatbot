@@ -124,12 +124,12 @@ export function ReportSidebar({ sections, sectionGroups }: ReportSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href="#">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <GalleryVerticalEnd className="size-4" />
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
+                  <img src="/linguosity_logo.jpg" alt="Linguosity Logo" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Reports</span>
-                  <span className="">v1.0.0</span>
+                  <span className="font-semibold">Linguosity</span>
+                  <span className="">Reports Dashboard</span>
                 </div>
               </a>
             </SidebarMenuButton>
