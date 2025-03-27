@@ -9,6 +9,14 @@ import {
 } from "@/components/ui/sidebar";
 import { usePathname } from 'next/navigation';
 import { ReportsProvider, useReports } from "@/components/contexts/reports-context";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 function ReportsContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,7 +52,24 @@ function ReportsContent({ children }: { children: React.ReactNode }) {
           <div className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1 flex justify-between items-center">
-              <h1 className="text-xl font-bold">{isEditPage ? 'Edit Report' : (isReportDetailPage ? 'Report' : 'Reports')}</h1>
+              <div>
+                <Breadcrumb className="mb-1">
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbLink href="/reports">Reports</BreadcrumbLink>
+                    </BreadcrumbItem>
+                    {pathname?.includes('/text-editor-test') && (
+                      <>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                          <BreadcrumbPage>Text Editor Test</BreadcrumbPage>
+                        </BreadcrumbItem>
+                      </>
+                    )}
+                  </BreadcrumbList>
+                </Breadcrumb>
+                <h1 className="text-xl font-bold">{isEditPage ? 'Edit Report' : (isReportDetailPage ? (pathname?.includes('/text-editor-test') ? 'Data Structure Editing' : 'Report') : 'Reports')}</h1>
+              </div>
             </div>
           </div>
           <div className="flex-1 p-4 md:p-6">

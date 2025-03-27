@@ -1,13 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Minus, Plus } from "lucide-react";
+import { GalleryVerticalEnd, Minus, Plus } from "lucide-react";
 import { 
   Sidebar, 
   SidebarContent, 
   SidebarGroup, 
   SidebarGroupContent, 
   SidebarGroupLabel, 
+  SidebarHeader, 
   SidebarMenu, 
   SidebarMenuItem, 
   SidebarMenuButton,
@@ -21,6 +22,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { SearchForm } from "@/components/search-form";
 
 // Original type for backward compatibility
 type ReportSection = {
@@ -117,6 +119,24 @@ export function ReportSidebar({ sections, sectionGroups }: ReportSidebarProps) {
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <a href="#">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                  <GalleryVerticalEnd className="size-4" />
+                </div>
+                <div className="flex flex-col gap-0.5 leading-none">
+                  <span className="font-semibold">Reports</span>
+                  <span className="">v1.0.0</span>
+                </div>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <SearchForm />
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           {!displayGroups.length && <SidebarGroupLabel>Report Sections</SidebarGroupLabel>}
