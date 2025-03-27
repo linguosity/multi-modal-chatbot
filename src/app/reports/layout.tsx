@@ -28,7 +28,18 @@ function ReportsContent({ children }: { children: React.ReactNode }) {
             onSectionChange={handleSectionChange}
           />
         ) : (
-          <ReportSidebar sections={reportSections} />
+          pathname?.includes('/text-editor-test') ? 
+            // For text-editor-test page, use the new sectionGroups property if available
+            <ReportSidebar sectionGroups={reportSections.length > 0 ? 
+              // If there are old-style sections, convert them to groups
+              undefined : 
+              // Otherwise, use sectionGroups directly
+              []} 
+              sections={reportSections}
+            />
+          :
+            // For other report pages, use the traditional sections property
+            <ReportSidebar sections={reportSections} />
         )
       )}
       <SidebarInset>

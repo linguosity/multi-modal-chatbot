@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Minus, Plus } from "lucide-react";
 import { 
   Sidebar, 
   SidebarContent, 
@@ -9,24 +10,63 @@ import {
   SidebarGroupLabel, 
   SidebarMenu, 
   SidebarMenuItem, 
-  SidebarMenuButton
+  SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarRail
 } from "@/components/ui/sidebar";
-import { Link } from "react-scroll";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
+// Original type for backward compatibility
 type ReportSection = {
   id: string;
   title: string;
   order: number;
 };
 
+// New type for collapsible sections
+type ReportSectionGroup = {
+  title: string;
+  url?: string;
+  items?: { 
+    title: string;
+    url: string; 
+    id?: string;
+    isActive?: boolean;
+  }[];
+};
+
 interface ReportSidebarProps {
-  sections: ReportSection[];
+  sections?: ReportSection[];  // Keep for backward compatibility
+  sectionGroups?: ReportSectionGroup[]; // New prop for grouped sections
 }
 
-export function ReportSidebar({ sections }: ReportSidebarProps) {
-  const sortedSections = [...sections].sort((a, b) => a.order - b.order);
+export function ReportSidebar({ sections, sectionGroups }: ReportSidebarProps) {
+  // Support both old and new formats
+  let displayGroups: ReportSectionGroup[] = [];
+  
+  if (sectionGroups && sectionGroups.length > 0) {
+    // Use the new format if provided
+    displayGroups = sectionGroups;
+  } else if (sections && sections.length > 0) {
+    // Convert old format to new format if needed
+    const sortedSections = [...sections].sort((a, b) => a.order - b.order);
+    displayGroups = [{
+      title: "Report Sections",
+      items: sortedSections.map(section => ({
+        title: section.title,
+        url: `#${section.id}`,
+        id: section.id
+      }))
+    }];
+  }
 
-  // Icons for different section types
+  // Icons for different section types (keep from original implementation)
   const getSectionIcon = (sectionId: string) => {
     switch (sectionId) {
       case 'heading':
@@ -79,35 +119,59 @@ export function ReportSidebar({ sections }: ReportSidebarProps) {
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Report Sections</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {sortedSections.map((section) => (
-                <SidebarMenuItem key={section.id}>
-                  <SidebarMenuButton asChild>
-                    <a 
-                      href={`#${section.id}`} 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const element = document.getElementById(section.id);
-                        if (element) {
-                          element.scrollIntoView({ 
-                            behavior: 'smooth', 
-                            block: 'start' 
-                          });
-                        }
-                      }}
-                    >
-                      {getSectionIcon(section.id)}
-                      <span>{section.title}</span>
-                    </a>
-                  </SidebarMenuButton>
+          {!displayGroups.length && <SidebarGroupLabel>Report Sections</SidebarGroupLabel>}
+          <SidebarMenu>
+            {displayGroups.map((group, index) => (
+              <Collapsible key={group.title} defaultOpen={index === 0} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton>
+                      {group.title}
+                      <Plus className="ml-auto group-data-[state=open]/collapsible:hidden" />
+                      <Minus className="ml-auto group-data-[state=closed]/collapsible:hidden" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  {group.items?.length ? (
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {group.items.map((item) => (
+                          <SidebarMenuSubItem key={item.title}>
+                            <SidebarMenuSubButton 
+                              asChild
+                              isActive={item.isActive}
+                            >
+                              <a 
+                                href={item.url} 
+                                onClick={(e) => {
+                                  if (item.url?.startsWith('#')) {
+                                    e.preventDefault();
+                                    const elementId = item.id || item.url.substring(1);
+                                    const element = document.getElementById(elementId);
+                                    if (element) {
+                                      element.scrollIntoView({ 
+                                        behavior: 'smooth', 
+                                        block: 'start' 
+                                      });
+                                    }
+                                  }
+                                }}
+                              >
+                                {item.id && getSectionIcon(item.id)}
+                                {item.title}
+                              </a>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  ) : null}
                 </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
+              </Collapsible>
+            ))}
+          </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarRail />
     </Sidebar>
   );
 }

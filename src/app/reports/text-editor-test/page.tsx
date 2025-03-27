@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PdfUploader } from "@/components/reports/PdfUploader";
 import { ExportDocxButton } from "@/components/reports/ExportDocxButton";
+import { useReports } from "@/components/contexts/reports-context";
 
 /**
  * Create a default report skeleton
@@ -298,6 +299,9 @@ const TextSectionCard = ({ content, title }: { content: string, title: string })
  * Test component for Claude's JSON-based text editor tool
  */
 export default function TextEditorTestPage() {
+  // Get context for sidebar integration
+  const { setSectionGroups } = useReports();
+  
   // Input form state
   const [inputText, setInputText] = useState('');
   const [selectedSection, setSelectedSection] = useState('auto-detect');
@@ -448,6 +452,52 @@ export default function TextEditorTestPage() {
       (report.assessmentResults.domains[domain].needs && report.assessmentResults.domains[domain].needs.length > 0)
     )
   );
+  
+  // Initialize sidebar section groups based on report structure
+  useEffect(() => {
+    // Create section groups for the sidebar
+    const sectionGroups = [
+      {
+        title: "Student Information",
+        items: [
+          { title: "Demographics", url: "#demographics" },
+          { title: "Referral Reason", url: "#referral" }
+        ]
+      },
+      {
+        title: "Background",
+        items: [
+          { title: "Educational History", url: "#educational-history" },
+          { title: "Health Information", url: "#health-info" },
+          { title: "Family Information", url: "#family-info" },
+          { title: "Parent Concerns", url: "#parent-concerns" }
+        ]
+      },
+      {
+        title: "Assessment Results",
+        items: [
+          ...activeDomains.map(domain => ({
+            title: `${domain.charAt(0).toUpperCase() + domain.slice(1)} Language`,
+            url: `#domain-${domain}`,
+            isActive: report.assessmentResults.domains[domain].isConcern
+          })),
+          { title: "Observations", url: "#observations" },
+          { title: "Assessment Tools", url: "#assessment-tools" }
+        ]
+      },
+      {
+        title: "Conclusions",
+        items: [
+          { title: "Eligibility", url: "#eligibility" },
+          { title: "Summary", url: "#summary" },
+          { title: "Recommendations", url: "#recommendations" }
+        ]
+      }
+    ];
+    
+    // Update the context with our section groups
+    setSectionGroups(sectionGroups);
+  }, [report, activeDomains, setSectionGroups]);
   
   /**
    * Handle form submission to update report using Claude's text editor
@@ -828,7 +878,7 @@ export default function TextEditorTestPage() {
             <div className="mb-8">
               <h3 className="text-base font-semibold text-purple-700 mb-3 pb-1 border-b border-purple-200">Student Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Card className="border border-purple-100 shadow-sm bg-purple-50/30">
+                <Card id="demographics" className="border border-purple-100 shadow-sm bg-purple-50/30">
                   <CardHeader className="py-2 px-3 bg-purple-50">
                     <CardTitle className="text-sm font-medium text-purple-800">Demographics</CardTitle>
                   </CardHeader>
@@ -840,7 +890,7 @@ export default function TextEditorTestPage() {
                   </CardContent>
                 </Card>
                 
-                <Card className="border border-purple-100 shadow-sm bg-purple-50/30">
+                <Card id="referral" className="border border-purple-100 shadow-sm bg-purple-50/30">
                   <CardHeader className="py-2 px-3 bg-purple-50">
                     <CardTitle className="text-sm font-medium text-purple-800">Referral Reason</CardTitle>
                   </CardHeader>
@@ -855,7 +905,7 @@ export default function TextEditorTestPage() {
             <div className="mb-8">
               <h3 className="text-base font-semibold text-blue-700 mb-3 pb-1 border-b border-blue-200">Background Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Card className="border border-blue-100 shadow-sm bg-blue-50/30">
+                <Card id="educational-history" className="border border-blue-100 shadow-sm bg-blue-50/30">
                   <CardHeader className="py-2 px-3 bg-blue-50">
                     <CardTitle className="text-sm font-medium text-blue-800">Educational History</CardTitle>
                   </CardHeader>
@@ -864,7 +914,7 @@ export default function TextEditorTestPage() {
                   </CardContent>
                 </Card>
                 
-                <Card className="border border-blue-100 shadow-sm bg-blue-50/30">
+                <Card id="health-info" className="border border-blue-100 shadow-sm bg-blue-50/30">
                   <CardHeader className="py-2 px-3 bg-blue-50">
                     <CardTitle className="text-sm font-medium text-blue-800">Health Information</CardTitle>
                   </CardHeader>
@@ -874,7 +924,7 @@ export default function TextEditorTestPage() {
                   </CardContent>
                 </Card>
                 
-                <Card className="border border-blue-100 shadow-sm bg-blue-50/30">
+                <Card id="family-info" className="border border-blue-100 shadow-sm bg-blue-50/30">
                   <CardHeader className="py-2 px-3 bg-blue-50">
                     <CardTitle className="text-sm font-medium text-blue-800">Family Information</CardTitle>
                   </CardHeader>
@@ -884,7 +934,7 @@ export default function TextEditorTestPage() {
                   </CardContent>
                 </Card>
                 
-                <Card className="border border-blue-100 shadow-sm bg-blue-50/30">
+                <Card id="parent-concerns" className="border border-blue-100 shadow-sm bg-blue-50/30">
                   <CardHeader className="py-2 px-3 bg-blue-50">
                     <CardTitle className="text-sm font-medium text-blue-800">Parent/Guardian Concerns</CardTitle>
                   </CardHeader>
@@ -910,6 +960,7 @@ export default function TextEditorTestPage() {
                       
                       return (
                         <Card 
+                          id={`domain-${domain}`}
                           key={domain} 
                           className={`border shadow-sm ${hasConcern 
                             ? 'border-amber-200 bg-amber-50/30' 
@@ -1017,7 +1068,7 @@ export default function TextEditorTestPage() {
             
               {/* Observations subsection */}
               {Object.keys(report.assessmentResults.observations || {}).length > 0 && (
-                <div className="mb-4">
+                <div id="observations" className="mb-4">
                   <h4 className="text-sm font-medium text-green-800 mb-2">Observations</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {Object.entries(report.assessmentResults.observations).map(([obsKey, content]) => (
@@ -1040,7 +1091,7 @@ export default function TextEditorTestPage() {
               
               {/* Assessment Tools subsection */}
               {report.assessmentResults.assessmentProceduresAndTools?.assessmentToolsUsed?.length > 0 && (
-                <div className="mb-4">
+                <div id="assessment-tools" className="mb-4">
                   <h4 className="text-sm font-medium text-green-800 mb-2">Assessment Tools</h4>
                   <Card className="border border-green-100 shadow-sm bg-green-50/30 mb-3">
                     <CardHeader className="py-2 px-3 bg-green-50">
@@ -1074,7 +1125,7 @@ export default function TextEditorTestPage() {
                 <div className="grid grid-cols-1 gap-3">
                   {/* Eligibility subsection */}
                   {report.conclusion.eligibility && (
-                    <Card className="border border-amber-100 shadow-sm bg-amber-50/30">
+                    <Card id="eligibility" className="border border-amber-100 shadow-sm bg-amber-50/30">
                       <CardHeader className="py-2 px-3 bg-amber-50">
                         <CardTitle className="text-sm font-medium text-amber-800">Eligibility Determination</CardTitle>
                       </CardHeader>
@@ -1098,7 +1149,7 @@ export default function TextEditorTestPage() {
                   
                   {/* Conclusion summary */}
                   {report.conclusion.conclusion && report.conclusion.conclusion.summary && (
-                    <Card className="border border-amber-100 shadow-sm bg-amber-50/30">
+                    <Card id="summary" className="border border-amber-100 shadow-sm bg-amber-50/30">
                       <CardHeader className="py-2 px-3 bg-amber-50">
                         <CardTitle className="text-sm font-medium text-amber-800">Summary</CardTitle>
                       </CardHeader>
@@ -1110,7 +1161,7 @@ export default function TextEditorTestPage() {
                   
                   {/* Recommendations */}
                   {report.conclusion.recommendations && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div id="recommendations" className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {/* Services */}
                       <Card className="border border-amber-100 shadow-sm bg-amber-50/30">
                         <CardHeader className="py-2 px-3 bg-amber-50">

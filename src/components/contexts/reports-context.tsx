@@ -12,10 +12,26 @@ interface ReportSection {
   cards?: any[]; // Type can be expanded as needed
 }
 
+// New type for collapsible section groups
+interface ReportSectionGroup {
+  title: string;
+  url?: string;
+  items?: { 
+    title: string;
+    url: string; 
+    id?: string;
+    isActive?: boolean;
+  }[];
+}
+
 interface ReportsContextType {
   // For ReportSidebar
   reportSections: ReportSection[];
   setReportSections: (sections: ReportSection[]) => void;
+  
+  // New collapsible section groups
+  sectionGroups: ReportSectionGroup[];
+  setSectionGroups: (groups: ReportSectionGroup[]) => void;
   
   // For ReportEditSidebar
   currentSectionId: string;
@@ -29,6 +45,7 @@ const ReportsContext = createContext<ReportsContextType | null>(null);
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
   const [reportSections, setReportSections] = useState<ReportSection[]>([]);
+  const [sectionGroups, setSectionGroups] = useState<ReportSectionGroup[]>([]);
   const [currentSectionId, setCurrentSectionId] = useState<string>('');
 
   const handleSectionChange = (sectionId: string) => {
@@ -41,6 +58,8 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
       value={{
         reportSections,
         setReportSections,
+        sectionGroups,
+        setSectionGroups,
         currentSectionId,
         setCurrentSectionId,
         handleSectionChange
