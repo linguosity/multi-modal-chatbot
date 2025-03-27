@@ -16,7 +16,7 @@ function ReportsContent({ children }: { children: React.ReactNode }) {
   const isReportDetailPage = pathname?.includes('/reports/') && !pathname?.endsWith('/reports');
   
   // Use the context for sidebar data
-  const { reportSections, currentSectionId, handleSectionChange } = useReports();
+  const { reportSections, sectionGroups, currentSectionId, handleSectionChange } = useReports();
   
   return (
     <div className="flex min-h-screen">
@@ -29,13 +29,10 @@ function ReportsContent({ children }: { children: React.ReactNode }) {
           />
         ) : (
           pathname?.includes('/text-editor-test') ? 
-            // For text-editor-test page, use the new sectionGroups property if available
-            <ReportSidebar sectionGroups={reportSections.length > 0 ? 
-              // If there are old-style sections, convert them to groups
-              undefined : 
-              // Otherwise, use sectionGroups directly
-              []} 
-              sections={reportSections}
+            // For text-editor-test page, use the new sectionGroups property
+            <ReportSidebar 
+              sectionGroups={sectionGroups}
+              sections={reportSections.length > 0 ? reportSections : undefined} 
             />
           :
             // For other report pages, use the traditional sections property

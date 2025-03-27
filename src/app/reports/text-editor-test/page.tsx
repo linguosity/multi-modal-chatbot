@@ -453,6 +453,18 @@ export default function TextEditorTestPage() {
     )
   );
   
+  // Create a stable dependency for active domains
+  const activeDomainsKey = React.useMemo(() => {
+    return activeDomains.join(',');
+  }, [activeDomains]);
+  
+  // Create a stable dependency for domain concerns
+  const domainConcernsKey = React.useMemo(() => {
+    return activeDomains
+      .map(domain => `${domain}:${report.assessmentResults.domains[domain].isConcern}`)
+      .join(',');
+  }, [activeDomains, report.assessmentResults.domains]);
+  
   // Initialize sidebar section groups based on report structure
   useEffect(() => {
     // Create section groups for the sidebar
@@ -497,7 +509,7 @@ export default function TextEditorTestPage() {
     
     // Update the context with our section groups
     setSectionGroups(sectionGroups);
-  }, [report, activeDomains, setSectionGroups]);
+  }, [setSectionGroups, activeDomainsKey, domainConcernsKey]);
   
   /**
    * Handle form submission to update report using Claude's text editor
