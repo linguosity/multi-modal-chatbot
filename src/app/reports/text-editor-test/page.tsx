@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PdfUploader } from "@/components/reports/PdfUploader";
 import { ExportDocxButton } from "@/components/reports/ExportDocxButton";
 import { useReports } from "@/components/contexts/reports-context";
+import { Pencil } from "lucide-react";
 
 /**
  * Create a default report skeleton
@@ -311,6 +312,14 @@ export default function TextEditorTestPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [inputMethod, setInputMethod] = useState<'text' | 'pdf'>('text');
   
+  // Popover state for the editor toolbar
+  const [editorOpen, setEditorOpen] = useState(false);
+  
+  // Debug logging for popover state
+  useEffect(() => {
+    console.log("[Editor] editorOpen changed:", editorOpen);
+  }, [editorOpen]);
+  
   // Report state
   const [report, setReport] = useState<SpeechLanguageReport>({
     header: {
@@ -606,268 +615,84 @@ export default function TextEditorTestPage() {
   };
   
   return (
-    <div className="container mx-auto py-6 max-w-5xl">
-      <header className="mb-6">
-        <h1 className="text-2xl font-medium mb-2">Claude JSON Report Editor</h1>
-        <p className="text-gray-600 text-sm">
-          This demo shows how Claude's text editor tool can make precise updates to a structured JSON report 
-          using the text_editor_20250124 tool. Enter observations or assessment data below to update 
-          the appropriate sections of the report.
-        </p>
-      </header>
-      
-      {/* Input form */}
-      <div className="mb-6">
-        <Tabs value={inputMethod} onValueChange={(value) => setInputMethod(value as 'text' | 'pdf')} className="w-full">
-          <TabsList className="w-full mb-4">
-            <TabsTrigger value="text" className="flex-1">Text Input</TabsTrigger>
-            <TabsTrigger value="pdf" className="flex-1">PDF Upload</TabsTrigger>
-          </TabsList>
+    <div className="w-full">
+      {/* Report card with scrollable content */}
+      <Card className="relative border-0 shadow-sm overflow-auto" style={{ height: "calc(100vh - 180px)" }}>
+        
+        {/* Fixed position controls that stay in place during scrolling */}
+        <div className="sticky top-4 left-4 z-50 ml-4">
+          {/* Pencil icon - always rendered but visibility toggled with CSS */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`rounded-full bg-white border border-gray-200 shadow p-2 hover:bg-gray-100 ${
+              editorOpen ? "invisible pointer-events-none" : ""
+            }`}
+            aria-label="Claude JSON Report Editor"
+            onClick={() => {
+              console.log("[Pencil Button] clicked!");
+              setEditorOpen(true);
+            }}
+          >
+            <Pencil className="h-4 w-4 text-gray-500" />
+          </Button>
           
-          <TabsContent value="text">
-            <form onSubmit={handleSubmit} className="w-full">
-              <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-4">
-                <div>
-                  <Input
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Enter observation or assessment data..."
-                    className="w-full mb-2"
-                    disabled={isUpdating}
-                  />
-                  
-                  {/* Section selector */}
-                  <div className="relative w-full">
-                    <select
-                      value={selectedSection}
-                      onChange={(e) => setSelectedSection(e.target.value)}
-                      disabled={isUpdating}
-                      className="w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="auto-detect">Auto-detect section</option>
-                      <optgroup label="Header">
-                        <option value="header.reasonForReferral">Reason For Referral</option>
-                        <option value="header.confidentialityStatement">Confidentiality Statement</option>
-                      </optgroup>
-                      <optgroup label="Background">
-                        <option value="background.studentDemographicsAndBackground.educationalHistory">Educational History</option>
-                        <option value="background.healthReport.medicalHistory">Medical History</option>
-                        <option value="background.parentGuardianConcerns">Parent/Guardian Concerns</option>
-                      </optgroup>
-                      <optgroup label="Assessment Results">
-                        <option value="assessmentResults.domains.receptive">Receptive Language</option>
-                        <option value="assessmentResults.domains.expressive">Expressive Language</option>
-                        <option value="assessmentResults.domains.pragmatic">Pragmatic Language</option>
-                        <option value="assessmentResults.domains.articulation">Articulation</option>
-                        <option value="assessmentResults.domains.voice">Voice</option>
-                        <option value="assessmentResults.domains.fluency">Fluency</option>
-                        <option value="assessmentResults.observations.classroomObservations">Classroom Observations</option>
-                        <option value="assessmentResults.observations.playBasedInformalObservations">Play-Based Observations</option>
-                      </optgroup>
-                      <optgroup label="Conclusion">
-                        <option value="conclusion.conclusion.summary">Conclusion Summary</option>
-                        <option value="conclusion.recommendations.services">Service Recommendations</option>
-                        <option value="conclusion.eligibility.californiaEdCode">Eligibility Determination</option>
-                      </optgroup>
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="opacity-50"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-                
+          {/* Editor panel - always rendered but visibility toggled with CSS */}
+          <div className={`bg-white border shadow-lg rounded-md p-4 w-full absolute 
+      top-0 
+      left-0 
+      right-0 
+      p-4 
+      bg-white 
+      shadow 
+      z-[9999] ${
+        editorOpen ? "" : "invisible pointer-events-none"
+      }`}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
                 <Button 
-                  type="submit" 
-                  disabled={isUpdating || !inputText.trim()}
-                  className="bg-purple-600 hover:bg-purple-700 text-white h-10"
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    console.log("[Editor panel] Close button clicked");
+                    setEditorOpen(false);
+                  }}
+                  className="h-6 w-6 p-0"
                 >
-                  {isUpdating ? (
-                    <>
-                      <Spinner className="h-4 w-4 mr-2" />
-                      Updating...
-                    </>
-                  ) : (
-                    'Update Report'
-                  )}
+                  ✕
                 </Button>
               </div>
-            </form>
-          </TabsContent>
-          
-          <TabsContent value="pdf">
-            <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-4">
-              <div>
-                <PdfUploader 
-                  onUpload={async (pdfData: string) => {
-                    setIsUpdating(true);
-                    setError(null);
-                    setSuccess(null);
-                    setCommandDetails(null);
-                    
-                    try {
-                      const response = await fetch('/api/text-editor-test', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          pdfData: pdfData,
-                          report: report,
-                          updateSection: selectedSection === 'auto-detect' ? undefined : selectedSection
-                        }),
-                      });
-                      
-                      if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to process PDF');
-                      }
-                      
-                      const data = await response.json();
-                      
-                      // Update the report state with the result from Claude's processing
-                      if (data.report) {
-                        setReport(data.report);
-                        
-                        // Set command details and success message
-                        if (data.command) {
-                          setCommandDetails(data.command);
-                          
-                          if (data.affectedDomain) {
-                            setSuccess(`Report updated successfully in the "${data.affectedDomain}" domain from PDF.`);
-                          } else {
-                            setSuccess(`Report updated successfully from PDF using ${data.command.command} command.`);
-                          }
-                        } else {
-                          setSuccess('Report updated successfully from PDF');
-                        }
-                      } else if (data.error) {
-                        setError(data.error);
-                      }
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : 'An unexpected error occurred processing the PDF');
-                    } finally {
-                      setIsUpdating(false);
-                    }
-                  }}
-                  disabled={isUpdating}
-                />
-                
-                {/* Section selector */}
-                <div className="relative w-full mt-3">
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">
-                    Target Section (Optional)
-                  </label>
-                  <select
-                    value={selectedSection}
-                    onChange={(e) => setSelectedSection(e.target.value)}
-                    disabled={isUpdating}
-                    className="w-full h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="auto-detect">Auto-detect section</option>
-                    <optgroup label="Assessment Results">
-                      <option value="assessmentResults.domains.receptive">Receptive Language</option>
-                      <option value="assessmentResults.domains.expressive">Expressive Language</option>
-                      <option value="assessmentResults.domains.pragmatic">Pragmatic Language</option>
-                      <option value="assessmentResults.domains.articulation">Articulation</option>
-                      <option value="assessmentResults.domains.voice">Voice</option>
-                      <option value="assessmentResults.domains.fluency">Fluency</option>
-                    </optgroup>
-                  </select>
-                  <div className="absolute right-3 top-[calc(50%+0.5rem)] -translate-y-1/2 pointer-events-none">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="opacity-50"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </div>
+              <p className="text-xs text-muted-foreground">
+                This demo shows how Claude's text editor tool can make precise updates to a structured JSON report.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
+                  Text Input
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
+                  PDF Upload
+                </Button>
+              </div>
+              <Input placeholder="Enter observation or assessment data..." className="text-xs" />
+              <div className="flex justify-between">
+                <Button variant="outline" size="sm" className="text-xs">
+                  Auto-detect section
+                </Button>
+                <Button size="sm" className="text-xs">Update Report</Button>
+              </div>
+              <div className="pt-3 border-t">
+                <span className="text-xs font-medium">Speech-Language Report</span>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  <Button variant="outline" size="sm" className="text-xs h-6">Export DOCX</Button>
+                  <Button variant="outline" size="sm" className="text-xs h-6">Export HTML</Button>
+                  <Button variant="outline" size="sm" className="text-xs h-6">Clear Report</Button>
+                  <Button variant="outline" size="sm" className="text-xs h-6">View JSON</Button>
                 </div>
               </div>
             </div>
-          </TabsContent>
-        </Tabs>
-        
-        {error && (
-          <div className="mt-4 p-2 bg-red-50 text-red-600 rounded-md text-sm">
-            {error}
           </div>
-        )}
-        
-        {success && (
-          <div className="mt-4 p-2 bg-green-50 text-green-700 rounded-md text-sm">
-            {success}
-          </div>
-        )}
-      </div>
-      
-      {/* Report sections as cards */}
-      <Card className="mb-6 border-0 shadow-sm">
-        <CardHeader className="bg-white border-b flex flex-row justify-between items-center">
-          <CardTitle className="text-xl font-medium">Speech-Language Report</CardTitle>
-          <div className="flex gap-2">
-            <ExportDocxButton 
-              reportData={report} 
-              className="text-xs h-8"
-            />
-            <Button
-              variant="outline"
-              className="text-xs h-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
-              onClick={() => {
-                // Import and use on demand to avoid potential import issues
-                import('@/lib/las-report-generator').then(module => {
-                  module.exportLASReport(report);
-                  setSuccess("Generated HTML report as a temporary solution");
-                }).catch(error => {
-                  console.error('Error loading LAS report generator:', error);
-                  setError('Failed to load LAS report generator. Please try again.');
-                });
-              }}
-            >
-              Export as HTML
-            </Button>
-            <Button
-              variant="outline"
-              className="text-xs h-8 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-              onClick={() => {
-                if (window.confirm("Are you sure you want to clear the report? This cannot be undone.")) {
-                  // Reset report to initial empty state
-                  setReport(createReportSkeleton());
-                  setSuccess("Report has been cleared successfully");
-                  setError(null);
-                  setCommandDetails(null);
-                }
-              }}
-            >
-              Clear Report
-            </Button>
-            <Button
-              variant="outline"
-              className="text-xs h-8"
-              onClick={() => setShowJsonPreview(true)}
-            >
-              View JSON
-            </Button>
-          </div>
-        </CardHeader>
+        </div>
+       
         <CardContent className="p-6">
           {/* Empty state */}
           {activeDomains.length === 0 && 
