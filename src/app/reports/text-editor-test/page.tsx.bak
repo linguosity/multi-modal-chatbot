@@ -531,7 +531,7 @@ export default function TextEditorTestPage() {
   return (
     <div className="container mx-auto py-6 max-w-5xl">
       <header className="mb-6">
-        <h1 className="text-2xl font-medium mb-2">Claude JSON Report Editor</h1>
+        <h1 className="text-2xl font-medium mb-2">Claude JSON Report </h1>
         <p className="text-gray-600 text-sm">
           This demo shows how Claude's text editor tool can make precise updates to a structured JSON report 
           using the text_editor_20250124 tool. Enter observations or assessment data below to update 

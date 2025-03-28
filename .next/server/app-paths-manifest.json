@@ -1,5 +1,3 @@
 {
-  "/page": "app/page.js",
-  "/reports/text-editor-test/page": "app/reports/text-editor-test/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/reports/text-editor-test/page": "app/reports/text-editor-test/page.js"
 }

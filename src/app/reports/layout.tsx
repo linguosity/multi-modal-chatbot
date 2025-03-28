@@ -27,7 +27,7 @@ function ReportsContent({ children }: { children: React.ReactNode }) {
   const { reportSections, sectionGroups, currentSectionId, handleSectionChange } = useReports();
   
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen w-full">
       {isReportDetailPage && (
         isEditPage ? (
           <ReportEditSidebar 
@@ -72,7 +72,7 @@ function ReportsContent({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="flex-1 p-4 md:p-6">
+          <div className="relative flex-1">
             {children}
           </div>
         </div>
