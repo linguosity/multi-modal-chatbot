@@ -47,10 +47,38 @@ export const BatchRequestStatus: React.FC<BatchRequestStatusProps> = ({
       console.log(`🔍 Polling batch status for ID: ${currentBatchId} (poll #${pollCount + 1})`);
       
       // Validate batch ID format before polling
-      if (!currentBatchId.startsWith('msgbatch_') && !currentBatchId.startsWith('simulated_') && !currentBatchId.startsWith('error_')) {
+      if (!currentBatchId.startsWith('msgbatch_') && !currentBatchId.startsWith('simulated_') && 
+          !currentBatchId.startsWith('error_') && !currentBatchId.startsWith('pdf_batch_')) {
         console.warn(`⚠️ Polling with unexpected batch ID format: ${currentBatchId}`);
-        console.warn(`⚠️ Expected formats are msgbatch_* for Anthropic or simulated_*/error_* for simulation`);
+        console.warn(`⚠️ Expected formats are msgbatch_* for Anthropic, simulated_*/error_* for simulation, or pdf_batch_* for PDF processing`);
         // Continue anyway as the API can handle invalid formats through simulation
+      }
+      
+      // Handle PDF batch (this is our own internal ID format)
+      const isPdfBatch = currentBatchId.startsWith('pdf_batch_');
+      if (isPdfBatch) {
+        console.log(`📊 PDF batch detected: ${currentBatchId}`);
+        // For PDF batches, we'll simulate progress based on poll count
+        // until we get a proper batch ID from the API
+        
+        // Simulate some progress
+        const progressPercent = Math.min(Math.floor((pollCount / 10) * 100), 90);
+        setProgress(progressPercent);
+        
+        // After a few polls, assume we have a 25% completion rate
+        if (pollCount > 2) {
+          setCompletedRequests(Math.floor(sections.length * 0.25));
+        }
+        
+        // After a few more polls, simulate 50% completion
+        if (pollCount > 4) {
+          setCompletedRequests(Math.floor(sections.length * 0.5));
+        }
+        
+        // Keep polling
+        setPollCount(pollCount + 1);
+        setTimeout(pollBatchStatus, POLL_INTERVAL);
+        return;
       }
       
       // Encode the original report as a URL parameter
@@ -108,12 +136,23 @@ export const BatchRequestStatus: React.FC<BatchRequestStatusProps> = ({
           setCompletedRequests(completed);
           setTotalRequests(total > 0 ? total : sections.length);
           
-          // Calculate progress percentage
+          // Calculate progress percentage based on tool response counts
           const progressPercent = total > 0 
             ? Math.floor((completed / total) * 100)
-            : Math.floor((pollCount / 10) * 100); // Fallback to time-based progress
+            : Math.min(Math.floor((pollCount / 10) * 100), 90); // Fallback to time-based progress capped at 90%
             
-          setProgress(progressPercent);
+          // Make sure progress is actually updated and shows incremental changes
+          setProgress(prev => {
+            // Only increase progress, never decrease
+            if (progressPercent > prev) {
+              return progressPercent;
+            }
+            // If we have completed requests but progress hasn't changed, add a small increment
+            else if (completed > 0 && prev < 95) {
+              return Math.min(prev + 5, 95); // Add 5% but cap at 95% until complete
+            }
+            return prev;
+          });
           
           // Check for errors in individual requests
           const failedRequests = requestCounts.errored || 0;
@@ -243,13 +282,23 @@ export const BatchRequestStatus: React.FC<BatchRequestStatusProps> = ({
             {sections.map((section, index) => (
               <span 
                 key={index}
-                className={`inline-block px-2 py-1 rounded ${
+                className={`inline-block px-2 py-1 rounded flex items-center ${
                   index < completedRequests
                     ? 'bg-blue-200 text-blue-800' 
-                    : 'bg-blue-100 text-blue-600'
+                    : index === completedRequests 
+                      ? 'bg-blue-300 text-blue-800 border border-blue-400' 
+                      : 'bg-blue-100 text-blue-600'
                 }`}
               >
+                {index === completedRequests && status === 'in_progress' && (
+                  <Spinner className="h-3 w-3 mr-1 text-blue-600" />
+                )}
                 {section.split('.').slice(-1)[0]}
+                {index < completedRequests && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
               </span>
             ))}
           </div>

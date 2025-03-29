@@ -1,5 +1,10 @@
 {
   "pages": {
+    "/api/text-editor-test/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/text-editor-test/route.js"
+    ],
     "/global-error": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -30,11 +35,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/reports/text-editor-test/page.js"
-    ],
-    "/api/text-editor-test/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/text-editor-test/route.js"
     ],
     "/api/text-editor-test/status/route": [
       "static/chunks/webpack.js",

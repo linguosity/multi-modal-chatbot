@@ -482,6 +482,10 @@ export default function TextEditorTestPage() {
     setCommandDetails(null);
 
     try {
+      // Get a client request ID for logging
+      const clientRequestId = `client_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+      console.log(`[${clientRequestId}] 🚀 Starting PDF processing request`);
+      
       const response = await fetch('/api/text-editor-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -494,13 +498,29 @@ export default function TextEditorTestPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error(`[${clientRequestId}] ❌ PDF processing error:`, errorData);
         throw new Error(errorData.error || 'Failed to process PDF');
       }
 
       const data = await response.json();
+      console.log(`[${clientRequestId}] 📦 PDF processing response:`, {
+        hasReport: !!data.report,
+        hasCommand: !!data.command,
+        hasBatch: !!data.batch,
+        batchId: data.batch?.id,
+        commandType: data.command?.command,
+        affectedDomain: data.affectedDomain
+      });
 
-      // Update the report state with the result from Claude's processing
-      if (data.report) {
+      // If we have a batch response, don't update the report yet
+      // The batch status component will handle polling and updating
+      if (data.batch && data.batch.id) {
+        console.log(`[${clientRequestId}] 🔄 Batch processing started with ID: ${data.batch.id}`);
+        // EditorPanel will handle the actual batch status display
+      }
+      // Otherwise update the report state with the result from Claude's processing
+      else if (data.report) {
+        console.log(`[${clientRequestId}] 📝 Updating report with PDF processing results`);
         setReport(data.report);
 
         // Set command details and success message
@@ -516,12 +536,21 @@ export default function TextEditorTestPage() {
           setSuccess('Report updated successfully from PDF');
         }
       } else if (data.error) {
+        console.error(`[${clientRequestId}] ❌ Error from PDF processing:`, data.error);
         setError(data.error);
       }
+      
+      return data; // Return data for EditorPanel to handle batch status
     } catch (err) {
+      console.error("PDF processing error:", err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred processing the PDF');
+      throw err; // Rethrow for EditorPanel to handle
     } finally {
-      setIsUpdating(false);
+      // Only set isUpdating to false if we're not doing batch processing
+      // Otherwise, this will be handled when batch completes
+      if (selectedSection !== 'auto-detect') {
+        setIsUpdating(false);
+      }
     }
   };
 
@@ -596,7 +625,7 @@ export default function TextEditorTestPage() {
           isUpdating={isUpdating}
           error={error}
           success={success}
-          handleSubmit={handleSubmit}
+          handleSubmit={handleSubmit}  // The EditorPanel now decides between standard/batch based on section
           onExportHtml={handleExportHtml}
           onClearReport={handleClearReport}
           onViewJson={() => setShowJsonPreview(true)}
@@ -622,9 +651,14 @@ export default function TextEditorTestPage() {
                 sample: commands[0].value
               });
             }
+            
+            // Clear the updating state
+            setIsUpdating(false);
           }}
           onBatchError={(errorMessage) => {
             setError(errorMessage);
+            // Clear the updating state
+            setIsUpdating(false);
           }}
         />
        
