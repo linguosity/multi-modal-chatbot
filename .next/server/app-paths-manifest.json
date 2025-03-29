@@ -1,3 +1,5 @@
 {
+  "/api/text-editor-test/route": "app/api/text-editor-test/route.js",
+  "/api/text-editor-test/status/route": "app/api/text-editor-test/status/route.js",
   "/reports/text-editor-test/page": "app/reports/text-editor-test/page.js"
 }

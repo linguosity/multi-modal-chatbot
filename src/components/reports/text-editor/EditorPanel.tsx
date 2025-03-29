@@ -6,8 +6,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PdfUploader } from "@/components/reports/PdfUploader";
 import { ExportDocxButton } from "@/components/reports/ExportDocxButton";
-import { Pencil } from "lucide-react";
+import { Pencil, Zap } from "lucide-react";
 import { SpeechLanguageReport } from '@/types/reportTypes';
+import BatchRequestStatus from './BatchRequestStatus';
 
 interface EditorPanelProps {
   inputText: string;
@@ -23,6 +24,8 @@ interface EditorPanelProps {
   onViewJson: () => void;
   report: SpeechLanguageReport;
   onPdfUpload: (pdfData: string) => Promise<void>;
+  onBatchComplete: (updatedReport: SpeechLanguageReport, commands: any[], affectedDomains: string[]) => void;
+  onBatchError: (error: string) => void;
 }
 
 export const EditorPanel: React.FC<EditorPanelProps> = ({ 
@@ -38,10 +41,75 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   onClearReport,
   onViewJson,
   report,
-  onPdfUpload
+  onPdfUpload,
+  onBatchComplete,
+  onBatchError
 }) => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [inputMethod, setInputMethod] = useState<'text' | 'pdf'>('text');
+  const [processingMode, setProcessingMode] = useState<'standard' | 'batch'>('standard');
+  const [batchStatus, setBatchStatus] = useState<{
+    active: boolean;
+    batchId: string;
+    sections: string[];
+  }>({
+    active: false,
+    batchId: '',
+    sections: []
+  });
+
+  // Handle batch submit
+  const handleBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() || isUpdating) return;
+    
+    try {
+      // Prepare the same payload used in standard mode
+      const payload = {
+        input: inputText,
+        report: report,
+        updateSection: selectedSection === 'auto-detect' ? undefined : selectedSection
+      };
+      
+      // Call the batch API endpoint
+      const response = await fetch('/api/text-editor-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to start batch processing');
+      }
+      
+      const data = await response.json();
+      
+      // If we have a batch ID, start the polling component
+      if (data.batch && data.batch.id) {
+        // Validate the batch ID format - for debugging
+        if (!data.batch.id.startsWith('msgbatch_') && !data.batch.id.startsWith('simulated_')) {
+          console.warn(`⚠️ Unexpected batch ID format from API: ${data.batch.id}`);
+          console.warn(`⚠️ Expected formats are msgbatch_* for Anthropic or simulated_* for simulation`);
+          // Continue anyway as the status endpoint can handle invalid formats
+        }
+        
+        setBatchStatus({
+          active: true,
+          batchId: data.batch.id,
+          sections: data.batch.sections || []
+        });
+        
+        // Clear input text and hide editor
+        setInputText('');
+        setEditorOpen(false);
+      } else {
+        throw new Error('No batch ID received from API');
+      }
+    } catch (err) {
+      onBatchError(err instanceof Error ? err.message : 'Failed to start batch processing');
+    }
+  };
 
   return (
     <div className="sticky top-4 left-4 z-50 ml-4 mr-4">
@@ -50,7 +118,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         variant="ghost"
         size="icon"
         className={`rounded-full bg-white border border-gray-200 shadow p-2 hover:bg-gray-100 ${
-          editorOpen ? "invisible pointer-events-none" : ""
+          editorOpen || batchStatus.active ? "invisible pointer-events-none" : ""
         }`}
         aria-label="Claude JSON Report Editor"
         onClick={() => {
@@ -60,6 +128,25 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
       >
         <Pencil className="h-4 w-4 text-gray-500" />
       </Button>
+      
+      {/* Batch status component */}
+      {batchStatus.active && (
+        <div className="mb-4">
+          <BatchRequestStatus
+            batchId={batchStatus.batchId}
+            originalReport={report}
+            sections={batchStatus.sections}
+            onComplete={(updatedReport, commands, affectedDomains) => {
+              setBatchStatus({ active: false, batchId: '', sections: [] });
+              onBatchComplete(updatedReport, commands, affectedDomains);
+            }}
+            onError={(error) => {
+              setBatchStatus({ active: false, batchId: '', sections: [] });
+              onBatchError(error);
+            }}
+          />
+        </div>
+      )}
       
       {/* Editor panel - always rendered but visibility toggled with CSS */}
       <div className={`bg-white border shadow-lg rounded-md p-4 w-full absolute 
@@ -74,6 +161,25 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
           }`}>
         <div className="space-y-3">
           <div className="flex justify-between items-center">
+            <div className="flex space-x-2">
+              <Button
+                variant={processingMode === 'standard' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setProcessingMode('standard')}
+                className="text-xs h-7"
+              >
+                Standard
+              </Button>
+              <Button
+                variant={processingMode === 'batch' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setProcessingMode('batch')}
+                className="text-xs h-7"
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                Batch Mode
+              </Button>
+            </div>
             <Button 
               variant="ghost" 
               size="sm" 
@@ -86,6 +192,15 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               ✕
             </Button>
           </div>
+          
+          {/* Processing mode explainer */}
+          {processingMode === 'batch' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-2 text-xs text-blue-700">
+              <strong>Batch Mode:</strong> Processes multiple sections in parallel for faster results. 
+              The editor will close and show a progress tracker while your report is being updated.
+            </div>
+          )}
+          
           {/* Input form */}
           <div className="mb-6">
             <Tabs value={inputMethod} onValueChange={(value) => setInputMethod(value as 'text' | 'pdf')} className="w-full">
@@ -95,7 +210,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               </TabsList>
 
               <TabsContent value="text">
-                <form onSubmit={handleSubmit} className="w-full">
+                <form onSubmit={processingMode === 'standard' ? handleSubmit : handleBatchSubmit} className="w-full">
                   <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-4">
                     <div>
                       <Input
@@ -162,15 +277,20 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                     <Button 
                       type="submit" 
                       disabled={isUpdating || !inputText.trim()}
-                      className="bg-purple-600 hover:bg-purple-700 text-white h-10"
+                      className={`${processingMode === 'standard' 
+                        ? 'bg-purple-600 hover:bg-purple-700' 
+                        : 'bg-blue-600 hover:bg-blue-700'} text-white h-10`}
                     >
                       {isUpdating ? (
                         <>
                           <Spinner className="h-4 w-4 mr-2" />
-                          Updating...
+                          Processing...
                         </>
                       ) : (
-                        'Update Report'
+                        <>
+                          {processingMode === 'batch' && <Zap className="h-4 w-4 mr-1" />}
+                          {processingMode === 'standard' ? 'Update Report' : 'Process in Batch'}
+                        </>
                       )}
                     </Button>
                   </div>

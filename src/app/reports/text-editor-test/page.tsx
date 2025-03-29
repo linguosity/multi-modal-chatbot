@@ -602,6 +602,30 @@ export default function TextEditorTestPage() {
           onViewJson={() => setShowJsonPreview(true)}
           report={report}
           onPdfUpload={handlePdfUpload}
+          onBatchComplete={(updatedReport, commands, affectedDomains) => {
+            // Update the report with batch results
+            setReport(updatedReport);
+            
+            // Set success message
+            const domainsText = affectedDomains.length > 0 
+              ? `${affectedDomains.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')} domains`
+              : 'multiple sections';
+            setSuccess(`Batch processing completed successfully! Updated ${domainsText}.`);
+            
+            // Show command details for the first command if available
+            if (commands && commands.length > 0) {
+              setCommandDetails({
+                command: 'batch_update',
+                updates: commands.length,
+                domains: affectedDomains,
+                path: commands[0].path,
+                sample: commands[0].value
+              });
+            }
+          }}
+          onBatchError={(errorMessage) => {
+            setError(errorMessage);
+          }}
         />
        
         <div className="p-6">

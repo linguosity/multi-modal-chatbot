@@ -35,6 +35,11 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/text-editor-test/route.js"
+    ],
+    "/api/text-editor-test/status/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/text-editor-test/status/route.js"
     ]
   }
 }
