@@ -1,318 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AssessmentTool, getAssessmentToolById } from '@/lib/assessment-tools';
-
-// Define domain section structure
-interface DomainSection {
-  isConcern: boolean;
-  topicSentence: string;
-  strengths: string[];
-  needs: string[];
-  impactStatement: string;
-  lastUpdated?: string;
-  assessmentTools?: string[]; // Domain-specific assessment tools list
-}
-
-// Define sections of the speech-language report
-interface ReportHeader {
-  studentInformation: {
-    firstName: string;
-    lastName: string;
-    DOB: string;
-    reportDate: string;
-    evaluationDate: string;
-    parents: string[];
-    homeLanguage: string;
-  };
-  reasonForReferral: string;
-  confidentialityStatement: string;
-}
-
-interface ReportBackground {
-  studentDemographicsAndBackground: {
-    educationalHistory: string;
-  };
-  healthReport: {
-    medicalHistory: string;
-    visionAndHearingScreening: string;
-    medicationsAndAllergies: string;
-  };
-  earlyInterventionHistory: string;
-  familyHistory: {
-    familyStructure: string;
-    languageAndCulturalBackground: string;
-    socioeconomicFactors: string;
-  };
-  parentGuardianConcerns: string;
-}
-
-interface ReportAssessmentResults {
-  observations: {
-    classroomObservations?: string;
-    playBasedInformalObservations?: string;
-    socialInteractionObservations?: string;
-    [key: string]: string | undefined;
-  };
-  assessmentProceduresAndTools: {
-    overviewOfAssessmentMethods: string;
-    assessmentToolsUsed: string[]; // Store only the IDs of assessment tools
-  };
-  domains: {
-    receptive: DomainSection;
-    expressive: DomainSection;
-    pragmatic: DomainSection;
-    articulation: DomainSection;
-    voice: DomainSection;
-    fluency: DomainSection;
-    [key: string]: DomainSection;
-  };
-}
-
-interface ReportConclusion {
-  eligibility: {
-    domains: {
-      receptive: boolean;
-      expressive: boolean;
-      pragmatic: boolean;
-      articulation: boolean;
-      voice: boolean;
-      fluency: boolean;
-      [key: string]: boolean;
-    };
-    californiaEdCode: string;
-  };
-  conclusion: {
-    summary: string;
-  };
-  recommendations: {
-    services: {
-      typeOfService: string;
-      frequency: string;
-      setting: string;
-    };
-    accommodations: string[];
-    facilitationStrategies: string[];
-  };
-  parentFriendlyGlossary?: {
-    terms: {
-      [key: string]: string;
-    };
-  };
-}
-
-// The top-level report combining all sections
-interface SpeechLanguageReport {
-  header: ReportHeader;
-  background: ReportBackground;
-  assessmentResults: ReportAssessmentResults;
-  conclusion: ReportConclusion;
-  metadata: {
-    lastUpdated: string;
-    version: number;
-    createdBy?: string;
-  };
-}
-
-/**
- * Normalize input data from various sources (text, PDF, audio)
- * @param input - Input data in various formats
- */
-async function normalizeInput(input: any): Promise<string> {
-  // Handle different input formats
-  if (typeof input === 'string') {
-    return input;
-  } else if (input.text) {
-    return input.text;
-  } else if (input.pdfData) {
-    // Return the base64 PDF data - Claude will process it with its document capability
-    return input.pdfData;
-  }
-  return JSON.stringify(input);
-}
-
-/**
- * Create a default report skeleton if none exists
- */
-function createReportSkeleton(): SpeechLanguageReport {
-  return {
-    header: {
-      studentInformation: {
-        firstName: "",
-        lastName: "",
-        DOB: "",
-        reportDate: "",
-        evaluationDate: "",
-        parents: [],
-        homeLanguage: ""
-      },
-      reasonForReferral: "",
-      confidentialityStatement: ""
-    },
-    background: {
-      studentDemographicsAndBackground: {
-        educationalHistory: ""
-      },
-      healthReport: {
-        medicalHistory: "",
-        visionAndHearingScreening: "",
-        medicationsAndAllergies: ""
-      },
-      earlyInterventionHistory: "",
-      familyHistory: {
-        familyStructure: "",
-        languageAndCulturalBackground: "",
-        socioeconomicFactors: ""
-      },
-      parentGuardianConcerns: ""
-    },
-    assessmentResults: {
-      observations: {
-        classroomObservations: "",
-        playBasedInformalObservations: "",
-        socialInteractionObservations: ""
-      },
-      assessmentProceduresAndTools: {
-        overviewOfAssessmentMethods: "",
-        assessmentToolsUsed: [] // IDs of assessment tools
-      },
-      domains: {
-        receptive: {
-          isConcern: false,
-          topicSentence: "",
-          strengths: [],
-          needs: [],
-          impactStatement: ""
-        },
-        expressive: {
-          isConcern: false,
-          topicSentence: "",
-          strengths: [],
-          needs: [],
-          impactStatement: ""
-        },
-        pragmatic: {
-          isConcern: false,
-          topicSentence: "",
-          strengths: [],
-          needs: [],
-          impactStatement: ""
-        },
-        articulation: {
-          isConcern: false,
-          topicSentence: "",
-          strengths: [],
-          needs: [],
-          impactStatement: ""
-        },
-        voice: {
-          isConcern: false,
-          topicSentence: "",
-          strengths: [],
-          needs: [],
-          impactStatement: ""
-        },
-        fluency: {
-          isConcern: false,
-          topicSentence: "",
-          strengths: [],
-          needs: [],
-          impactStatement: ""
-        }
-      }
-    },
-    conclusion: {
-      eligibility: {
-        domains: {
-          receptive: false,
-          expressive: false,
-          pragmatic: false,
-          articulation: false,
-          voice: false,
-          fluency: false
-        },
-        californiaEdCode: ""
-      },
-      conclusion: {
-        summary: ""
-      },
-      recommendations: {
-        services: {
-          typeOfService: "",
-          frequency: "",
-          setting: ""
-        },
-        accommodations: [],
-        facilitationStrategies: []
-      },
-      parentFriendlyGlossary: {
-        terms: {}
-      }
-    },
-    metadata: {
-      lastUpdated: new Date().toISOString(),
-      version: 1
-    }
-  };
-}
-
-/**
- * Update a specific domain section with new data
- */
-function updateDomainSection(
-  report: SpeechLanguageReport,
-  domain: string,
-  updates: Partial<DomainSection>
-): SpeechLanguageReport {
-  const updatedReport = { ...report };
-  
-  // Initialize domain if it doesn't exist
-  if (!updatedReport.assessmentResults.domains[domain]) {
-    updatedReport.assessmentResults.domains[domain] = {
-      isConcern: false,
-      topicSentence: '',
-      strengths: [],
-      needs: [],
-      impactStatement: ''
-    };
-  }
-  
-  // Update specific fields
-  if (updates.isConcern !== undefined) {
-    updatedReport.assessmentResults.domains[domain].isConcern = updates.isConcern;
-  }
-  
-  if (updates.topicSentence) {
-    updatedReport.assessmentResults.domains[domain].topicSentence = updates.topicSentence;
-  }
-  
-  if (updates.strengths && updates.strengths.length > 0) {
-    updatedReport.assessmentResults.domains[domain].strengths = [
-      ...(updatedReport.assessmentResults.domains[domain].strengths || []),
-      ...updates.strengths
-    ];
-  }
-  
-  if (updates.needs && updates.needs.length > 0) {
-    updatedReport.assessmentResults.domains[domain].needs = [
-      ...(updatedReport.assessmentResults.domains[domain].needs || []),
-      ...updates.needs
-    ];
-  }
-  
-  if (updates.impactStatement) {
-    updatedReport.assessmentResults.domains[domain].impactStatement = updates.impactStatement;
-  }
-  
-  // Also update the eligibility status if this is an area of concern
-  if (updates.isConcern !== undefined) {
-    updatedReport.conclusion.eligibility.domains[domain] = updates.isConcern;
-  }
-  
-  // Update metadata
-  updatedReport.metadata.lastUpdated = new Date().toISOString();
-  updatedReport.metadata.version += 1;
-  
-  return updatedReport;
-}
+import { SpeechLanguageReport, DomainSection } from '@/types/reportTypes';
+import { normalizeInput, createReportSkeleton, deepMerge, updateDomainSection } from '@/lib/reportUtils';
 
 /**
  * API endpoint to test Claude's text editor tool with JSON report updates
@@ -348,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     // Create or use existing report
     const report = existingReport || createReportSkeleton();
-    console.log(`[${requestId}] 📋 Using ${existingReport ? 'provided' : 'default'} report structure with ${Object.keys(report.domains || {}).length} domains`);
+    console.log(`[${requestId}] 📋 Using ${existingReport ? 'provided' : 'default'} report structure with ${Object.keys(report.assessmentResults.domains).length} domains`);
     
     // Get API key from environment variables
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -373,9 +62,9 @@ export async function POST(request: NextRequest) {
         console.log(`[${requestId}] 📄 Processing PDF data...`);
       }
       
-      // Determine which section to update
+      // Determine which section(s) to update
       const sectionToUpdate = updateSection || 'auto-detect';
-      console.log(`[${requestId}] 🎯 Target section: ${sectionToUpdate}`);
+      console.log(`[${requestId}] 🎯 Target section(s): ${sectionToUpdate}`);
       
       // Prepare the report section that Claude will view and edit
       let viewContent: string;
@@ -397,58 +86,31 @@ export async function POST(request: NextRequest) {
         return null;
       };
       
+      // NEW LOGIC: Always send the full serialized report if "auto-detect" or if multiple sections are specified.
       if (sectionToUpdate === 'auto-detect') {
-        // For auto-detect, we only send a summary of each section to save tokens
-        const reportSummary = {
-          header: {
-            studentName: `${report.header.studentInformation.firstName} ${report.header.studentInformation.lastName}`,
-            reasonForReferral: report.header.reasonForReferral?.substring(0, 100) + '...',
-          },
-          assessmentResults: {
-            domains: Object.keys(report.assessmentResults.domains).reduce((acc, domain) => {
-              acc[domain] = {
-                isConcern: report.assessmentResults.domains[domain].isConcern,
-                topicSentence: report.assessmentResults.domains[domain].topicSentence
-              };
-              return acc;
-            }, {} as Record<string, any>)
-          },
-          conclusion: {
-            summary: report.conclusion.conclusion.summary?.substring(0, 100) + '...'
-          }
-        };
-        
-        viewContent = JSON.stringify(reportSummary, null, 2);
+        // Send the full report JSON when no sections are specified
+        viewContent = JSON.stringify(report, null, 2);
         targetPath = '';
-        console.log(`[${requestId}] 🔍 Auto-detect mode: Sending summary report structure (${viewContent.length} chars)`);
-      } else if (sectionToUpdate.startsWith('assessmentResults.domains.')) {
-        // Extract domain name from path
-        const domainName = sectionToUpdate.split('.')[2];
-        viewContent = JSON.stringify(report.assessmentResults.domains[domainName] || {}, null, 2);
-        targetPath = sectionToUpdate;
-        console.log(`[${requestId}] 🔍 Domain-specific update: ${domainName}`, report.assessmentResults.domains[domainName] || 'domain not found');
+        console.log(`[${requestId}] Tag mode: Sending full report structure without specific section tags.`);
+      } else if (sectionToUpdate.includes(',')) {
+        // If the user specifies multiple sections (comma-separated), send the full report and tag those sections
+        viewContent = JSON.stringify(report, null, 2);
+        targetPath = sectionToUpdate; // targetPath now holds a comma-separated list of sections
+        console.log(`[${requestId}] Tag mode: User-specified sections: ${sectionToUpdate}`);
       } else {
-        // Handle other specific paths by determining which main section it belongs to
+        // For a single specified section, handle as before
         const mainSection = getMainSection(sectionToUpdate);
-        
         if (mainSection) {
-          // Send just that section of the report
           viewContent = JSON.stringify(report[mainSection], null, 2);
           targetPath = sectionToUpdate;
-          console.log(`[${requestId}] 🔍 Section update: ${mainSection} -> ${sectionToUpdate}`);
+          console.log(`[${requestId}] Section update: ${mainSection} -> ${sectionToUpdate}`);
         } else {
-          // If we can't determine the section, get the specific path or default to summary
           const nestedValue = getNestedValue(report, sectionToUpdate);
           viewContent = nestedValue 
             ? JSON.stringify(nestedValue, null, 2)
-            : JSON.stringify({
-                header: report.header,
-                assessmentResults: {
-                  domains: report.assessmentResults.domains
-                }
-              }, null, 2);
+            : JSON.stringify(report, null, 2);
           targetPath = sectionToUpdate;
-          console.log(`[${requestId}] 🔍 Other section update: ${sectionToUpdate}`);
+          console.log(`[${requestId}] Other section update: ${sectionToUpdate}`);
         }
       }
       
@@ -466,10 +128,18 @@ The report is organized into four main sections:
 3. assessmentResults - Observations, assessment tools, and domain evaluations
 4. conclusion - Eligibility determination, summary, and recommendations
 
+User-specified sections: ${sectionToUpdate === 'auto-detect' ? 'None specified' : sectionToUpdate}
+
 INSTRUCTIONS:
 1. DO NOT use the text editor tool's str_replace command for these updates
-2. INSTEAD, use the JSON path command approach described below
-3. Format your response as a regular text message containing the JSON command
+2. INSTEAD, analyze ALL sections of the report that need updating based on the input
+3. Return MULTIPLE update_key JSON commands - one for each section that needs updating
+
+IMPORTANT: Your response should include separate JSON commands for:
+- Student information (name, DOB, demographics)
+- Background information (educational, family, medical, developmental history)
+- Each language domain with relevant findings (receptive, expressive, fluency, etc.)
+- Assessment tools mentioned in the input
 
 JSON PATH COMMAND FORMAT:
 \`\`\`json
@@ -496,10 +166,9 @@ For domain sections, maintain these guidelines:
 IMPORTANT: When processing standardized tests, add the assessment tool name directly to the domain.assessmentTools array. For example:
 "assessmentTools": ["Goldman-Fristoe Test of Articulation-3 (GFTA-3)"]
 
-DO NOT respond with a direct text answer. ALWAYS respond with a JSON command as shown above.`;
+FORMAT YOUR RESPONSE AS MULTIPLE JSON COMMANDS, EACH IN ITS OWN CODE BLOCK.`;
 
       // Prepare the user message based on input type
-      let userMessage = '';
       let userContent = [];
       
       if (isPdfUpload) {
@@ -507,7 +176,7 @@ DO NOT respond with a direct text answer. ALWAYS respond with a JSON command as 
         userContent = [
           {
             type: "text",
-            text: `I need to update the speech-language report based on the content in this PDF document. ${sectionToUpdate !== 'auto-detect' ? `Please focus on updating the ${sectionToUpdate} section.` : 'Please analyze the PDF and determine which section of the report to update.'}\n\nHere is the current report structure:\n\`\`\`json\n${viewContent}\n\`\`\`\n\nFor standardized tests like GFTA, CELF, etc., identify key scores and findings, and update the appropriate domain section. Extract any relevant phonological processes, error patterns, or specific strengths/needs.\n\nIMPORTANT: When extracting data from standardized tests, be sure to add the test's full name to the domain.assessmentTools array using the update_key command. For example, if analyzing GFTA-3 results for articulation, include "assessmentTools": ["Goldman-Fristoe Test of Articulation, Third Edition (GFTA-3)"] in your update. This helps track which tools were used for each domain.\n\nRespond with an update_key JSON command as described in the system prompt.`
+            text: `I need to update the speech-language report based on the content in this PDF document. ${sectionToUpdate !== 'auto-detect' ? `Please focus on updating the ${sectionToUpdate} section.` : 'Please analyze the PDF and determine which section of the report to update.'}\n\nHere is the current report structure:\n\`\`\`json\n${viewContent}\n\`\`\`\n\nFor standardized tests like GFTA, CELF, etc., identify key scores and findings, and update the appropriate domain section. Extract any relevant phonological processes, error patterns, or specific strengths/needs.\n\nIMPORTANT: When extracting data from standardized tests, be sure to add the test\'s full name to the domain.assessmentTools array using the update_key command. For example, if analyzing GFTA-3 results for articulation, include "assessmentTools": ["Goldman-Fristoe Test of Articulation, Third Edition (GFTA-3)"] in your update. This helps track which tools were used for each domain.\n\nRespond with an update_key JSON command as described in the system prompt.`
           },
           {
             type: "document",
@@ -787,12 +456,16 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
             try {
               // Extract the JSON object from markdown code blocks or plain text
               const jsonStr = match.replace(/```json\s*|\s*```/g, '').trim();
+              
+              // Parse as full JSON object to preserve structure
               const jsonObj = JSON.parse(jsonStr);
               
               // Check if this is an update_key command
               if (jsonObj.command === 'update_key' && jsonObj.path && jsonObj.action && jsonObj.value !== undefined) {
-                updateKeyCommand = jsonObj;
-                console.log(`[${requestId}] 🔑 Found update_key command in text:`, updateKeyCommand);
+                updateKeyCommand = jsonObj; // Use the object directly, not stringified then reparsed
+                console.log(`[${requestId}] 🔑 Found update_key command in text`);
+                // Log the full structure to help with debugging
+                console.log(`[${requestId}] 📊 Update command structure:`, JSON.stringify(updateKeyCommand));
                 break;
               }
             } catch (e) {
@@ -813,10 +486,11 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
         let affectedDomain = '';
         
         // Extract domain if path starts with domains.X
-        if (updateKeyCommand.path.startsWith('domains.')) {
+        if (updateKeyCommand.path.includes('domains.')) {
           const pathParts = updateKeyCommand.path.split('.');
-          if (pathParts.length >= 2) {
-            affectedDomain = pathParts[1];
+          const domainIndex = pathParts.findIndex(part => part === 'domains');
+          if (domainIndex !== -1 && pathParts.length > domainIndex + 1) {
+            affectedDomain = pathParts[domainIndex + 1];
             console.log(`[${requestId}] 🎯 Affected domain from path: ${affectedDomain}`);
           }
         }
@@ -828,12 +502,20 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
           
           // Navigate to the parent object of the target property
           for (let i = 0; i < pathParts.length - 1; i++) {
-            if (!current[pathParts[i]]) {
-              // Create missing objects in the path
-              current[pathParts[i]] = {};
-              console.log(`[${requestId}] 🏗️ Created missing object at ${pathParts.slice(0, i+1).join('.')}`);
+            const part = pathParts[i];
+            
+            // Create missing objects in the path
+            if (!current[part]) {
+              // Check if the next path segment is a number (array index)
+              const nextPart = pathParts[i + 1];
+              const isNextPartArrayIndex = !isNaN(parseInt(nextPart));
+              
+              // Create appropriate container type (array or object)
+              current[part] = isNextPartArrayIndex ? [] : {};
+              console.log(`[${requestId}] 🏗️ Created missing ${isNextPartArrayIndex ? 'array' : 'object'} at ${pathParts.slice(0, i + 1).join('.')}`);
             }
-            current = current[pathParts[i]];
+            
+            current = current[part];
           }
           
           // Get the target property name
@@ -867,17 +549,16 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
               break;
               
             case 'merge':
-              // For objects, merge properties
-              if (!current[targetProp] || typeof current[targetProp] !== 'object' || Array.isArray(current[targetProp])) {
+              // For objects, deep merge properties
+              if (!current[targetProp] || typeof current[targetProp] !== 'object') {
                 current[targetProp] = {};
               }
               
-              current[targetProp] = { 
-                ...current[targetProp], 
-                ...updateKeyCommand.value 
-              };
+              current[targetProp] = deepMerge(current[targetProp], updateKeyCommand.value);
               
               console.log(`[${requestId}] ✅ Merged into ${updateKeyCommand.path}`);
+              // Log the structure after merge
+              console.log(`[${requestId}] 📊 Structure after merge:`, JSON.stringify(current[targetProp]));
               break;
               
             default:
@@ -889,6 +570,11 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
           updatedReport.metadata.version = (updatedReport.metadata.version || 0) + 1;
           
           console.log(`[${requestId}] ✅ Successfully applied update_key command`);
+          
+          // Log the final affected section
+          const sectionPath = updateKeyCommand.path.split('.')[0]; // Get top-level section
+          const updatedSection = updatedReport[sectionPath];
+          console.log(`[${requestId}] 📊 Updated section structure:`, JSON.stringify(updatedSection).substring(0, 200) + '...');
           
           return NextResponse.json({
             report: updatedReport,
@@ -1039,23 +725,23 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
                   const tsMatch = finalCommand.new_str.match(/"topicSentence":\s*"([^"]*)"/);
                   if (tsMatch) extractedContent['topicSentence'] = tsMatch[1];
                   
-                  // Try to extract evidence (simplified)
-                  const evidenceMatch = finalCommand.new_str.match(/"evidence":\s*\[(.*?)\]/s);
-                  if (evidenceMatch) {
+                  // Try to extract strengths/evidence (simplified)
+                  const strengthsMatch = finalCommand.new_str.match(/"strengths":\s*\[(.*?)\]/s);
+                  if (strengthsMatch) {
                     try {
-                      extractedContent['evidence'] = JSON.parse(`[${evidenceMatch[1]}]`);
+                      extractedContent['strengths'] = JSON.parse(`[${strengthsMatch[1]}]`);
                     } catch (e) {
-                      console.warn(`[${requestId}] ⚠️ Could not parse evidence`, e);
+                      console.warn(`[${requestId}] ⚠️ Could not parse strengths`, e);
                     }
                   }
                   
-                  // Try to extract challenges (simplified)
-                  const challengesMatch = finalCommand.new_str.match(/"challenges":\s*\[(.*?)\]/s);
-                  if (challengesMatch) {
+                  // Try to extract needs/challenges (simplified)
+                  const needsMatch = finalCommand.new_str.match(/"needs":\s*\[(.*?)\]/s);
+                  if (needsMatch) {
                     try {
-                      extractedContent['challenges'] = JSON.parse(`[${challengesMatch[1]}]`);
+                      extractedContent['needs'] = JSON.parse(`[${needsMatch[1]}]`);
                     } catch (e) {
-                      console.warn(`[${requestId}] ⚠️ Could not parse challenges`, e);
+                      console.warn(`[${requestId}] ⚠️ Could not parse needs`, e);
                     }
                   }
                   
@@ -1135,7 +821,7 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
                   const updatedDomainSection = {
                     ...domainSection,
                     topicSentence: finalCommand.new_str.match(/"topicSentence":\s*"([^"]*)"/)?.[1] || domainSection.topicSentence,
-                    evidence: [...(domainSection.evidence || []), normalizedInput]
+                    strengths: [...(domainSection.strengths || []), normalizedInput]
                   };
                   updatedReport = updateDomainSection(report, extractedDomain, updatedDomainSection);
                 }
@@ -1229,7 +915,7 @@ IMPORTANT: Format your entire response as a text message containing only the JSO
       const updatedReport = { ...report };
       
       // Simple domain detection based on keywords
-      const inputLower = input.toLowerCase();
+      const inputLower = input?.toLowerCase() || '';
       let targetDomain = 'articulation';
       
       if (inputLower.includes('understand') || inputLower.includes('follow') || inputLower.includes('direction')) {
