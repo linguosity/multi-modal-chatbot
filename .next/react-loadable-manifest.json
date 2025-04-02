@@ -1,12 +1,1 @@
-{
-  "app/dashboard/[userId]/reports/[reportId]/page.tsx -> @/lib/las-report-generator": {
-    "id": "app/dashboard/[userId]/reports/[reportId]/page.tsx -> @/lib/las-report-generator",
-    "files": [
-      "static/chunks/_app-pages-browser_src_lib_las-report-generator_js.js"
-    ]
-  },
-  "lib/las-report-generator.js -> file-saver": {
-    "id": "lib/las-report-generator.js -> file-saver",
-    "files": []
-  }
-}
+{}

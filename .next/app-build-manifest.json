@@ -5,16 +5,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/global-error.js"
     ],
-    "/not-found": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/not-found.js"
-    ],
-    "/_not-found/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
-    ],
     "/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -26,10 +16,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/error.js"
     ],
-    "/page": [
+    "/not-found": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+      "static/chunks/app/not-found.js"
     ],
     "/dashboard/layout": [
       "static/chunks/webpack.js",
@@ -41,30 +31,25 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/loading.js"
     ],
-    "/dashboard/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
-    ],
     "/dashboard/[userId]/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/[userId]/layout.js"
     ],
-    "/dashboard/[userId]/reports/layout": [
+    "/dashboard/[userId]/lists/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/[userId]/reports/layout.js"
+      "static/chunks/app/dashboard/[userId]/lists/layout.js"
     ],
-    "/dashboard/[userId]/reports/page": [
+    "/dashboard/[userId]/lists/[listId]/edit/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/[userId]/reports/page.js"
+      "static/chunks/app/dashboard/[userId]/lists/[listId]/edit/page.js"
     ],
-    "/dashboard/[userId]/reports/[reportId]/page": [
+    "/dashboard/[userId]/lists/[listId]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/[userId]/reports/[reportId]/page.js"
+      "static/chunks/app/dashboard/[userId]/lists/[listId]/page.js"
     ]
   }
 }

@@ -28,15 +28,15 @@ export default function UserReportsLayout({ children }: { children: React.ReactN
                 <>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbPage>Report Editor</BreadcrumbPage>
+                    <BreadcrumbPage> {userId} </BreadcrumbPage>
                   </BreadcrumbItem>
                 </>
               )}
             </BreadcrumbList>
           </Breadcrumb>
-          <h1 className="text-xl font-bold">
+          {/*<h1 className="text-xl font-bold">
             {isReportDetail ? "Edit Report" : "My Reports"}
-          </h1>
+          </h1>*/}
         </div>
         <div className="relative flex-1 overflow-auto px-4 md:px-6 py-4">
           {children}

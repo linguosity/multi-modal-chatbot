@@ -31,19 +31,18 @@ const appSuiteItems = [
     color: '#6C8578', // sage green
   },
   {
+    id: 'lists',
+    name: 'Word Lists',
+    href: '/dashboard/user1/lists', // Using user1 as temporary user ID
+    icon: Mic,
+    color: '#C45336', // burnt sienna
+  },
+  {
     id: 'polyglot',
     name: 'Polyglot',
     href: '/polyglot',
     icon: Globe,
     color: '#785F73', // muted plum
-    comingSoon: true
-  },
-  {
-    id: 'listophonic',
-    name: 'Listophonic',
-    href: '/listophonic',
-    icon: Mic,
-    color: '#C45336', // burnt sienna
     comingSoon: true
   },
   {
@@ -62,10 +61,12 @@ function ReportSectionNavigation() {
   
   return (
     <>
+      <hr className="my-4" />
       {sectionGroups.map((group, index) => (
         <SidebarGroup key={index}>
           <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
           <SidebarMenu>
+          
             {group.items?.map((item, itemIndex) => (
               <SidebarMenuItem key={itemIndex}>
                 <SidebarMenuButton
@@ -99,9 +100,12 @@ export default function DashboardLayout({
   
   // Determine the current app
   const currentApp = appSuiteItems.find(app => {
-    // Special case for reports which now use a dynamic route with userId
+    // Special case for reports and lists which now use a dynamic route with userId
     if (app.id === 'reports') {
       return pathname.includes('/dashboard/') && pathname.includes('/reports');
+    }
+    if (app.id === 'lists') {
+      return pathname.includes('/dashboard/') && pathname.includes('/lists');
     }
     return pathname === app.href || pathname.startsWith(`${app.href}/`);
   })?.id;
@@ -192,12 +196,7 @@ export default function DashboardLayout({
       
       <SidebarInset>
         <div className="flex flex-col h-full">
-          <div className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-            <SidebarTrigger className="md:hidden" />
-            <div className="flex-1">
-              {/* Header content will be provided by child layouts */}
-            </div>
-          </div>
+         
           <div className="relative flex-1 overflow-auto">
             {children}
           </div>
