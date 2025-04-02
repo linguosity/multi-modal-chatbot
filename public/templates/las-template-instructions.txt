@@ -1,0 +1,110 @@
+LAS ASSESSMENT REPORT TEMPLATE - INSTRUCTIONS
+============================================
+
+Follow these steps to add tags to your LAS Assessment Report template:
+
+1. HEADER SECTION
+----------------
+Replace text with these tags:
+
+Student Name: {studentFullName}
+Date of Birth: {studentDOB}
+Evaluation Date: {evaluationDate}
+Report Date: {reportDate}
+Parent(s)/Guardian(s): {studentParents}
+Home Language: {header.studentInformation.homeLanguage}
+Reason for Referral: {header.reasonForReferral}
+Confidentiality Statement: {header.confidentialityStatement}
+
+2. BACKGROUND SECTION
+--------------------
+Replace text with these tags:
+
+Educational History: {background.studentDemographicsAndBackground.educationalHistory}
+Medical History: {background.healthReport.medicalHistory}
+Vision/Hearing: {background.healthReport.visionAndHearingScreening}
+Medications/Allergies: {background.healthReport.medicationsAndAllergies}
+Early Intervention: {background.earlyInterventionHistory}
+Family Structure: {background.familyHistory.familyStructure}
+Cultural Background: {background.familyHistory.languageAndCulturalBackground}
+Parent Concerns: {background.parentGuardianConcerns}
+
+3. ASSESSMENT SECTION
+-------------------
+Replace text with these tags:
+
+Classroom Observations: {assessmentResults.observations.classroomObservations}
+Play Observations: {assessmentResults.observations.playBasedInformalObservations}
+Social Interactions: {assessmentResults.observations.socialInteractionObservations}
+Assessment Methods: {assessmentResults.assessmentProceduresAndTools.overviewOfAssessmentMethods}
+
+For the assessment tools list, create a bulleted list and use:
+{#assessmentToolsList}
+• {text}
+{/assessmentToolsList}
+
+4. DOMAINS SECTION
+----------------
+For each domain (receptive, expressive, pragmatic, articulation, voice, fluency), use:
+
+DOMAIN NAME: {assessmentResults.domains.DOMAIN_NAME.topicSentence}
+
+Strengths (as bulleted list):
+{#assessmentResults.domains.DOMAIN_NAME.strengthsList}
+• {text}
+{/assessmentResults.domains.DOMAIN_NAME.strengthsList}
+
+Needs (as bulleted list):
+{#assessmentResults.domains.DOMAIN_NAME.needsList}
+• {text}
+{/assessmentResults.domains.DOMAIN_NAME.needsList}
+
+Impact Statement: {assessmentResults.domains.DOMAIN_NAME.impactStatement}
+
+Domain Tools (as bulleted list):
+{#assessmentResults.domains.DOMAIN_NAME.assessmentToolsList}
+• {text}
+{/assessmentResults.domains.DOMAIN_NAME.assessmentToolsList}
+
+5. CONCLUSION SECTION
+-------------------
+Replace text with these tags:
+
+Eligibility: {conclusion.eligibility.californiaEdCode}
+Summary: {conclusion.conclusion.summary}
+Service Type: {conclusion.recommendations.services.typeOfService}
+Frequency: {conclusion.recommendations.services.frequency}
+Setting: {conclusion.recommendations.services.setting}
+
+Accommodations (as bulleted list):
+{#conclusion.recommendations.accommodationsList}
+• {text}
+{/conclusion.recommendations.accommodationsList}
+
+Facilitation Strategies (as bulleted list):
+{#conclusion.recommendations.facilitationStrategiesList}
+• {text}
+{/conclusion.recommendations.facilitationStrategiesList}
+
+IMPORTANT FORMATTING TIPS:
+-------------------------
+1. For bulleted lists, add the bullet in Word first, then add the tag
+2. Make sure both opening and closing tags are on their own lines
+3. Keep the exact spacing and formatting shown above
+4. Save the file as a DOCX in the /public/templates/ directory
+5. The system is configured for paragraphLoop and linebreaks features
+
+WORKING WITH TABLES:
+------------------
+If placing tags in table cells, each tag should be in its own cell.
+For lists in tables, the entire list (opening tag, item tags, closing tag)
+should be contained within a single cell.
+
+CREATING TABLES FOR DATA:
+-----------------------
+Student Info:
+| Label        | Value                           |
+|--------------|----------------------------------|
+| Name         | {studentFullName}               |
+| DOB          | {studentDOB}                    |
+| Parents      | {studentParents}                |
