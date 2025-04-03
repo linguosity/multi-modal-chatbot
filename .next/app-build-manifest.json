@@ -5,6 +5,16 @@
       "static/chunks/main-app.js",
       "static/chunks/app/global-error.js"
     ],
+    "/not-found": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/not-found.js"
+    ],
+    "/_not-found/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/_not-found/page.js"
+    ],
     "/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -16,11 +26,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/error.js"
     ],
-    "/not-found": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/not-found.js"
-    ],
     "/dashboard/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -31,25 +36,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/loading.js"
     ],
-    "/dashboard/[userId]/layout": [
+    "/dashboard/narratively/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/[userId]/layout.js"
+      "static/chunks/app/dashboard/narratively/page.js"
     ],
-    "/dashboard/[userId]/lists/layout": [
+    "/api/generate-template/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/[userId]/lists/layout.js"
-    ],
-    "/dashboard/[userId]/lists/[listId]/edit/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/[userId]/lists/[listId]/edit/page.js"
-    ],
-    "/dashboard/[userId]/lists/[listId]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/[userId]/lists/[listId]/page.js"
+      "static/chunks/app/api/generate-template/route.js"
     ]
   }
 }

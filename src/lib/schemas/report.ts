@@ -15,6 +15,10 @@ export const REPORT_SECTION_TYPES = {
   CONCLUSION: "conclusion",
   RECOMMENDATIONS: "recommendations",
   ACCOMMODATIONS: "accommodations",
+  PRE_READING_ACTIVITIES: "pre_reading_activities",
+  VOCABULARY_GLOSSARY: "vocabulary_glossary",
+  POST_READING_QUESTIONS: "post_reading_questions",
+  NARRATIVE_CONTENT: "narrative_content",
   OTHER: "other"
 } as const;
 
@@ -35,6 +39,10 @@ export const ReportSectionSchema = z.object({
     REPORT_SECTION_TYPES.CONCLUSION,
     REPORT_SECTION_TYPES.RECOMMENDATIONS,
     REPORT_SECTION_TYPES.ACCOMMODATIONS,
+    REPORT_SECTION_TYPES.PRE_READING_ACTIVITIES,
+    REPORT_SECTION_TYPES.VOCABULARY_GLOSSARY,
+    REPORT_SECTION_TYPES.POST_READING_QUESTIONS,
+    REPORT_SECTION_TYPES.NARRATIVE_CONTENT,
     REPORT_SECTION_TYPES.OTHER
   ]),
   title: z.string(),
@@ -59,6 +67,7 @@ export const ReportTemplateSchema = z.object({
     "progress", 
     "exit", 
     "consultation", 
+    "narrative",
     "other"
   ]),
   sections: z.array(ReportSectionSchema),
@@ -82,6 +91,7 @@ export const ReportSchema = z.object({
     "progress", 
     "exit", 
     "consultation", 
+    "narrative",
     "other"
   ]),
   
@@ -111,6 +121,40 @@ export const ReportSchema = z.object({
   // Related data
   relatedAssessmentIds: z.array(z.string()).optional(),
   relatedEligibilityIds: z.array(z.string()).optional(),
+  
+  // Narrative specific properties
+  narrativeLevel: z.enum([
+    "heaps",
+    "sequences",
+    "primitive_narratives",
+    "chain_narratives",
+    "focused_chains",
+    "true_narratives"
+  ]).optional(),
+  targetVocabulary: z.array(z.string()).optional(),
+});
+
+// Barrett's Taxonomy of Reading Comprehension levels
+export const READING_COMPREHENSION_LEVELS = {
+  LITERAL: "literal",
+  REORGANIZATION: "reorganization",
+  INFERENTIAL: "inferential",
+  EVALUATION: "evaluation",
+  APPRECIATION: "appreciation"
+} as const;
+
+// Schema for reading comprehension questions
+export const ReadingComprehensionQuestionSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  level: z.enum([
+    READING_COMPREHENSION_LEVELS.LITERAL,
+    READING_COMPREHENSION_LEVELS.REORGANIZATION,
+    READING_COMPREHENSION_LEVELS.INFERENTIAL,
+    READING_COMPREHENSION_LEVELS.EVALUATION,
+    READING_COMPREHENSION_LEVELS.APPRECIATION
+  ]),
+  sampleAnswer: z.string().optional()
 });
 
 // Default section templates that can be used across reports
@@ -268,6 +312,54 @@ export const DEFAULT_SECTIONS = {
     isRequired: true,
     isGenerated: true,
     generationPrompt: "Generate a list of specific accommodations and modifications that teachers and other staff can implement to support the student's communication needs in various educational settings."
+  },
+  
+  // New section templates for narrative activities
+  PRE_READING_ACTIVITIES: {
+    id: "pre_reading_activities",
+    sectionType: REPORT_SECTION_TYPES.PRE_READING_ACTIVITIES,
+    title: "Pre-Reading Activities",
+    content: "### Picture Walk\nBefore reading, look through the illustrations with the student and discuss what might happen in the story.\n\n### Vocabulary Preview\nIntroduce and discuss key vocabulary words from the story using child-friendly definitions, pictures, and examples.\n\n### Prediction Activity\nBased on the title and cover illustration, ask the student to predict what the story might be about.",
+    order: 1,
+    isRequired: true,
+    isGenerated: true,
+    generationPrompt: "Generate 3-5 engaging pre-reading activities that will prepare students for the narrative, including a vocabulary preview, prediction activities, and background knowledge activation."
+  },
+  
+  // Vocabulary glossary section
+  VOCABULARY_GLOSSARY: {
+    id: "vocabulary_glossary",
+    sectionType: REPORT_SECTION_TYPES.VOCABULARY_GLOSSARY,
+    title: "Vocabulary Glossary",
+    content: "### Target Vocabulary\n\n1. **[Word 1]** - [child-friendly definition] - Example: [example sentence]\n2. **[Word 2]** - [child-friendly definition] - Example: [example sentence]\n3. **[Word 3]** - [child-friendly definition] - Example: [example sentence]",
+    order: 2,
+    isRequired: true,
+    isGenerated: true,
+    generationPrompt: "Generate a glossary of 5-10 target vocabulary words from the narrative with child-friendly definitions and example sentences showing each word in context."
+  },
+  
+  // Narrative content section
+  NARRATIVE_CONTENT: {
+    id: "narrative_content",
+    sectionType: REPORT_SECTION_TYPES.NARRATIVE_CONTENT,
+    title: "Narrative Story",
+    content: "[The narrative content will be generated based on the selected narrative level and target vocabulary.]",
+    order: 3,
+    isRequired: true,
+    isGenerated: true,
+    generationPrompt: "Generate an age-appropriate narrative at the [narrativeLevel] level of development that incorporates all the target vocabulary words. The narrative should have a clear beginning, middle, and end with characters, setting, problem, and resolution appropriate for the developmental level."
+  },
+  
+  // Post-reading questions section
+  POST_READING_QUESTIONS: {
+    id: "post_reading_questions",
+    sectionType: REPORT_SECTION_TYPES.POST_READING_QUESTIONS,
+    title: "Comprehension Questions",
+    content: "### Literal Comprehension (Recalling Facts)\n1. [Question 1]\n2. [Question 2]\n\n### Reorganization (Organizing Information)\n3. [Question 3]\n\n### Inferential Comprehension (Reading Between the Lines)\n4. [Question 4]\n5. [Question 5]\n\n### Evaluation (Making Judgments)\n6. [Question 6]\n\n### Appreciation (Emotional Response)\n7. [Question 7]",
+    order: 4,
+    isRequired: true,
+    isGenerated: true,
+    generationPrompt: "Generate 7-10 comprehension questions based on Barrett's Taxonomy of Reading Comprehension (literal, reorganization, inferential, evaluation, and appreciation levels), with at least one question from each level. Include sample answers for each question."
   }
 };
 
@@ -276,3 +368,5 @@ export type ReportSectionType = keyof typeof REPORT_SECTION_TYPES;
 export type ReportSection = z.infer<typeof ReportSectionSchema>;
 export type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
 export type Report = z.infer<typeof ReportSchema>;
+export type ReadingComprehensionLevel = keyof typeof READING_COMPREHENSION_LEVELS;
+export type ReadingComprehensionQuestion = z.infer<typeof ReadingComprehensionQuestionSchema>;

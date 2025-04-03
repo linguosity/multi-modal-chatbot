@@ -39,3 +39,22 @@ export const getOpenAIConfig = () => {
     organization: process.env.OPENAI_ORG_ID,
   };
 };
+
+// Types for image generation
+export interface ImageGenerationOptions {
+  prompt: string;
+  model?: 'dall-e-2' | 'dall-e-3';
+  size?: '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792';
+  quality?: 'standard' | 'hd';
+  style?: 'vivid' | 'natural';
+  n?: number;
+}
+
+// Default options for image generation
+export const DEFAULT_IMAGE_OPTIONS: Partial<ImageGenerationOptions> = {
+  model: 'dall-e-3',
+  size: '1024x1024',
+  quality: 'standard',
+  style: 'vivid',
+  n: 1
+};

@@ -1,11 +1,87 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
+import { NarrativeGenerationOptions, generateNarrative } from '@/lib/claudeListGenerator';
+import { openaiClient } from '@/lib/openai-config';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    // Check if the request has a body
+    const contentType = request.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const body = await request.json();
+      
+      // For narrative generation
+      if (body.templateType === 'narrative') {
+        // Validate required parameters
+        if (!body.narrativeLevel || !body.targetVocabulary || !Array.isArray(body.targetVocabulary)) {
+          return NextResponse.json(
+            { error: 'Missing required parameters: narrativeLevel and targetVocabulary array' },
+            { status: 400 }
+          );
+        }
+
+        const options: NarrativeGenerationOptions = {
+          narrativeLevel: body.narrativeLevel,
+          targetVocabulary: body.targetVocabulary,
+          studentAge: body.studentAge || 8,
+          studentName: body.studentName || '',
+          includeBarrettQuestions: body.includeBarrettQuestions !== false,
+          includePreReadingActivities: body.includePreReadingActivities !== false,
+          generateImages: body.generateImages === true
+        };
+
+        const result = await generateNarrative(options);
+        
+        // If image generation is requested and we have image prompts
+        if (options.generateImages && result.imagePrompts && result.imagePrompts.length > 0) {
+          try {
+            // Generate images for each prompt in parallel
+            const imagePromises = result.imagePrompts.map(async (prompt, index) => {
+              try {
+                const imageResponse = await openaiClient.images.generate({
+                  model: 'dall-e-3',
+                  prompt: prompt.description,
+                  n: 1,
+                  size: '1024x1024',
+                  quality: 'standard',
+                  style: 'vivid'
+                });
+                
+                return {
+                  url: imageResponse.data[0].url,
+                  prompt: prompt.description,
+                  context: prompt.sceneContext,
+                  index
+                };
+              } catch (imgError) {
+                console.error(`Error generating image ${index + 1}:`, imgError);
+                return {
+                  error: `Failed to generate image ${index + 1}`,
+                  context: prompt.sceneContext,
+                  index
+                };
+              }
+            });
+            
+            // Wait for all image generation to complete
+            const generatedImages = await Promise.all(imagePromises);
+            
+            // Add images to the result
+            result.images = generatedImages;
+          } catch (imageError) {
+            console.error('Error during image generation:', imageError);
+            // Continue without images if there's an error
+          }
+        }
+        
+        return NextResponse.json(result);
+      }
+    }
+    
+    // Default behavior: generate assessment report template
     // Paths for template files
     const templatePath = path.resolve(process.cwd(), 'public/templates/basic-template.docx');
     const outputPath = path.resolve(process.cwd(), 'public/templates/report-template.docx');

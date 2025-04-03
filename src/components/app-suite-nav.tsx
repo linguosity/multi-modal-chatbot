@@ -12,7 +12,7 @@ const apps = [
     id: 'reports',
     name: 'Reports',
     description: 'Create and manage speech & language reports',
-    href: '/reports',
+    href: '/dashboard',
     icon: FileText,
     color: '#6C8578', // sage green
   },
@@ -29,19 +29,17 @@ const apps = [
     id: 'listophonic',
     name: 'Listophonic',
     description: 'Auditory processing and listening skills',
-    href: '/listophonic',
+    href: '/dashboard/lists',
     icon: Mic,
     color: '#C45336', // burnt sienna
-    comingSoon: true
   },
   {
     id: 'narratives',
     name: 'Narratively',
     description: 'Student narrative development tools',
-    href: '/narratively',
+    href: '/dashboard/narratively',
     icon: Lightbulb,
     color: '#A87C39', // warm gold
-    comingSoon: true
   }
 ];
 
@@ -49,9 +47,15 @@ export function AppSuiteNav() {
   const pathname = usePathname();
   
   // Check if path is within a specific app
-  const currentApp = apps.find(app => 
-    pathname === app.href || pathname.startsWith(`${app.href}/`)
-  )?.id;
+  const getCurrentApp = () => {
+    if (pathname.includes('/dashboard/narratively')) return 'narratives';
+    if (pathname.includes('/dashboard/lists')) return 'listophonic';
+    if (pathname.includes('/dashboard')) return 'reports';
+    if (pathname.includes('/polyglot')) return 'polyglot';
+    return null;
+  };
+
+  const currentApp = getCurrentApp();
   
   return (
     <Card className="border border-[#E6E0D6] bg-[#F8F7F4] rounded-xl shadow-sm mb-6">

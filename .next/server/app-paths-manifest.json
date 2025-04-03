@@ -1,4 +1,4 @@
 {
-  "/dashboard/[userId]/lists/[listId]/page": "app/dashboard/[userId]/lists/[listId]/page.js",
-  "/dashboard/[userId]/lists/[listId]/edit/page": "app/dashboard/[userId]/lists/[listId]/edit/page.js"
+  "/api/generate-template/route": "app/api/generate-template/route.js",
+  "/dashboard/narratively/page": "app/dashboard/narratively/page.js"
 }
