@@ -21,14 +21,24 @@ export default function UserReportsLayout({ children }: { children: React.ReactN
         <div className="sticky top-0 z-30 flex h-12 items-center gap-4 border-b bg-background px-4 md:px-6">
           <Breadcrumb className="mb-1">
             <BreadcrumbList>
+              {/* "Home" link */}
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+
+              <BreadcrumbSeparator />
+
+              {/* Main "Reports" link */}
               <BreadcrumbItem>
                 <BreadcrumbLink href={`/dashboard/${userId}/reports`}>My Reports</BreadcrumbLink>
               </BreadcrumbItem>
+              
+              {/* If on a detail page, show an extra breadcrumb */}
               {isReportDetail && (
                 <>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbPage> {userId} </BreadcrumbPage>
+                    <BreadcrumbPage>Report Details</BreadcrumbPage>
                   </BreadcrumbItem>
                 </>
               )}

@@ -4,6 +4,7 @@ import { FileText, Globe, Mic, Lightbulb, ChevronRight } from "lucide-react";
 import Link from 'next/link';
 import { usePathname, useParams } from 'next/navigation';
 import { useReports, ReportsProvider } from "@/components/contexts/reports-context";
+import { StoriesProvider } from "@/components/contexts/stories-context";
 import { 
   Sidebar, 
   SidebarContent, 
@@ -38,6 +39,13 @@ const appSuiteItems = [
     color: '#C45336', // burnt sienna
   },
   {
+    id: 'stories',
+    name: 'Stories',
+    href: '/dashboard/user1/stories', // Using user1 as temporary user ID
+    icon: Lightbulb,
+    color: '#A87C39', // warm gold
+  },
+  {
     id: 'polyglot',
     name: 'Polyglot',
     href: '/polyglot',
@@ -48,10 +56,9 @@ const appSuiteItems = [
   {
     id: 'narratively',
     name: 'Narratively',
-    href: '/narratively',
+    href: '/dashboard/narratively',
     icon: Lightbulb,
     color: '#A87C39', // warm gold
-    comingSoon: true
   }
 ];
 
@@ -100,109 +107,110 @@ export default function DashboardLayout({
   
   // Determine the current app
   const currentApp = appSuiteItems.find(app => {
-    // Special case for reports and lists which now use a dynamic route with userId
+    // Special case for reports, lists, and stories which now use a dynamic route with userId
     if (app.id === 'reports') {
       return pathname.includes('/dashboard/') && pathname.includes('/reports');
     }
     if (app.id === 'lists') {
       return pathname.includes('/dashboard/') && pathname.includes('/lists');
     }
+    if (app.id === 'stories') {
+      return pathname.includes('/dashboard/') && pathname.includes('/stories');
+    }
     return pathname === app.href || pathname.startsWith(`${app.href}/`);
   })?.id;
   
   return (
     <ReportsProvider>
-      <div className="flex min-h-screen">
-        <Sidebar variant="sidebar" collapsible="icon">
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild>
-                <Link href="/">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
-                    <img src="/linguosity_logo.jpg" alt="Linguosity Logo" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex flex-col gap-0.5 leading-none">
-                    <span className="font-semibold">Linguosity</span>
-                    <span className="">Speech & Language Suite</span>
-                  </div>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          <SearchForm />
-        </SidebarHeader>
-        
-        <SidebarContent>
-          {/* App Suite Navigation */}
-          <SidebarGroup>
-            <SidebarGroupLabel>Linguosity Suite</SidebarGroupLabel>
+      <StoriesProvider>
+        <div className="flex min-h-screen">
+          <Sidebar variant="sidebar" collapsible="icon">
+          <SidebarHeader>
             <SidebarMenu>
-              {appSuiteItems.map((app) => {
-                const isActive = app.id === currentApp;
-                
-                return (
-                  <SidebarMenuItem key={app.id}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                    >
-                      <Link
-                        href={app.comingSoon ? '#' : app.href}
-                        className="flex items-center gap-3 group relative"
-                      >
-                        <div className={cn(
-                          "flex-shrink-0 h-5 w-5 rounded-md flex items-center justify-center",
-                          `text-[${app.color}]`
-                        )}>
-                          {React.createElement(app.icon, { 
-                            size: 16,
-                            className: isActive ? "text-current" : "text-current opacity-75"
-                          })}
-                        </div>
-                        <div className="flex-1">
-                          <span className="font-medium text-sm">
-                            {app.name}
-                            {app.comingSoon && (
-                              <span className="ml-2 inline-block text-[10px] font-medium py-0.5 px-1 bg-[#F0DDC5] text-[#8A6534] rounded">
-                                Soon
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        {!app.comingSoon && (
-                          <ChevronRight 
-                            className={cn(
-                              "h-3.5 w-3.5 opacity-0 group-hover:opacity-70 transition-opacity",
-                              isActive && "opacity-70"
-                            )}
-                          />
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              <SidebarMenuItem>
+                <SidebarMenuButton size="lg" asChild>
+                  <Link href="/">
+                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
+                      <img src="/linguosity_logo.jpg" alt="Linguosity Logo" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex flex-col gap-0.5 leading-none">
+                      <span className="font-semibold">Linguosity</span>
+                      <span className="">Speech & Language Suite</span>
+                    </div>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
-          </SidebarGroup>
+            <SearchForm />
+          </SidebarHeader>
           
-          {/* Report Section Navigation - Only show when viewing a specific report */}
-          {pathname.includes('/reports/') && pathname.split('/').length > 4 && (
-            <ReportSectionNavigation />
-          )}
-        </SidebarContent>
-        <SidebarRail />
-      </Sidebar>
-      
-      <SidebarInset>
-        <div className="flex flex-col h-full">
-         
-          <div className="relative flex-1 overflow-auto">
-            {children}
+          <SidebarContent>
+            {/* App Suite Navigation */}
+            <SidebarGroup>
+              <SidebarGroupLabel>Linguosity Suite</SidebarGroupLabel>
+              <SidebarMenu>
+                {appSuiteItems.map((app) => {
+                  const isActive = app.id === currentApp;
+                  
+                  return (
+                    <SidebarMenuItem key={app.id}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                      >
+                        <Link
+                          href={app.comingSoon ? '#' : app.href}
+                          className="flex items-center gap-3 group relative"
+                        >
+                          <div className={cn(
+                            "flex-shrink-0 h-5 w-5 rounded-md flex items-center justify-center",
+                            `text-[${app.color}]`
+                          )}>
+                            {React.createElement(app.icon, { 
+                              size: 16,
+                              className: isActive ? "text-current" : "text-current opacity-75"
+                            })}
+                          </div>
+                          <div className="flex-1">
+                            <span className="font-medium text-sm">
+                              {app.name}
+                              
+                            </span>
+                          </div>
+                          {!app.comingSoon && (
+                            <ChevronRight 
+                              className={cn(
+                                "h-3.5 w-3.5 opacity-0 group-hover:opacity-70 transition-opacity",
+                                isActive && "opacity-70"
+                              )}
+                            />
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+            
+            {/* Report Section Navigation - Only show when viewing a specific report */}
+            {pathname.includes('/reports/') && pathname.split('/').length > 4 && (
+              <ReportSectionNavigation />
+            )}
+          </SidebarContent>
+          <SidebarRail />
+        </Sidebar>
+        
+        <SidebarInset>
+          <div className="flex flex-col h-full">
+           
+            <div className="relative flex-1 overflow-auto">
+              {children}
+            </div>
           </div>
-        </div>
-      </SidebarInset>
-    </div>
+        </SidebarInset>
+      </div>
+      </StoriesProvider>
     </ReportsProvider>
   );
 }

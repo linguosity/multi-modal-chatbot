@@ -54,7 +54,7 @@ export default function Page() {
           <div className="flex justify-between items-center mb-2">
             <h2 className="font-semibold text-xl">Polyglot</h2>
             <span className="text-xs font-medium py-0.5 px-1.5 bg-[#F0DDC5] text-[#8A6534] rounded">
-              Coming Soon
+              Coming
             </span>
           </div>
           <p className="text-muted-foreground mb-4">

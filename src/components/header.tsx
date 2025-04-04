@@ -18,6 +18,7 @@ import { Menu, FileText, Home, MessageSquare, ClipboardCheck, User, LogOut, Pane
 import { usePathname } from 'next/navigation'
 import { useSidebar, SidebarTrigger } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
+import { UserDropdown } from '@/components/auth/user-dropdown'
 
 export function Header() {
   const pathname = usePathname();
@@ -148,38 +149,7 @@ export function Header() {
         </DropdownMenu>
         
         {/* User avatar and dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="/avatar.png" alt="User" />
-                <AvatarFallback>SL</AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <div className="flex items-center justify-start gap-2 p-2">
-              <div className="flex flex-col space-y-1 leading-none">
-                <p className="font-medium">Sarah Lewis</p>
-                <p className="text-sm text-muted-foreground">slewis@example.com</p>
-              </div>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/profile" className="flex items-center cursor-pointer">
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/logout" className="flex items-center cursor-pointer">
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserDropdown />
       </div>
     </header>
   )

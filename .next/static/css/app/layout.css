@@ -1,6 +1,6 @@
-/*!***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
-  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[2].use[1]!./node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[13].oneOf[2].use[2]!./node_modules/next/font/google/target.css?{"path":"src/app/layout.tsx","import":"Inter","arguments":[{"subsets":["latin"],"variable":"--font-inter","display":"swap"}],"variableName":"inter"} ***!
-  \***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+/*!***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[2].use[1]!./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[13].oneOf[2].use[2]!./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/font/google/target.css?{"path":"src/app/layout.tsx","import":"Inter","arguments":[{"subsets":["latin"],"variable":"--font-inter","display":"swap"}],"variableName":"inter"} ***!
+  \***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 /* cyrillic-ext */
 @font-face {
   font-family: 'Inter';
@@ -68,9 +68,9 @@
 }.__variable_d65c78 {--font-inter: 'Inter', 'Inter Fallback'
 }
 
-/*!**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
-  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[2].use[1]!./node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[13].oneOf[2].use[2]!./node_modules/next/font/google/target.css?{"path":"src/app/layout.tsx","import":"Source_Sans_3","arguments":[{"subsets":["latin"],"variable":"--font-source-sans","display":"swap"}],"variableName":"sourceSans"} ***!
-  \**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+/*!**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[2].use[1]!./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[13].oneOf[2].use[2]!./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/font/google/target.css?{"path":"src/app/layout.tsx","import":"Source_Sans_3","arguments":[{"subsets":["latin"],"variable":"--font-source-sans","display":"swap"}],"variableName":"sourceSans"} ***!
+  \**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 /* cyrillic-ext */
 @font-face {
   font-family: 'Source Sans 3';
@@ -138,9 +138,9 @@
 }.__variable_1fdbab {--font-source-sans: 'Source Sans 3', 'Source Sans 3 Fallback'
 }
 
-/*!*****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
-  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[2].use[1]!./node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[13].oneOf[2].use[2]!./node_modules/next/font/google/target.css?{"path":"src/app/layout.tsx","import":"Cormorant_Garamond","arguments":[{"subsets":["latin"],"variable":"--font-cormorant","display":"swap","weight":["300","400","500","600","700"]}],"variableName":"cormorant"} ***!
-  \*****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+/*!*****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[2].use[1]!./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[13].oneOf[2].use[2]!./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/font/google/target.css?{"path":"src/app/layout.tsx","import":"Cormorant_Garamond","arguments":[{"subsets":["latin"],"variable":"--font-cormorant","display":"swap","weight":["300","400","500","600","700"]}],"variableName":"cormorant"} ***!
+  \*****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 /* cyrillic-ext */
 @font-face {
   font-family: 'Cormorant Garamond';
@@ -370,9 +370,9 @@
 }.__variable_f2604b {--font-cormorant: 'Cormorant Garamond', 'Cormorant Garamond Fallback'
 }
 
-/*!*****************************************************************************************************************************************************************************************************************************************************************!*\
-  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[10].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[10].use[3]!./src/app/globals.css ***!
-  \*****************************************************************************************************************************************************************************************************************************************************************/
+/*!*************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[10].use[2]!./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[10].use[3]!./src/app/globals.css ***!
+  \*************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 *, ::before, ::after {
   --tw-border-spacing-x: 0;
   --tw-border-spacing-y: 0;
@@ -982,6 +982,54 @@ video {
       opacity: 0;
     }
   }
+  
+  /* Auth page animations */
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.8s ease-out forwards;
+  }
+  
+  @keyframes fadeInRight {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-fade-in-right {
+    animation: fadeInRight 0.5s ease-out forwards;
+  }
+  
+  /* Staggered animation for children */
+  .stagger-animation > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger-animation > *:nth-child(2) {
+    animation-delay: 150ms;
+  }
+  .stagger-animation > *:nth-child(3) {
+    animation-delay: 300ms;
+  }
+  .stagger-animation > *:nth-child(4) {
+    animation-delay: 450ms;
+  }
+  .stagger-animation > *:nth-child(5) {
+    animation-delay: 600ms;
+  }
 .container {
   width: 100%;
   margin-right: auto;
@@ -1215,6 +1263,9 @@ video {
 .mb-8 {
   margin-bottom: 2rem;
 }
+.ml-0\.5 {
+  margin-left: 0.125rem;
+}
 .ml-1 {
   margin-left: 0.25rem;
 }
@@ -1284,11 +1335,20 @@ video {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .block {
   display: block;
 }
 .inline-block {
   display: inline-block;
+}
+.inline {
+  display: inline;
 }
 .flex {
   display: flex;
@@ -1370,6 +1430,9 @@ video {
 .h-\[1px\] {
   height: 1px;
 }
+.h-\[calc\(100\%-2\.5rem\)\] {
+  height: calc(100% - 2.5rem);
+}
 .h-\[calc\(100vh-8rem\)\] {
   height: calc(100vh - 8rem);
 }
@@ -1408,6 +1471,9 @@ video {
 }
 .max-h-\[600px\] {
   max-height: 600px;
+}
+.max-h-\[80vh\] {
+  max-height: 80vh;
 }
 .max-h-\[90vh\] {
   max-height: 90vh;
@@ -1490,6 +1556,9 @@ video {
 .w-4 {
   width: 1rem;
 }
+.w-44 {
+  width: 11rem;
+}
 .w-5 {
   width: 1.25rem;
 }
@@ -1534,6 +1603,9 @@ video {
 }
 .w-\[400px\] {
   width: 400px;
+}
+.w-\[450px\] {
+  width: 450px;
 }
 .w-\[95\%\] {
   width: 95%;
@@ -1727,9 +1799,6 @@ video {
 .items-center {
   align-items: center;
 }
-.justify-start {
-  justify-content: flex-start;
-}
 .justify-end {
   justify-content: flex-end;
 }
@@ -1876,6 +1945,9 @@ video {
 }
 .whitespace-pre-wrap {
   white-space: pre-wrap;
+}
+.text-balance {
+  text-wrap: balance;
 }
 .break-words {
   overflow-wrap: break-word;
@@ -2040,6 +2112,10 @@ video {
   --tw-border-opacity: 1;
   border-color: rgb(126 34 206 / var(--tw-border-opacity, 1));
 }
+.border-red-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(254 202 202 / var(--tw-border-opacity, 1));
+}
 .border-sidebar-border {
   border-color: hsl(var(--sidebar-border));
 }
@@ -2174,6 +2250,9 @@ video {
 .bg-destructive {
   background-color: hsl(var(--destructive));
 }
+.bg-destructive\/15 {
+  background-color: hsl(var(--destructive) / 0.15);
+}
 .bg-emerald-50\/30 {
   background-color: rgb(236 253 245 / 0.3);
 }
@@ -2303,10 +2382,21 @@ video {
 .bg-gradient-to-br {
   background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
 }
+.bg-gradient-to-t {
+  background-image: linear-gradient(to top, var(--tw-gradient-stops));
+}
+.from-background\/80 {
+  --tw-gradient-from: hsl(var(--background) / 0.8) var(--tw-gradient-from-position);
+  --tw-gradient-to: hsl(var(--background) / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
 .from-blue-500 {
   --tw-gradient-from: #3b82f6 var(--tw-gradient-from-position);
   --tw-gradient-to: rgb(59 130 246 / 0) var(--tw-gradient-to-position);
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.to-background\/20 {
+  --tw-gradient-to: hsl(var(--background) / 0.2) var(--tw-gradient-to-position);
 }
 .to-purple-600 {
   --tw-gradient-to: #9333ea var(--tw-gradient-to-position);
@@ -2320,6 +2410,9 @@ video {
 .stroke-\[\#9C4226\] {
   stroke: #9C4226;
 }
+.object-contain {
+  object-fit: contain;
+}
 .object-cover {
   object-fit: cover;
 }
@@ -2328,6 +2421,9 @@ video {
 }
 .p-1 {
   padding: 0.25rem;
+}
+.p-10 {
+  padding: 2.5rem;
 }
 .p-2 {
   padding: 0.5rem;
@@ -2349,6 +2445,10 @@ video {
 }
 .p-8 {
   padding: 2rem;
+}
+.px-0 {
+  padding-left: 0px;
+  padding-right: 0px;
 }
 .px-1 {
   padding-left: 0.25rem;
@@ -2580,6 +2680,9 @@ video {
 }
 .font-semibold {
   font-weight: 600;
+}
+.uppercase {
+  text-transform: uppercase;
 }
 .lowercase {
   text-transform: lowercase;
@@ -3000,6 +3103,9 @@ video {
 .ease-linear {
   transition-timing-function: linear;
 }
+.ease-out {
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
 @keyframes enter {
 
   from {
@@ -3044,6 +3150,9 @@ video {
 .ease-linear {
   animation-timing-function: linear;
 }
+.ease-out {
+  animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
 .running {
   animation-play-state: running;
 }
@@ -3083,6 +3192,11 @@ video {
   inset: -0.5rem;
 }
 
+.after\:inset-0::after {
+  content: var(--tw-content);
+  inset: 0px;
+}
+
 .after\:inset-y-0::after {
   content: var(--tw-content);
   top: 0px;
@@ -3094,9 +3208,39 @@ video {
   left: 50%;
 }
 
+.after\:top-1\/2::after {
+  content: var(--tw-content);
+  top: 50%;
+}
+
+.after\:z-0::after {
+  content: var(--tw-content);
+  z-index: 0;
+}
+
+.after\:flex::after {
+  content: var(--tw-content);
+  display: flex;
+}
+
 .after\:w-\[2px\]::after {
   content: var(--tw-content);
   width: 2px;
+}
+
+.after\:items-center::after {
+  content: var(--tw-content);
+  align-items: center;
+}
+
+.after\:border-t::after {
+  content: var(--tw-content);
+  border-top-width: 1px;
+}
+
+.after\:border-border::after {
+  content: var(--tw-content);
+  border-color: hsl(var(--border));
 }
 
 .last\:border-0:last-child {
@@ -3984,14 +4128,6 @@ video {
     min-height: min-content;
   }
 
-  .md\:w-1\/3 {
-    width: 33.333333%;
-  }
-
-  .md\:w-2\/3 {
-    width: 66.666667%;
-  }
-
   .md\:grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4008,16 +4144,12 @@ video {
     flex-direction: row;
   }
 
-  .md\:space-x-6 > :not([hidden]) ~ :not([hidden]) {
-    --tw-space-x-reverse: 0;
-    margin-right: calc(1.5rem * var(--tw-space-x-reverse));
-    margin-left: calc(1.5rem * calc(1 - var(--tw-space-x-reverse)));
+  .md\:justify-start {
+    justify-content: flex-start;
   }
 
-  .md\:space-y-0 > :not([hidden]) ~ :not([hidden]) {
-    --tw-space-y-reverse: 0;
-    margin-top: calc(0px * calc(1 - var(--tw-space-y-reverse)));
-    margin-bottom: calc(0px * var(--tw-space-y-reverse));
+  .md\:p-10 {
+    padding: 2.5rem;
   }
 
   .md\:p-6 {
@@ -4071,6 +4203,10 @@ video {
 }
 
 @media (min-width: 1024px) {
+
+  .lg\:block {
+    display: block;
+  }
 
   .lg\:grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));

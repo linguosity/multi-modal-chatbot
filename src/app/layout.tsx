@@ -3,7 +3,9 @@ import { cookies } from "next/headers";
 import { Inter, Source_Sans_3, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
+import { ProgressProvider } from "./progress-provider";
+import { LoadingBar } from "./loading-bar";
+import { Providers } from "./providers";
 
 // Main body font
 const inter = Inter({ 
@@ -41,7 +43,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <html lang="en">
             <body className={`${inter.variable} ${sourceSans.variable} ${cormorant.variable} font-sans`}>
                 <SidebarProvider defaultOpen={defaultOpen}>
-                    {children}
+                    <ProgressProvider>
+                        <LoadingBar />
+                        <Providers>
+                            {children}
+                        </Providers>
+                    </ProgressProvider>
                 </SidebarProvider>
             </body>
         </html>

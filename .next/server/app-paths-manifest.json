@@ -1,4 +1,6 @@
 {
-  "/api/generate-template/route": "app/api/generate-template/route.js",
-  "/dashboard/narratively/page": "app/dashboard/narratively/page.js"
+  "/login/page": "app/login/page.js",
+  "/dashboard/narratively/page": "app/dashboard/narratively/page.js",
+  "/dashboard/[userId]/reports/page": "app/dashboard/[userId]/reports/page.js",
+  "/dashboard/[userId]/reports/[reportId]/page": "app/dashboard/[userId]/reports/[reportId]/page.js"
 }
