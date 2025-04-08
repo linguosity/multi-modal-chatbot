@@ -27,7 +27,8 @@ import {
  */
 export function AssessmentToolManager({
   onSelectTool,
-  selectedDomain
+  selectedDomain,
+  isInPopover = false
 }: {
   onSelectTool?: (tool: AssessmentTool) => void;
   selectedDomain?: string;
@@ -231,22 +232,22 @@ export function AssessmentToolManager({
   };
   
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${isInPopover ? "max-w-full" : ""}`}>
       {/* Tool search interface */}
-      <Card className="shadow-sm border-0">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-medium flex justify-between items-center">
+      <Card className={`shadow-sm ${isInPopover ? "border-0" : "border-0"}`}>
+        <CardHeader className={isInPopover ? "pb-2 px-2 pt-0" : "pb-3"}>
+          <CardTitle className={`flex justify-between items-center ${isInPopover ? "text-sm" : "text-lg font-medium"}`}>
             <span>Assessment Tools</span>
             <Button 
               onClick={() => setIsAddingTool(true)} 
               size="sm" 
-              className="bg-purple-600 hover:bg-purple-700"
+              className={`bg-green-600 hover:bg-green-700 ${isInPopover ? "h-7 text-xs" : ""}`}
             >
-              <Plus className="h-4 w-4 mr-1" />
+              <Plus className={`${isInPopover ? "h-3 w-3" : "h-4 w-4"} mr-1`} />
               Add Tool
             </Button>
           </CardTitle>
-          <CardDescription>
+          <CardDescription className={isInPopover ? "text-xs" : ""}>
             Search for standardized tests and informal assessment tools
           </CardDescription>
         </CardHeader>

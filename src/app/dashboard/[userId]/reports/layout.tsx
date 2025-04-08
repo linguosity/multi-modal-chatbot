@@ -18,7 +18,7 @@ export default function UserReportsLayout({ children }: { children: React.ReactN
 
   return (
       <div className="flex flex-col h-full">
-        <div className="sticky top-0 z-30 flex h-12 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <div className="sticky top-0 z-30 flex h-12 w-full items-center gap-4 border-b bg-background px-4 md:px-6">
           <Breadcrumb className="mb-1">
             <BreadcrumbList>
               {/* "Home" link */}
@@ -48,7 +48,7 @@ export default function UserReportsLayout({ children }: { children: React.ReactN
             {isReportDetail ? "Edit Report" : "My Reports"}
           </h1>*/}
         </div>
-        <div className="relative flex-1 overflow-auto px-4 md:px-6 py-4">
+        <div className="relative flex-1 overflow-auto">
           {children}
         </div>
       </div>

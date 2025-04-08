@@ -1,404 +1,540 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+// FILE: src/components/reports/text-editor/AssessmentToolsSection.tsx
+// (Applied stacking card logic from BackgroundSection)
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Added hooks
+import { EditableCard } from "@/components/reports/EditableCard";
+// Removed unused Card, CardHeader, CardTitle, CardContent
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BookOpen, Plus, Search } from "lucide-react";
-import { AssessmentTool } from '@/lib/assessment-tools';
+import { Badge } from "@/components/ui/badge"; // Added Badge
+import { BookOpen, Plus, Search, Lock, Unlock, ChevronLeft, ChevronRight, X } from "lucide-react"; // Added ChevronLeft, ChevronRight, X
+import { motion, AnimatePresence, PanInfo } from 'framer-motion'; // Added framer-motion
+// Use correct types from schema file
+import { AssessmentTool, AssessmentResults } from '@/types/reportSchemas'; // Adjust path if needed
+import { AssessmentLibraryPanel } from "@/components/reports/AssessmentLibraryPanel";
+import { cn } from "@/lib/utils";
 
+// --- Interface Definitions ---
 interface AssessmentToolsSectionProps {
-  assessmentProcedures: {
-    overviewOfAssessmentMethods: string;
-    assessmentToolsUsed: string[];
-  };
-  observations: {
-    [key: string]: string | undefined;
-  };
-  onAddTool: (toolId: string) => void;
+  assessmentProcedures: AssessmentResults['assessmentProceduresAndTools'];
+  observations: AssessmentResults['observations'];
+  onAddTool: (toolId: string) => void; // Keep this for adding tools
+  onRemoveTool?: (toolId: string) => void; // Potentially needed if tools can be removed from the stack
   onOpenLibrary: () => void;
   allTools: Record<string, AssessmentTool>;
+  onLockSection?: (id: string, locked: boolean) => void;
+  onToggleSynthesis?: (id: string) => void;
+  onSaveContent?: (id: string, content: string) => void;
+  assessmentResultsLockStatus?: AssessmentResults['lockStatus'];
+  onToggleMarkedDone?: (id: string, isDone: boolean) => void;
+  assessmentMarkedDoneStatus?: AssessmentResults['markedDoneStatus']; // Need overall markedDone status
 }
 
+// Data structure for unified cards
+interface AssessmentCardData {
+    id: string; // Unique ID (e.g., 'validity-statement', 'observation-behavior', 'tool-celf5')
+    type: 'validity' | 'observation' | 'tool';
+    title: string;
+    isLocked?: boolean;
+    hasSynthesis?: boolean;
+    synthesisContent?: string;
+    initialContent?: string; // For editable cards
+    viewComponent?: React.ReactNode; // For non-editable cards (like tools)
+    isEditable?: boolean;
+    initialIsMarkedDone?: boolean;
+    color?: string; // Optional color theming
+}
+
+// --- Animation Constants (Copied from BackgroundSection) ---
+const MAX_VISIBLE_OFFSET = 1;
+const HORIZONTAL_STAGGER = 40;
+const VERTICAL_STAGGER = 6;
+const SCALE_FACTOR = 0.06;
+const ROTATE_Y_FACTOR = 5;
+const TRANSITION_DURATION = 0.4;
+const EASE_FUNCTION = [0.4, 0, 0.2, 1];
+const TRANSITION_TWEEN = { type: "tween", duration: TRANSITION_DURATION, ease: EASE_FUNCTION };
+const SWIPE_THRESHOLD = 40;
+const SWIPE_VELOCITY_THRESHOLD = 200;
+
+
 /**
- * Component for displaying all assessment tools, including observations
+ * Component for displaying Assessment Tools and Observations using stacking cards.
  */
-export const AssessmentToolsSection: React.FC<AssessmentToolsSectionProps> = ({ 
-  assessmentProcedures, 
+export const AssessmentToolsSection: React.FC<AssessmentToolsSectionProps> = ({
+  assessmentProcedures,
   observations,
   onAddTool,
+  // onRemoveTool, // Add if needed
   onOpenLibrary,
-  allTools
+  allTools,
+  onLockSection,
+  onToggleSynthesis,
+  onSaveContent,
+  assessmentResultsLockStatus,
+  onToggleMarkedDone: notifyParentOfMarkDoneChange, // Rename for clarity
+  assessmentMarkedDoneStatus
 }) => {
+  // --- State for Add/Search (Remains the same) ---
   const [toolSearchQuery, setToolSearchQuery] = React.useState('');
   const [showToolSearchResults, setShowToolSearchResults] = React.useState(false);
-  const [toolSearchResults, setToolSearchResults] = React.useState<any[]>([]);
+  const [toolSearchResults, setToolSearchResults] = React.useState<AssessmentTool[]>([]);
   const [quickToolForm, setQuickToolForm] = React.useState({
-    name: '',
-    id: '',
-    domains: [] as string[]
+    name: '', id: '', domains: [] as string[]
   });
 
-  // Filter observations to show non-empty ones
-  const validObservations = Object.entries(observations || {}).filter(([_, content]) => content);
-  
+  // --- State for Stacking Cards (Adapted from BackgroundSection) ---
+  const [finishedCardIds, setFinishedCardIds] = useState(new Set<string>());
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  // --- Data Preparation (Unified Card Array) ---
+  const allAssessmentCards: AssessmentCardData[] = useMemo(() => {
+    const cards: AssessmentCardData[] = [];
+
+    // 1. Validity Statement
+    if (assessmentProcedures?.overviewOfAssessmentMethods !== undefined) {
+      const id = 'validity-statement';
+      cards.push({
+        id: id,
+        type: 'validity',
+        title: 'Assessment Methods',
+        isLocked: assessmentProcedures?.isLocked ?? assessmentResultsLockStatus?.validityStatement ?? false,
+        hasSynthesis: !!assessmentProcedures?.synthesis,
+        synthesisContent: assessmentProcedures?.synthesis || "",
+        initialContent: assessmentProcedures?.overviewOfAssessmentMethods || "",
+        isEditable: true,
+        initialIsMarkedDone: assessmentMarkedDoneStatus?.validityStatement ?? false,
+        color: "green"
+      });
+    }
+
+    // 2. Observations
+    const validObservationEntries = Object.entries(observations || {}).filter(
+      ([key, content]) => key !== 'synthesis' && key !== 'isLocked' && key !== 'lockStatus' && key !== 'wasSectionLock' && key !== 'markedDoneStatus' && content // Filter out metadata and empty content
+    );
+    validObservationEntries.forEach(([obsKey, content]) => {
+      const id = `observation-${obsKey}`;
+      cards.push({
+        id: id,
+        type: 'observation',
+        title: obsKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
+        isLocked: (observations?.lockStatus?.[obsKey]) ?? assessmentResultsLockStatus?.observations?.[obsKey] ?? false,
+        // Note: Synthesis for observations might be section-wide, not per-observation.
+        // Assuming section-wide synthesis for now. Adjust if needed.
+        hasSynthesis: !!observations?.synthesis,
+        synthesisContent: observations?.synthesis || "",
+        initialContent: content || "",
+        isEditable: true,
+        initialIsMarkedDone: assessmentMarkedDoneStatus?.observations?.[id] ?? false,
+        color: "green"
+      });
+    });
+
+    // 3. Used Tools
+    const usedToolIds = assessmentProcedures?.assessmentToolsUsed || [];
+    usedToolIds.forEach(toolId => {
+      const toolDetails = allTools?.[toolId];
+      const id = `tool-${toolId}`;
+      cards.push({
+          id: id,
+          type: 'tool',
+          title: toolDetails?.name || toolId.toUpperCase(),
+          isLocked: (assessmentProcedures?.lockStatus?.tools?.[toolId]) ?? assessmentResultsLockStatus?.tools?.[toolId] ?? false,
+          // Assuming synthesis applies to the procedures section, not individual tools
+          hasSynthesis: !!assessmentProcedures?.synthesis,
+          synthesisContent: assessmentProcedures?.synthesis || "",
+          isEditable: false, // Tools are generally view-only in this context
+          viewComponent: toolDetails ? (
+              <div className="space-y-1 text-xs"> {/* Ensure consistent font size */}
+                  {toolDetails.authors && <p><span className="font-medium">Authors:</span> {toolDetails.authors.join(', ')}</p>}
+                  {toolDetails.year && <p><span className="font-medium">Year:</span> {toolDetails.year}</p>}
+                  {toolDetails.targetAgeRange && <p><span className="font-medium">Ages:</span> {toolDetails.targetAgeRange}</p>}
+                  {toolDetails.domains && toolDetails.domains.length > 0 && (
+                      <p><span className="font-medium">Domains:</span> {toolDetails.domains.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')}</p>
+                  )}
+                  {/* Add a placeholder if no specific details */}
+                  {!toolDetails.authors && !toolDetails.year && !toolDetails.targetAgeRange && (!toolDetails.domains || toolDetails.domains.length === 0) && (
+                    <p className="text-gray-500 italic">No specific details provided for this tool.</p>
+                  )}
+              </div>
+          ) : (
+              <p className="text-gray-600 text-xs">Details not found for tool ID: {toolId}</p>
+          ),
+          initialIsMarkedDone: assessmentMarkedDoneStatus?.tools?.[id] ?? false,
+          color: "green"
+      });
+    });
+
+    return cards;
+  }, [assessmentProcedures, observations, allTools, assessmentResultsLockStatus, assessmentMarkedDoneStatus]); // Dependencies for the unified list
+
+
+  // --- Derived State (Adapted from BackgroundSection) ---
+  const visibleCardsInDeck = useMemo(() =>
+      allAssessmentCards.filter(card => !finishedCardIds.has(card.id)),
+      [allAssessmentCards, finishedCardIds]
+  );
+  const finishedCardsForBadges = useMemo(() =>
+      allAssessmentCards.filter(card => finishedCardIds.has(card.id)),
+      [allAssessmentCards, finishedCardIds]
+  );
+
+  const numCardsInDeck = visibleCardsInDeck.length;
+
+  // Effect to adjust activeIndex if cards are finished/added (Adapted from BackgroundSection)
+  useEffect(() => {
+      if (numCardsInDeck > 0 && activeIndex >= numCardsInDeck) {
+          setActiveIndex(numCardsInDeck - 1);
+      } else if (numCardsInDeck === 0) {
+          setActiveIndex(0); // Reset if deck becomes empty
+      }
+  }, [numCardsInDeck, activeIndex]);
+
+   // --- START: Lock Logic (Checks original props, not derived state) ---
+   // This logic remains largely the same, ensuring it checks the source props
+   const areAllToolsCardsLocked = useCallback(() => {
+    // Check validity statement lock
+    const validityLocked = assessmentProcedures?.isLocked ?? assessmentResultsLockStatus?.validityStatement ?? false;
+
+    // Check all *relevant* observation locks (those that generated cards)
+    const obsKeysInData = allAssessmentCards
+        .filter(card => card.type === 'observation')
+        .map(card => card.id.replace('observation-', '')); // Extract original keys
+    const allObsLocked = obsKeysInData.length === 0 || obsKeysInData.every(key =>
+        (observations?.lockStatus?.[key]) ?? assessmentResultsLockStatus?.observations?.[key] ?? false
+    );
+
+    // Check all *used* tool locks
+    const usedToolIds = assessmentProcedures?.assessmentToolsUsed || [];
+    const allToolsLocked = usedToolIds.length === 0 || usedToolIds.every(toolId =>
+       (assessmentProcedures?.lockStatus?.tools?.[toolId]) ?? assessmentResultsLockStatus?.tools?.[toolId] ?? false
+    );
+
+    return validityLocked && allObsLocked && allToolsLocked;
+  }, [assessmentProcedures, observations, assessmentResultsLockStatus, allAssessmentCards]); // Include allAssessmentCards to re-evaluate if obs keys change
+
+
+  const isAnyToolCardLocked = useCallback(() => {
+    const validityLocked = assessmentProcedures?.isLocked ?? assessmentResultsLockStatus?.validityStatement ?? false;
+
+    const obsKeysInData = allAssessmentCards
+        .filter(card => card.type === 'observation')
+        .map(card => card.id.replace('observation-', ''));
+    const anyObsLocked = obsKeysInData.some(key =>
+        (observations?.lockStatus?.[key]) ?? assessmentResultsLockStatus?.observations?.[key] ?? false
+    );
+
+    const usedToolIds = assessmentProcedures?.assessmentToolsUsed || [];
+    const anyToolLocked = usedToolIds.some(toolId =>
+       (assessmentProcedures?.lockStatus?.tools?.[toolId]) ?? assessmentResultsLockStatus?.tools?.[toolId] ?? false
+    );
+
+    return validityLocked || anyObsLocked || anyToolLocked;
+  }, [assessmentProcedures, observations, assessmentResultsLockStatus, allAssessmentCards]);
+
+  const handleSectionLock = useCallback(() => {
+    const shouldLock = !areAllToolsCardsLocked();
+    if (onLockSection) {
+      // The parent component handles applying the lock state across
+      // assessmentProcedures, observations, etc., based on this section ID.
+      onLockSection('section-assessment-tools', shouldLock);
+    }
+  }, [onLockSection, areAllToolsCardsLocked]);
+  // === END: Lock Logic ===
+
+
+  // --- Navigation (Adapted from BackgroundSection) ---
+  const handlePrev = useCallback(() => {
+      if (numCardsInDeck === 0) return;
+      setActiveIndex((prev) => (prev - 1 + numCardsInDeck) % numCardsInDeck);
+  }, [numCardsInDeck]);
+
+  const handleNext = useCallback(() => {
+      if (numCardsInDeck === 0) return;
+      setActiveIndex((prev) => (prev + 1) % numCardsInDeck);
+  }, [numCardsInDeck]);
+
+  // Optional: Keyboard listener (Adapted from BackgroundSection)
+  useEffect(() => {
+      const handleKeyDown = (event: KeyboardEvent) => {
+          if (numCardsInDeck <= 1) return;
+          if (event.key === 'ArrowLeft') {
+              handlePrev();
+          } else if (event.key === 'ArrowRight') {
+              handleNext();
+          }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handlePrev, handleNext, numCardsInDeck]); // Add numCardsInDeck dependency
+
+  // --- Swipe Handler (Adapted from BackgroundSection) ---
+  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      if (numCardsInDeck <= 1) return; // No swiping if only one card or fewer
+      const { offset, velocity } = info;
+      // Simplified swipe power calculation for horizontal swipes
+      const swipe = Math.abs(offset.x) * velocity.x;
+      const swipeThreshold = SWIPE_THRESHOLD * SWIPE_VELOCITY_THRESHOLD / 5; // Adjust sensitivity as needed
+
+      if (swipe < -swipeThreshold) { // Swipe left (faster/further) -> Next card
+          handleNext();
+      } else if (swipe > swipeThreshold) { // Swipe right (faster/further) -> Previous card
+          handlePrev();
+      }
+      // No action if swipe is weak or vertical
+  };
+
+
+  // --- Finish/Unfinish Card Handlers (Adapted from BackgroundSection) ---
+   const handleMarkCardFinished = useCallback((cardId: string) => {
+       setFinishedCardIds(prev => new Set(prev).add(cardId));
+       notifyParentOfMarkDoneChange?.(cardId, true); // Notify parent
+   }, [notifyParentOfMarkDoneChange]);
+
+   const handleUnfinishCard = useCallback((cardId: string) => {
+       setFinishedCardIds(prev => {
+           const next = new Set(prev);
+           next.delete(cardId);
+           return next;
+       });
+       notifyParentOfMarkDoneChange?.(cardId, false); // Notify parent
+   }, [notifyParentOfMarkDoneChange]);
+
+   // Initialize finishedCardIds from props on mount
+   useEffect(() => {
+        const initialFinished = new Set<string>();
+        allAssessmentCards.forEach(card => {
+            if (card.initialIsMarkedDone) {
+                initialFinished.add(card.id);
+            }
+        });
+        setFinishedCardIds(initialFinished);
+        // Adjust active index if starting with some cards finished
+        const initialVisibleCount = allAssessmentCards.length - initialFinished.size;
+         if (initialVisibleCount > 0) {
+             setActiveIndex(0); // Start at the first visible card
+         }
+
+    }, [allAssessmentCards]); // Run only when the card data changes fundamentally
+
+
+  // --- Animation Calculation (Copied from BackgroundSection) ---
+  const calculateCardStyle = (index: number) => {
+    let offset = index - activeIndex;
+    const half = Math.floor(numCardsInDeck / 2);
+
+    // Handle wrap-around for calculating offset
+    if (numCardsInDeck > 1) { // Avoid division by zero or unnecessary logic for 0 or 1 card
+        if (offset > half) offset -= numCardsInDeck;
+        else if (offset < -half) offset += numCardsInDeck;
+    }
+
+    const absOffset = Math.abs(offset);
+
+    // Safety check for NaN or Infinity results from calculations
+    const safe = (n: number) => (Number.isFinite(n) ? n : 0);
+
+    // Style for the active card (center)
+    if (offset === 0) {
+        return {
+            x: 0, y: 0, scale: 1, rotateY: 0, opacity: 1, zIndex: numCardsInDeck + 1, // Highest zIndex
+            display: 'flex', // Ensure it's visible
+        };
+    }
+    // Style for visible cards behind the active card
+    else if (absOffset <= MAX_VISIBLE_OFFSET) {
+        return {
+            x: safe(offset * HORIZONTAL_STAGGER),
+            y: safe(absOffset * VERTICAL_STAGGER),
+            scale: safe(1 - (absOffset * SCALE_FACTOR)),
+            rotateY: safe(-offset * ROTATE_Y_FACTOR), // Rotate away from the center
+            opacity: 1, // Fully visible
+            zIndex: numCardsInDeck - absOffset, // Lower zIndex based on distance
+            display: 'flex',
+        };
+    }
+    // Style for cards completely hidden (beyond MAX_VISIBLE_OFFSET)
+    else {
+        const sign = Math.sign(offset);
+        return {
+            // Position further out, matching the last visible card's position/rotation/scale
+            x: safe(sign * HORIZONTAL_STAGGER * (MAX_VISIBLE_OFFSET + 0.5)), // Slightly further than last visible
+            y: safe(VERTICAL_STAGGER * MAX_VISIBLE_OFFSET),
+            scale: safe(1 - (MAX_VISIBLE_OFFSET * SCALE_FACTOR)),
+            rotateY: safe(-sign * ROTATE_Y_FACTOR * MAX_VISIBLE_OFFSET),
+            opacity: 0, // Hidden
+            zIndex: 0, // Lowest zIndex
+            // 'display: flex' is kept to allow AnimatePresence to track it for exit animations
+            // but opacity: 0 hides it visually. Alternatively, could use 'display: none'
+            // but that might interfere with animations.
+            display: 'flex',
+        };
+    }
+  };
+
+
+  // --- Main Return Statement ---
   return (
-    <div id="assessment-tools" className="mb-4">
-      <div className="flex justify-between items-center mb-2">
-        <h4 className="text-sm font-medium text-green-800">Assessment Tools</h4>
-        <div className="flex space-x-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button 
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add Tool
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-3" align="end">
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">Add Assessment Tool</h3>
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    <label htmlFor="quick-tool-name" className="text-xs">Tool Name</label>
-                    <Input 
-                      id="quick-tool-name" 
-                      placeholder="E.g., CELF-5" 
-                      className="h-8 text-xs"
-                      value={quickToolForm.name}
-                      onChange={(e) => setQuickToolForm({
-                        ...quickToolForm,
-                        name: e.target.value,
-                        id: e.target.value.toLowerCase().replace(/\s+/g, '_')
-                      })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="quick-tool-id" className="text-xs">ID/Acronym</label>
-                    <Input 
-                      id="quick-tool-id" 
-                      placeholder="E.g., celf5" 
-                      className="h-8 text-xs"
-                      value={quickToolForm.id}
-                      onChange={(e) => setQuickToolForm({
-                        ...quickToolForm,
-                        id: e.target.value.toLowerCase().replace(/\s+/g, '_')
-                      })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs">Domains</label>
-                    <div className="flex flex-wrap gap-1">
-                      {["receptive", "expressive", "pragmatic", "articulation"].map(domain => (
-                        <Button 
-                          key={domain}
-                          variant={quickToolForm.domains.includes(domain) ? "default" : "outline"}
-                          size="sm" 
-                          className={`h-6 text-xs py-0 ${
-                            quickToolForm.domains.includes(domain) 
-                              ? "bg-green-600 hover:bg-green-700 text-white" 
-                              : ""
-                          }`}
-                          onClick={() => {
-                            setQuickToolForm(prev => {
-                              if (prev.domains.includes(domain)) {
-                                return {
-                                  ...prev,
-                                  domains: prev.domains.filter(d => d !== domain)
-                                };
-                              } else {
-                                return {
-                                  ...prev,
-                                  domains: [...prev.domains, domain]
-                                };
-                              }
-                            });
-                          }}
+    <div className="mb-8"> {/* Main wrapper */}
+
+        {/* Section Header */}
+        <div id="assessment-tools-section-header" className="flex justify-between items-center mb-1 scroll-mt-20">
+            <h3 className="text-md font-semibold uppercase tracking-wide">Assessment Tools</h3>
+             <div className="flex gap-2 items-center">
+                 {/* Use the correct lock check functions */}
+                 {onLockSection && (
+                     <Button
+                         size="sm"
+                         variant={areAllToolsCardsLocked() ? "secondary" : "ghost"}
+                         onClick={handleSectionLock}
+                         className={`transition-all hover:scale-110 ${
+                             areAllToolsCardsLocked() ? "text-gray-600 bg-gray-200 border-gray-300" // All locked style
+                             : isAnyToolCardLocked() ? "text-amber-600" // Some locked style
+                             : "text-gray-500 hover:text-gray-700" // None locked style
+                         }`}
+                         title={areAllToolsCardsLocked() ? "Unlock all cards in this section" : "Lock all cards in this section"}
+                     >
+                         {areAllToolsCardsLocked() ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
+                         {/* Text change from original: "Unlock Section" vs "Section Locked" */}
+                         {areAllToolsCardsLocked() ? "Section Locked" : "Lock Section"}
+                     </Button>
+                 )}
+             </div>
+        </div>
+        <hr className="mb-3 border-green-200" /> {/* Color matching internal cards */}
+
+        {/* Add/Search Tools Controls (Keep this section as is) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 mb-4 items-start">
+            {/* Left side: Add buttons */}
+            <div className="flex gap-2 items-center">
+                {/* Popover for Quick Add */}
+                <Popover>
+                    <PopoverTrigger asChild>
+                         <Button size="sm" variant="outline" className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50"> <Plus className="h-3.5 w-3.5 mr-1" /> Quick Add </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-3" align="start">
+                       {/* Quick Add Form Content... */}
+                       <div className="space-y-3"> <h3 className="text-sm font-medium">Add Assessment Tool</h3> <div className="space-y-2"> <div className="space-y-1"> <Label htmlFor="quick-tool-name" className="text-xs">Tool Name</Label> <Input id="quick-tool-name" placeholder="E.g., CELF-5" className="h-8 text-xs" value={quickToolForm.name} onChange={(e) => setQuickToolForm({ ...quickToolForm, name: e.target.value, id: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') })} /> </div> <div className="space-y-1"> <Label htmlFor="quick-tool-id" className="text-xs">ID/Acronym</Label> <Input id="quick-tool-id" placeholder="e.g., celf-5" className="h-8 text-xs" value={quickToolForm.id} onChange={(e) => setQuickToolForm({ ...quickToolForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') })} /> </div> <div className="space-y-1"> <Label className="text-xs">Domains</Label> <div className="flex flex-wrap gap-1"> {["receptive", "expressive", "pragmatic", "articulation", "voice", "fluency"].map(domain => ( <Button key={domain} variant={quickToolForm.domains.includes(domain) ? "default" : "outline"} size="sm" className={`h-6 text-xs py-0 ${quickToolForm.domains.includes(domain) ? "bg-green-600 hover:bg-green-700 text-white" : ""}`} onClick={() => setQuickToolForm(prev => ({ ...prev, domains: prev.domains.includes(domain) ? prev.domains.filter(d => d !== domain) : [...prev.domains, domain] }))} > {domain.charAt(0).toUpperCase() + domain.slice(1)} </Button> ))} </div> </div> </div> <div className="pt-2 flex justify-between"> <Button variant="ghost" size="sm" className="text-xs h-7" onClick={onOpenLibrary} > Open Library </Button> <Button size="sm" className="text-xs h-7 bg-green-600 hover:bg-green-700" disabled={!quickToolForm.name || !quickToolForm.id} onClick={() => { onAddTool(quickToolForm.id); console.log("Quick Added Tool:", quickToolForm); setQuickToolForm({ name: '', id: '', domains: [] }); document.body.click(); }} > Add Tool </Button> </div> </div>
+                    </PopoverContent>
+                </Popover>
+                 <AssessmentLibraryPanel onAddTool={(tool) => { onAddTool(tool.id); }} selectedDomain={null} />
+            </div>
+
+            {/* Right side: Inline Search */}
+            <div className="relative">
+                 <div className="flex items-center border rounded-md overflow-hidden"> <div className="pl-3 text-gray-500"><Search className="h-4 w-4" /></div> <Input placeholder="Search available assessment tools..." className="border-0 focus-visible:ring-0 text-sm h-8" value={toolSearchQuery} onChange={(e) => { const query=e.target.value.toLowerCase(); setToolSearchQuery(e.target.value); if(query.trim()){ const results=Object.values(allTools).filter((tool: AssessmentTool) => tool.name.toLowerCase().includes(query) || tool.id.toLowerCase().includes(query) || (tool.authors || []).some((author: string) => author.toLowerCase().includes(query))); setToolSearchResults(results); setShowToolSearchResults(true); } else { setShowToolSearchResults(false); }}} onFocus={()=> toolSearchQuery.trim() && setShowToolSearchResults(true)} onBlur={()=> setTimeout(() => setShowToolSearchResults(false), 200)} /> </div>
+                 {showToolSearchResults && ( <div className="absolute w-full bg-white border rounded-md shadow-lg p-1 z-10 max-h-60 overflow-y-auto mt-1"> {toolSearchResults.length > 0 ? ( <> <div className="text-xs text-gray-500 px-2 py-1.5">Found {toolSearchResults.length} tools</div> {toolSearchResults.map((tool)=>( <div key={tool.id} className="px-2 py-1.5 hover:bg-gray-100 rounded-sm cursor-pointer flex items-center text-sm" onMouseDown={() => { onAddTool(tool.id); setToolSearchQuery(''); setShowToolSearchResults(false); }}> <BookOpen className={`h-3.5 w-3.5 mr-2 ${tool.type === 'quantitative' ? 'text-blue-500' : 'text-green-500'}`} /> <div><span>{tool.name}</span><span className="text-xs text-gray-500 ml-2">({tool.id})</span></div> </div> ))} </> ) : ( <div className="p-3 text-sm text-center text-gray-500">No matching tools found.</div> )} </div> )}
+             </div>
+        </div>
+
+
+       {/* Finished Cards Badge List (Adapted from BackgroundSection) */}
+       {finishedCardsForBadges.length > 0 && (
+           <div className="mb-4 px-2 py-2 border border-dashed border-gray-300 rounded-md">
+               <h5 className="text-xs font-semibold mb-2 text-gray-500 uppercase">Finished Items</h5>
+               <div className="flex flex-wrap gap-2">
+                   {finishedCardsForBadges.map(card => (
+                       <Badge key={card.id} variant="secondary" className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-gray-100 border border-gray-200 text-gray-700"> {/* Added color */}
+                           <span className="text-xs font-medium">{card.title}</span>
+                           {/* Make unfinish button slightly larger and use X icon */}
+                           <button
+                               onClick={() => handleUnfinishCard(card.id)}
+                               className="rounded-full hover:bg-green-200 p-0.5 focus:outline-none focus:ring-1 focus:ring-green-400"
+                               aria-label={`Remove ${card.title} from finished`}
+                           >
+                               <X className="h-3 w-3 text-green-700" /> {/* Adjusted icon size/color */}
+                           </button>
+                       </Badge>
+                   ))}
+               </div>
+           </div>
+       )}
+
+
+        {/* --- Stacking Card Container (Replaces the old grid) --- */}
+        <div className="relative h-[380px] w-full max-w-lg mx-auto flex items-center justify-center overflow-hidden">
+            {/* Conditional rendering for empty states */}
+            {numCardsInDeck === 0 && finishedCardsForBadges.length === 0 && ( <div className="text-center text-gray-500 italic">No assessment cards available. Add tools or observations.</div> )}
+            {numCardsInDeck === 0 && finishedCardsForBadges.length > 0 && ( <div className="text-center text-gray-500 italic">All assessment cards marked as finished.</div> )}
+
+            {/* AnimatePresence for exit/entry */}
+            <AnimatePresence initial={false}>
+                {visibleCardsInDeck.map((cardData, index) => {
+                    const isActive = index === activeIndex;
+                    return (
+                        <motion.div
+                            key={cardData.id} // Use the unique card ID
+                            animate={calculateCardStyle(index)}
+                            initial={false} // Important for smooth transitions on index change
+                            exit={{ opacity: 0, x: Math.sign(index - activeIndex || -1) * -100 , scale: 0.8, transition: { duration: 0.2, ease: "easeIn" } }} // Exit animation away from center
+                            transition={TRANSITION_TWEEN}
+                            className="absolute top-0 left-0 w-full h-full flex items-center justify-center origin-center cursor-grab active:cursor-grabbing"
+                            style={{ pointerEvents: isActive ? 'auto' : 'none' }} // Only active card is interactive
+                            drag={isActive && numCardsInDeck > 1 ? "x" : false} // Allow drag only on active card if > 1 card
+                            dragConstraints={{ left: 0, right: 0 }} // Constrain drag horizontally
+                            dragElastic={0.2} // Elasticity at drag bounds
+                            onDragEnd={isActive && numCardsInDeck > 1 ? handleDragEnd : undefined} // Attach drag handler
                         >
-                          {domain.charAt(0).toUpperCase() + domain.slice(1)}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-2 flex justify-between">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs h-7"
-                    onClick={onOpenLibrary}
-                  >
-                    Show full editor
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="text-xs h-7 bg-green-600 hover:bg-green-700"
-                    onClick={() => {
-                      if (!quickToolForm.name || !quickToolForm.id) {
-                        return;
-                      }
-                      
-                      // Create tool object
-                      const newToolData = {
-                        id: quickToolForm.id,
-                        name: quickToolForm.name,
-                        year: new Date().getFullYear().toString(),
-                        authors: ['User Added'],
-                        targetPopulation: '',
-                        targetAgeRange: '',
-                        type: 'mixed' as const,
-                        domains: quickToolForm.domains,
-                        description: `Custom tool added via quick form on ${new Date().toLocaleDateString()}`
-                      };
-                      
-                      // Check if localStorage has customAssessmentTools
-                      let customTools = {};
-                      try {
-                        const storedTools = localStorage.getItem('customAssessmentTools');
-                        if (storedTools) {
-                          customTools = JSON.parse(storedTools);
-                        }
-                        
-                        // Add new tool
-                        customTools = {
-                          ...customTools,
-                          [quickToolForm.id]: newToolData
-                        };
-                        
-                        // Save back to localStorage
-                        localStorage.setItem('customAssessmentTools', JSON.stringify(customTools));
-                        
-                        // Add to report
-                        onAddTool(quickToolForm.id);
-                        
-                        // Reset form
-                        setQuickToolForm({
-                          name: '',
-                          id: '',
-                          domains: []
-                        });
-                        
-                        // Close popover by clicking outside
-                        document.body.click();
-                      } catch (e) {
-                        console.error('Error adding custom tool:', e);
-                      }
-                    }}
-                  >
-                    Add Tool
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-          
-          <Button 
-            onClick={onOpenLibrary}
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50"
-          >
-            Browse Library
-          </Button>
-        </div>
-      </div>
-      
-      {/* Inline Search */}
-      <div className="relative mb-3">
-        <div className="flex items-center border rounded-md overflow-hidden mb-2">
-          <div className="pl-3 text-gray-500">
-            <Search className="h-4 w-4" />
-          </div>
-          <Input
-            placeholder="Search assessment tools..."
-            className="border-0 focus-visible:ring-0 text-sm h-9"
-            value={toolSearchQuery}
-            onChange={(e) => {
-              setToolSearchQuery(e.target.value);
-              
-              if (e.target.value.trim()) {
-                // Filter tools based on query
-                try {
-                  const results = Object.values(allTools).filter((tool: any) => 
-                    tool.name.toLowerCase().includes(e.target.value.toLowerCase()) || 
-                    tool.id.toLowerCase().includes(e.target.value.toLowerCase()) ||
-                    (tool.authors || []).some((author: string) => 
-                      author.toLowerCase().includes(e.target.value.toLowerCase())
-                    )
-                  );
-                  
-                  setToolSearchResults(results);
-                  setShowToolSearchResults(true);
-                } catch (error) {
-                  console.error('Error searching tools:', error);
-                  setToolSearchResults([]);
-                }
-              } else {
-                setShowToolSearchResults(false);
-              }
-            }}
-            onFocus={() => {
-              if (toolSearchQuery.trim()) {
-                setShowToolSearchResults(true);
-              }
-            }}
-            onBlur={() => {
-              // Delay hiding to allow clicking on results
-              setTimeout(() => setShowToolSearchResults(false), 200);
-            }}
-          />
-        </div>
-        
-        {/* Search Results - Dynamically generated from found tools */}
-        {showToolSearchResults && toolSearchResults.length > 0 && (
-          <div className="absolute w-full bg-white border rounded-md shadow-md p-1 z-10 max-h-[250px] overflow-y-auto">
-            <div className="text-xs text-gray-500 px-2 py-1.5">
-              Found {toolSearchResults.length} assessment tools
-            </div>
-            
-            {toolSearchResults.map((tool, i) => (
-              <div 
-                key={i}
-                className="px-2 py-1.5 hover:bg-gray-100 rounded-sm cursor-pointer flex items-center text-sm"
-                onClick={() => {
-                  // Add the tool to the report
-                  onAddTool(tool.id);
-                  setToolSearchQuery('');
-                  setShowToolSearchResults(false);
-                }}
-              >
-                {tool.type === 'quantitative' ? (
-                  <BookOpen className="h-3.5 w-3.5 mr-2 text-blue-500" />
-                ) : (
-                  <BookOpen className="h-3.5 w-3.5 mr-2 text-green-500" />
-                )}
-                <div className="flex flex-col">
-                  <span>{tool.name}</span>
-                  <span className="text-xs text-gray-500">
-                    {tool.authors?.length > 0 ? tool.authors[0] + (tool.authors.length > 1 ? ' et al.' : '') : ''} 
-                    {tool.year ? ` (${tool.year})` : ''}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {showToolSearchResults && toolSearchResults.length === 0 && toolSearchQuery.trim() !== '' && (
-          <div className="absolute w-full bg-white border rounded-md shadow-md p-3 z-10">
-            <div className="text-sm text-center">
-              <p className="text-gray-600 mb-2">No matching assessment tools found</p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs h-7"
-                onClick={onOpenLibrary}
-              >
-                Add New Tool
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Methods Overview Card */}
-      <Card className="border border-green-100 shadow-sm bg-green-50/30 mb-3">
-        <CardHeader className="py-2 px-3 bg-green-50">
-          <CardTitle className="text-sm font-medium text-green-800">Validity Statement</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 text-xs">
-          <p>{assessmentProcedures.overviewOfAssessmentMethods || 
-            "A combination of standardized tests, language samples, and observations were used to assess the student's communication skills."}</p>
-        </CardContent>
-      </Card>
-      
-      {/* Observations Section */}
-      {validObservations.length > 0 && (
-        <div className="mb-4">
-          {/*<h5 className="text-xs font-medium text-green-800 mb-2">Observations</h5>*/}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            {validObservations.map(([obsKey, content]) => (
-              <Card key={obsKey} className="border border-green-100 shadow-sm bg-green-50/30">
-                <CardHeader className="py-2 px-3 bg-green-50">
-                  <CardTitle className="text-sm font-medium text-green-800">
-                    {obsKey.charAt(0).toUpperCase() + obsKey.slice(1).replace(/([A-Z])/g, ' $1')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-3 text-xs">
-                  <p>{content}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-      
-      {/* Assessment Tools Display */}
-      {assessmentProcedures.assessmentToolsUsed?.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          {assessmentProcedures.assessmentToolsUsed.map(toolId => {
-            // Get tool details if available
-            const toolDetails = allTools?.[toolId];
-            
-            return (
-              <Card key={toolId} className="border border-green-100 shadow-sm bg-green-50/30">
-  <CardHeader className="py-2 px-3 bg-green-50">
-    <CardTitle className="text-sm font-medium text-green-800">
-      {toolDetails ? (
-        <>
-          {(toolDetails.authors?.length > 0 || toolDetails.year) && (
-            <>
-              {toolDetails.name}; {toolDetails.authors?.[0] || 'Unknown'}, {toolDetails.year || 'n.d.'}
-            </>
-          )}
-        </>
-      ) : (
-        toolId.toUpperCase()
-      )}
-    </CardTitle>
-  </CardHeader>
-  <CardContent className="p-3 text-xs">
-    {toolDetails ? (
-      <div className="space-y-1">
-        {toolDetails.targetAgeRange && (
-          <p><span className="font-medium">Ages:</span> {toolDetails.targetAgeRange}</p>
-        )}
-        {toolDetails.domains?.length > 0 && (
-          <p><span className="font-medium">Domains:</span> {toolDetails.domains.map(d => 
-            d.charAt(0).toUpperCase() + d.slice(1)
-          ).join(', ')}</p>
-        )}
-      </div>
-    ) : (
-      <p className="text-green-800">Tool ID: {toolId}</p>
-    )}
-  </CardContent>
-</Card>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="text-center bg-white rounded-md border border-dashed border-green-200 p-6">
-          <p className="text-gray-500 mb-3">No assessment tools selected yet</p>
-          <Button
-            onClick={onOpenLibrary}
-            size="sm"
-            className="bg-green-600 hover:bg-green-700"
-          >
-            Browse Assessment Library
-          </Button>
-        </div>
-      )}
-      
-      {/* Hidden button for the modal - activated by other buttons */}
-      <button 
-        id="assessment-search-modal"
-        className="hidden"
-        onClick={onOpenLibrary}
-      />
-    </div>
+                            {/* Ensure the card takes up appropriate space */}
+                            <div className="w-full max-w-md h-[95%]">
+                                <EditableCard
+                                    // --- Core Card Data ---
+                                    id={cardData.id}
+                                    title={cardData.title}
+                                    initialContent={cardData.initialContent}
+                                    viewComponent={cardData.viewComponent}
+                                    isEditable={cardData.isEditable}
+                                    // --- State & Callbacks ---
+                                    isLocked={cardData.isLocked}
+                                    hasSynthesis={cardData.hasSynthesis}
+                                    synthesisContent={cardData.synthesisContent}
+                                    onSave={(content) => onSaveContent && onSaveContent(cardData.id, content)}
+                                    onToggleMarkedDone={() => handleMarkCardFinished(cardData.id)} // Use the new handler
+                                    onToggleSynthesis={() => onToggleSynthesis?.(cardData.id)}
+                                    onLock={(id, lockState) => onLockSection?.(id, lockState)} // Pass direct lock callback if EditableCard supports it per-card
+                                    // --- Styling ---
+                                    color={cardData.color || "neutral"} // Use card color or default
+                                    className="border border-neutral-200 shadow-lg bg-white h-full flex flex-col min-h-[200px]" // Base style for assessment cards
+                                    headerClassName="py-2 px-3 bg-neutral-100" // Consistent header
+                                    contentClassName="p-3 text-xs text-neutral-700 grow overflow-y-auto" // Content area styling
+                                    disableHoverEffect={true} // Disable hover as it's inside a draggable container
+                                    // markedDone={finishedCardIds.has(cardData.id)} // Pass derived done state if needed by EditableCard UI
+                                />
+                            </div>
+                        </motion.div>
+                    );
+                })}
+            </AnimatePresence>
+
+            {/* Navigation Buttons (Show only if more than one card in deck) */}
+            {numCardsInDeck > 1 && (
+                <>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handlePrev}
+                        className="absolute left-2 sm:-left-8 top-1/2 -translate-y-1/2 z-30 text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full"
+                        aria-label="Previous Card"
+                    >
+                        <ChevronLeft className="h-6 w-6" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleNext}
+                        className="absolute right-2 sm:-right-8 top-1/2 -translate-y-1/2 z-30 text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full"
+                        aria-label="Next Card"
+                    >
+                        <ChevronRight className="h-6 w-6" />
+                    </Button>
+                </>
+            )}
+        </div> {/* End Stacking Card Container */}
+
+
+    </div> // End Main Section Div
   );
 };
 

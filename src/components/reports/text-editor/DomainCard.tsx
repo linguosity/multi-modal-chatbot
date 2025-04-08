@@ -1,132 +1,134 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DomainSection } from '@/types/reportTypes';
+// FILE: src/components/reports/text-editor/DomainCard.tsx
+// (Added onMarkFinished prop and passed it down)
 
+import React from 'react';
+import { EditableCard } from '@/components/reports/EditableCard';
+import { DomainSection } from '@/types/reportSchemas';
+
+// --- Interface Updated ---
 interface DomainCardProps {
   domain: string;
   domainData: DomainSection;
-  onAddToolToGlobal?: (tool: string) => void;
+  onLockSection?: (id: string, locked: boolean) => void;
+  onToggleSynthesis?: (id: string) => void;
+  onSaveContent?: (id: string, content: string) => void;
+  onMarkFinished?: () => void; // <<< ADD THIS PROP
 }
 
 /**
- * Component for displaying a language domain card with its strengths, needs, and tools
+ * Component for displaying a language domain card with its strengths, needs, and impact.
+ * Uses neutral styling consistent with other sections.
  */
-export const DomainCard: React.FC<DomainCardProps> = ({ domain, domainData, onAddToolToGlobal }) => {
-  const hasConcern = domainData.isConcern;
-  
+export const DomainCard: React.FC<DomainCardProps> = ({
+  domain,
+  domainData,
+  onLockSection,
+  onToggleSynthesis,
+  onSaveContent,
+  onMarkFinished // <<< Destructure the new prop
+}) => {
+
+  // Helper function to format content for editing (remains same)
+  const formatContentForEdit = (): string => {
+     // ... same function ...
+     let content = `Topic: ${domainData.topicSentence || ''}\n\n`;
+     if (domainData.strengths && domainData.strengths.length > 0) { content += `Strengths:\n${domainData.strengths.map(s => `- ${s}`).join('\n')}\n\n`; }
+     if (domainData.needs && domainData.needs.length > 0) { content += `Needs:\n${domainData.needs.map(n => `- ${n}`).join('\n')}\n\n`; }
+     if (domainData.impactStatement) { content += `Impact: ${domainData.impactStatement}`; }
+     return content.trim();
+  };
+
+  // Helper function to parse saved content (remains same)
+  const parseSavedContent = (content: string): Partial<DomainSection> => {
+    // ... same function ...
+    const lines = content.split('\n').map(l => l.trim()).filter(l => l);
+    const updatedData: Partial<DomainSection> = { strengths: [], needs: [] };
+    let currentSection: 'topic' | 'strengths' | 'needs' | 'impact' | null = 'topic';
+    lines.forEach(line => {
+        const lowerLine = line.toLowerCase();
+        if (lowerLine.startsWith('topic:')) { updatedData.topicSentence = line.substring(6).trim(); currentSection = null; }
+        else if (lowerLine === 'strengths:') { currentSection = 'strengths'; }
+        else if (lowerLine === 'needs:') { currentSection = 'needs'; }
+        else if (lowerLine.startsWith('impact:')) { updatedData.impactStatement = line.substring(7).trim(); currentSection = null; }
+        else if (line.startsWith('-') && currentSection) { const item = line.substring(1).trim(); if (currentSection === 'strengths') updatedData.strengths?.push(item); if (currentSection === 'needs') updatedData.needs?.push(item); }
+        else if (currentSection === 'topic' && !updatedData.topicSentence) { updatedData.topicSentence = line; currentSection = null; }
+        else if (currentSection === null && !lowerLine.endsWith(':')) { if (updatedData.impactStatement) updatedData.impactStatement += ` ${line}`; } });
+    updatedData.isConcern = (updatedData.needs?.length ?? 0) > 0; return updatedData;
+  };
+
+
   return (
-    <Card 
+    <EditableCard
       id={`domain-${domain}`}
-      className={`border shadow-sm ${hasConcern 
-        ? 'border-amber-200 bg-amber-50/30' 
-        : 'border-green-100 bg-green-50/30'
-      }`}
-    >
-      <CardHeader className={`py-2 px-3 flex flex-row justify-between items-center ${hasConcern 
-          ? 'bg-amber-50' 
-          : 'bg-green-50'
-        }`}
-      >
-        <CardTitle className={`text-sm font-medium ${hasConcern 
-            ? 'text-amber-800' 
-            : 'text-green-800'
-          }`}
-        >
-          {domain.charAt(0).toUpperCase() + domain.slice(1)} Language
-        </CardTitle>
-        {domainData.isConcern !== undefined && (
-          <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-            domainData.isConcern
-              ? 'bg-amber-100 text-amber-800'
-              : 'bg-green-100 text-green-800'
-          }`}>
-            {domainData.isConcern ? 'Area of Concern' : 'No Concern'}
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="p-3 text-xs">
-        {domainData.topicSentence && (
-          <div className="mb-2">
-            <p className="font-medium">{domainData.topicSentence}</p>
-          </div>
-        )}
-        
-        <div className="grid grid-cols-1 gap-2">
-          {domainData.strengths && domainData.strengths.length > 0 && (
-            <div>
-              <h5 className="text-xs font-semibold mb-1 text-gray-600">Strengths</h5>
-              <ul className="list-disc pl-4 space-y-0.5">
-                {domainData.strengths.map((item, index) => (
-                  <li key={index} className="text-gray-800">{item}</li>
-                ))}
-              </ul>
+      title={`${domain.charAt(0).toUpperCase() + domain.slice(1)} Language`}
+      className="border border-neutral-200 bg-white shadow-sm"
+      headerClassName="py-2 px-3 bg-neutral-100"
+      contentClassName="p-3 text-xs"
+      color="neutral"
+      isLocked={domainData.isLocked}
+      onLock={onLockSection}
+      onToggleSynthesis={onToggleSynthesis}
+      hasSynthesis={!!domainData.synthesis}
+      synthesisContent={domainData.synthesis || ""}
+      initialContent={formatContentForEdit()}
+      onSave={(content) => {
+          if (onSaveContent) {
+              onSaveContent(`domain-${domain}`, content);
+          }
+      }}
+      // --- Pass the callback down to EditableCard ---
+      onToggleMarkedDone={onMarkFinished} // <<< ADD THIS LINE
+      // --- ---
+      viewComponent={
+        <>
+          {/* Concern Status Badge - Style updated for 'No Concern' */}
+          {domainData.isConcern !== undefined && (
+            <div className="absolute top-2 right-12">
+              <div className={`px-1.5 py-0.5 rounded-full text-xxs font-medium ${
+                domainData.isConcern
+                  ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
+                  : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
+              }`}>
+                {domainData.isConcern ? 'Concern' : 'No Concern'}
+              </div>
             </div>
           )}
-          
-          {domainData.needs && domainData.needs.length > 0 && (
-            <div>
-              <h5 className="text-xs font-semibold mb-1 text-gray-600">Needs</h5>
-              <ul className="list-disc pl-4 space-y-0.5">
-                {domainData.needs.map((item, index) => (
-                  <li key={index} className="text-gray-800">{item}</li>
-                ))}
-              </ul>
-            </div>
+
+          {/* Topic Sentence */}
+          {domainData.topicSentence && (
+            <p className="font-medium mb-2">{domainData.topicSentence}</p>
           )}
-          
-          {domainData.impactStatement && (
-            <div>
-              <h5 className="text-xs font-semibold mb-1 text-gray-600">Educational Impact</h5>
-              <p className="text-gray-800">{domainData.impactStatement}</p>
-            </div>
-          )}
-          
-          {/* Domain-specific assessment tools */}
-          {domainData.assessmentTools && domainData.assessmentTools.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-gray-200">
-              <h5 className="text-xs font-semibold mb-1 text-gray-600">Assessment Tools</h5>
-              <ul className="list-disc pl-4 space-y-2">
-                {domainData.assessmentTools.map((tool, index) => {
-                  // Extract additional information if available (assuming format like "Tool Name (SST-4)")
-                  const nameMatch = tool.match(/(.*?)\s*(?:\(([^)]+)\))?$/);
-                  const fullName = nameMatch ? nameMatch[1].trim() : tool;
-                  const shortName = nameMatch && nameMatch[2] ? nameMatch[2].trim() : '';
-                  
-                  // Basic tool info extraction
-                  let toolInfo = '';
-                  if (tool.toLowerCase().includes('sst-4') || tool.toLowerCase().includes('stuttering severity instrument')) {
-                    toolInfo = 'Assesses stuttering severity on a standardized scale. Appropriate for children and adults.';
-                  } else if (tool.toLowerCase().includes('celf-5') || tool.toLowerCase().includes('clinical evaluation of language fundamentals')) {
-                    toolInfo = 'Assesses language skills across multiple domains. Ages 5-21 years.';
-                  } else if (tool.toLowerCase().includes('gfta-3') || tool.toLowerCase().includes('goldman-fristoe')) {
-                    toolInfo = 'Measures articulation of consonant sounds. Ages 2-21 years.';
-                  }
-                  
-                  return (
-                    <li key={index} className="text-gray-800">
-                      <div className="font-medium">{fullName}</div>
-                      {shortName && <div className="text-xs text-gray-500 mt-0.5">({shortName})</div>}
-                      {toolInfo && <div className="text-xs text-gray-600 mt-1 italic">{toolInfo}</div>}
-                      {onAddToolToGlobal && (
-                        <button 
-                          className="mt-1 text-xs text-blue-600 hover:text-blue-800" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAddToolToGlobal(tool);
-                          }}
-                        >
-                          {onAddToolToGlobal ? "+ Add to global list" : "✓ In global list"}
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+
+           {/* Strengths */}
+           {domainData.strengths && domainData.strengths.length > 0 && (
+             <div className="mb-1.5">
+               <h5 className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider">Strengths</h5>
+               <ul className="list-disc list-outside pl-4 space-y-0.5 marker:text-gray-400">
+                 {domainData.strengths.map((item, index) => ( <li key={`strength-${index}`} className="text-gray-800">{item}</li> ))}
+               </ul>
+             </div>
+           )}
+
+           {/* Needs */}
+           {domainData.needs && domainData.needs.length > 0 && (
+             <div className="mb-1.5">
+               <h5 className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider">Needs</h5>
+               <ul className="list-disc list-outside pl-4 space-y-0.5 marker:text-gray-400">
+                 {domainData.needs.map((item, index) => ( <li key={`need-${index}`} className="text-gray-800">{item}</li> ))}
+               </ul>
+             </div>
+           )}
+
+           {/* Impact Statement */}
+           {domainData.impactStatement && (
+             <div>
+               <h5 className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider">Educational Impact</h5>
+               <p className="text-gray-800">{domainData.impactStatement}</p>
+             </div>
+           )}
+        </>
+      }
+    />
   );
 };
 

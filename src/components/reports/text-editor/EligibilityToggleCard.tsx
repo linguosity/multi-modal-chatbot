@@ -3,6 +3,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { motion } from "framer-motion";
+import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Domain {
@@ -24,19 +26,26 @@ interface EligibilityToggleCardProps {
   domains: Domain[];
   edCodeInfo: Record<string, EdCodeInfo>;
   onChange?: (domains: Domain[]) => void;
+  isLocked?: boolean;
+  onLock?: (locked: boolean) => void;
 }
 
 export const EligibilityToggleCard: React.FC<EligibilityToggleCardProps> = ({
   title = "Eligibility Determination",
   domains = [],
   edCodeInfo = {},
-  onChange
+  onChange,
+  isLocked = false,
+  onLock
 }) => {
   const [activeDomains, setActiveDomains] = useState<Domain[]>(domains);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
 
   // Handle domain toggle
   const handleToggleDomain = (domainId: string, checked: boolean) => {
+    // Don't allow changes if the card is locked
+    if (isLocked) return;
+    
     const updatedDomains = activeDomains.map(domain => 
       domain.id === domainId ? { ...domain, selected: checked } : domain
     );
@@ -55,14 +64,64 @@ export const EligibilityToggleCard: React.FC<EligibilityToggleCardProps> = ({
       setSelectedDomain(null);
     }
   };
+  
+  const handleLock = () => {
+    if (onLock) {
+      onLock(!isLocked);
+    }
+  };
 
   // Check if we have any selected domains
   const hasSelectedDomains = activeDomains.some(domain => domain.selected);
 
+  // Animation variants for locked cards
+  const lockedCardAnimation = isLocked ? {
+    opacity: [0.92, 0.96, 0.92],
+    y: [-1, 0, -1],
+    boxShadow: ["0 1px 3px rgba(0,0,0,0.1)", "0 2px 4px rgba(0,0,0,0.12)", "0 1px 3px rgba(0,0,0,0.1)"],
+    scale: [0.995, 1, 0.995],
+    transition: { 
+      duration: 4, 
+      repeat: Infinity,
+      ease: "easeInOut"
+    }
+  } : {};
+
   return (
-    <Card className="bg-[#F8F7F4] border border-[#E6E0D6] rounded-lg shadow-sm mb-8">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xl font-display font-medium text-foreground">{title}</CardTitle>
+    <div className="w-full mb-6">
+      <motion.div
+        whileHover={!isLocked ? { y: -5, scale: 1.01 } : {}}
+        animate={lockedCardAnimation}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
+        <Card className={cn(
+          "bg-[#F8F7F4] border rounded-lg shadow-sm",
+          isLocked ? "bg-gray-100/50 border-green-200 shadow-green-50 opacity-95" : "border-[#E6E0D6]"
+        )}>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className={cn(
+          "text-xl font-display font-medium",
+          isLocked ? "text-green-700" : "text-foreground"
+        )}>
+          {isLocked && <Lock className="h-3 w-3 inline mr-1 text-green-600" />}
+          {title}
+        </CardTitle>
+        
+        {onLock && (
+          <div className="flex items-center">
+            <motion.button
+              onClick={handleLock}
+              className={cn(
+                "p-1 rounded-full transition-all hover:scale-110",
+                isLocked ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-gray-700"
+              )}
+              whileHover={{ scale: 1.1 }}
+              title={isLocked ? "Unlock section" : "Lock section"}
+            >
+              <Lock className={cn("h-4 w-4", isLocked ? "text-green-600" : "text-gray-500")} />
+            </motion.button>
+          </div>
+        )}
       </CardHeader>
       
       <Separator className="mb-4 bg-[#E6E0D6]" />
@@ -101,6 +160,7 @@ export const EligibilityToggleCard: React.FC<EligibilityToggleCardProps> = ({
                   checked={domain.selected}
                   onCheckedChange={(checked) => handleToggleDomain(domain.id, checked)}
                   className="data-[state=checked]:bg-[#6C8578]"
+                  disabled={isLocked}
                 />
               </div>
             ))}
@@ -173,6 +233,8 @@ export const EligibilityToggleCard: React.FC<EligibilityToggleCardProps> = ({
         </div>
       </CardContent>
     </Card>
+    </motion.div>
+    </div>
   );
 };
 
