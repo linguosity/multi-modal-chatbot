@@ -580,6 +580,7 @@ export default function ReportEditor() {
         {/* Editor Panel - Pass necessary props */}
         <EditorPanel
              {...{ inputText, setInputText, selectedSection, setSelectedSection, isUpdating, error, success, handleSubmit, handleExportHtml, handleClearReport, report, handlePdfUpload }}
+             onPdfUpload={handlePdfUpload} // <<< --- ADD THIS LINE --- >>>
              onViewJson={() => setShowJsonPreview(true)}
              onBatchComplete={(updatedReport, commands, affectedDomains) => { setReport(updatedReport); setSuccess(`Batch update completed.`); setCommandDetails({ command: 'batch_update', updates: commands?.length || 0 }); }}
              onBatchError={(errorMessage) => { setError(errorMessage); }}

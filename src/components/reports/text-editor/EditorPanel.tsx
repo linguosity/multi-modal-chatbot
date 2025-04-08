@@ -162,16 +162,17 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
       <div className="flex justify-between items-center">
         {/* Dialog Trigger Button */}
         <Dialog open={editorOpen} onOpenChange={setEditorOpen} modal={true}>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn( "rounded-full bg-[#F1EEE9]/80 shadow-lg p-2.5 hover:bg-[#E6E0D6] transition-all", "border border-[#E6E0D6] hover:border-[#D8CFC1]", batchStatus.active ? "invisible pointer-events-none" : "" )}
-              aria-label="Open Report Editor"
-            >
-              <Edit3 className="h-4 w-4 text-[#6C8578]" />
-            </Button>
-          </DialogTrigger>
+        
+        <DialogTrigger>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(/* styles */)}
+            aria-label="Open Report Editor"
+          >
+            <Edit3 className="h-4 w-4 text-[#6C8578]" />
+          </Button>
+        </DialogTrigger>
 
         <DialogContent className="max-w-4xl w-full p-0 rounded-xl border-0 animate-fadeIn">
           <DialogTitle className="sr-only">Update Report</DialogTitle>
@@ -179,7 +180,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-display text-2xl font-medium text-foreground tracking-tight">Update Report</h2>
-              <DialogClose asChild> <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-[#E6E0D6]/50"> <X className="h-4 w-4" /> </Button> </DialogClose>
+              <DialogClose> <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-[#E6E0D6]/50"> </Button> </DialogClose>
             </div>
 
             {/* Tabs */}
