@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
-
+// src/app/page.tsx
 export default function Home() {
-  redirect('/dashboard');
+  // Let middleware handle redirection based on auth status.
+  // Returning null or a minimal loader prevents flashing content here.
   return null;
 }

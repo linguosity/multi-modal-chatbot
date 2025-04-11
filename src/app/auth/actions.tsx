@@ -1,0 +1,172 @@
+// src/app/auth/actions.tsx
+'use server'
+
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server' // Ensure this path is correct
+import type { Database } from '@/types/supabaseTypes'; // Import Database type if needed
+
+// Helper to get origin URL safely on server
+function getSiteURL() {
+  let url =
+    process.env.NEXT_PUBLIC_SITE_URL ?? // Set this in .env.local
+    process.env.NEXT_PUBLIC_VERCEL_URL ?? // Automatically set by Vercel
+    'http://localhost:3000'; // Default if not set
+  // Make sure to include `https://` when not localhost.
+  url = url.includes('http') ? url : `https://${url}`;
+  // Make sure to include trailing `/`
+  url = url.charAt(url.length - 1) === '/' ? url : `${url}/`;
+  return url;
+}
+
+
+/**
+ * Server action for user login
+ */
+export async function loginUser(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const cookieStore = await cookies();
+  // --- FIX: Add await ---
+  const supabase = await createClient(cookieStore);
+
+  if (!email || !password) {
+    return { error: 'Email and password are required' };
+  }
+
+  if (!supabase) {
+      return { error: 'Supabase client could not be initialized.' };
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    console.error('[Login Action Error]', error.message);
+    // Provide clearer error messages if possible
+    if (error.message.includes('Invalid login credentials')) {
+       return { error: 'Invalid email or password.' };
+    }
+    return { error: `Login failed: ${error.message}` };
+  }
+
+  console.log('[Login Action] Success for:', email);
+  return { success: true, user: data.user };
+}
+
+/**
+ * Server action for user signup
+ */
+export async function signupUser(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const confirmPassword = formData.get('confirmPassword') as string;
+  const cookieStore = await cookies();
+   // --- FIX: Add await ---
+  const supabase = await createClient(cookieStore);
+
+  // Basic validation
+  if (!email || !password) {
+    return { error: 'Email and password are required' };
+  }
+  if (password !== confirmPassword) {
+    return { error: 'Passwords do not match' };
+  }
+  if (password.length < 8) {
+    return { error: 'Password must be at least 8 characters' };
+  }
+
+  if (!supabase) {
+      return { error: 'Supabase client could not be initialized.' };
+  }
+
+  // Ensure NEXT_PUBLIC_SITE_URL is set in your .env.local
+  const origin = getSiteURL();
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      // Use helper function for robust URL generation
+      emailRedirectTo: `${origin}auth/callback`,
+    }
+  });
+
+  if (error) {
+    console.error('[Signup Action Error]', error.message);
+    // Check for specific errors like user already registered
+    if (error.message.includes('User already registered')) {
+         return { error: 'An account with this email already exists. Please sign in.' };
+    }
+    return { error: `Signup failed: ${error.message}` };
+  }
+
+  // Handle specific case where user exists but email isn't confirmed
+  // Note: data.user might exist even if identities is empty if confirmation is needed
+  if (data.user && data.user.identities && data.user.identities.length === 0) {
+     // This might indicate email confirmation is needed, not necessarily an error
+     console.log('[Signup Action] User created, requires email confirmation:', email);
+     // You might want a specific success message indicating confirmation needed
+     // The form currently redirects to /register/confirmation, so maybe just return success
+     // return { success: true, confirmationNeeded: true };
+  }
+
+  console.log('[Signup Action] Success for:', email);
+  return { success: true, user: data.user };
+}
+
+/**
+ * Server action for user logout
+ */
+export async function logoutUser() {
+  const cookieStore = await cookies();
+   // --- FIX: Add await ---
+  const supabase = await createClient(cookieStore);
+
+  if (!supabase) {
+    console.error('[Logout Action Error] Supabase client failed');
+    return { error: 'Logout failed: Server error' };
+  }
+
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    console.error('[Logout Action Error]', error.message);
+    return { error: `Logout failed: ${error.message}` };
+  }
+
+  console.log('[Logout Action] User signed out');
+   // --- FIX: Redirect to /auth ---
+  redirect('/auth');
+}
+
+/**
+ * Get the current authenticated user (often used in Server Components/Pages)
+ */
+export async function getCurrentUser() {
+  const cookieStore = await cookies();
+  // --- FIX: Add await ---
+  const supabase = await createClient(cookieStore);
+
+  if (!supabase) {
+     console.error('[getCurrentUser Error] Supabase client failed');
+     return null; // Or throw an error
+  }
+
+  try {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (error) {
+          console.error('[getCurrentUser Error]', error.message);
+          return null;
+      }
+
+      return data?.user ?? null; // Return user or null
+
+  } catch (catchError: any) {
+       console.error('[getCurrentUser Catch Error]', catchError.message);
+       return null;
+  }
+}

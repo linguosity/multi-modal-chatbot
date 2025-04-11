@@ -1,5 +1,6 @@
 'use client';
 
+import { Home } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -18,12 +19,14 @@ export default function UserReportsLayout({ children }: { children: React.ReactN
 
   return (
       <div className="flex flex-col h-full">
-        <div className="sticky top-0 z-30 flex h-12 w-full items-center gap-4 border-b bg-background px-4 md:px-6">
+        <div className="sticky top-0 z-30 flex h-12 w-full items-center gap-4 border-b bg-background px-4 py-3 md:px-6">
           <Breadcrumb className="mb-1">
             <BreadcrumbList>
               {/* "Home" link */}
               <BreadcrumbItem>
-                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+                <BreadcrumbLink href="/dashboard">
+                  <Home className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                </BreadcrumbLink>
               </BreadcrumbItem>
 
               <BreadcrumbSeparator />
