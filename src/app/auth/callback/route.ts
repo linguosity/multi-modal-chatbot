@@ -1,45 +1,42 @@
-import { createClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import type { Database } from '@/types/supabaseTypes'
+// src/app/auth/callback/route.ts
+import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server'; // <<< Import your SERVER client factory
+// No need to import createBrowserClient or Database type here if factory handles it
 
 export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
+    const requestUrl = new URL(request.url);
+    const code = requestUrl.searchParams.get('code');
+    const next = requestUrl.searchParams.get('next') ?? '/dashboard'; // Get next path or default
 
-  if (code) {
-    const cookieStore = await cookies()
-    const supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          async get(name: string) {
-            const cookie = cookieStore.get(name)
-            return cookie?.value
-          },
-          async set(name: string, value: string, options: any) {
-            try {
-              cookieStore.set({ name, value, ...options })
-            } catch (error) {
-              console.warn('Error setting cookie in auth callback:', error)
-            }
-          },
-          async remove(name: string, options: any) {
-            try {
-              cookieStore.set({ name, value: '', ...options })
-            } catch (error) {
-              console.warn('Error removing cookie in auth callback:', error)
-            }
-          },
-        },
-      }
-    )
-    
-    await supabase.auth.exchangeCodeForSession(code)
-  }
+    console.log(`[Auth Callback] Received request for path: ${requestUrl.pathname} with code: ${code ? 'present' : 'missing'}`);
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(new URL('/dashboard', request.url))
+    if (code) {
+        const cookieStore = await cookies(); // Must await cookies() in Next 15+
+        const supabase = await createClient(cookieStore); // Use your server client factory
+
+        if (!supabase) {
+            console.error("[Auth Callback] Failed to create Supabase client");
+            // Redirect to an error state on your auth page
+            return NextResponse.redirect(new URL('/auth?error=Server+Configuration+Error', request.url));
+        }
+
+        console.log("[Auth Callback] Exchanging code for session...");
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error) {
+            console.error("[Auth Callback] Error exchanging code:", error.message);
+             // Redirect back to auth page with error message
+            return NextResponse.redirect(new URL(`/auth?error=${encodeURIComponent('Could not sign in: ' + error.message)}`, request.url));
+        }
+
+         console.log("[Auth Callback] Code exchanged successfully. Redirecting to:", next);
+         // Redirect to the intended destination (or dashboard) after successful exchange
+         return NextResponse.redirect(new URL(next, request.url));
+
+    } else {
+        console.error("[Auth Callback] No code found in request URL.");
+         // Redirect back to auth page if no code is present
+         return NextResponse.redirect(new URL(`/auth?error=Authorization+code+missing.`, request.url));
+    }
 }

@@ -27,7 +27,7 @@ import { motion, useScroll, useInView, useSpring, useTransform } from "framer-mo
 // Context and Data Fetching/Definitions
 import { useReports } from "@/components/contexts/reports-context";
 import { getAllAssessmentTools } from '@/lib/assessment-tools';
-import { EMPTY_REPORT, SAMPLE_REPORT } from '@/lib/seed-report';
+import { EMPTY_REPORT, SAMPLE_REPORT } from '@/types/sampleReportData';
 import { useBatchReportUpdater } from '@/hooks/useBatchReportUpdater';
 
 // === TYPE IMPORTS (from Zod Schema - Assuming 'applicableEdCodeText' was added) ===
@@ -55,7 +55,6 @@ import GlossarySection from "@/components/reports/text-editor/GlossarySection";
 // Other Utility Components
 import JsonViewerDialog from "@/components/reports/text-editor/JsonViewerDialog";
 import CommandDetailsCard from "@/components/reports/text-editor/CommandDetailsCard";
-import BatchJobStatus from "@/components/reports/BatchJobStatus";
 
 
 // --- Helper Functions ---
@@ -181,42 +180,35 @@ export default function ReportEditor() {
     updateSection
   } = useBatchReportUpdater(initialReport || createReportSkeleton());
 
-  // --- Effect to load report data ---
   useEffect(() => {
     setLoading(true);
-    
-    const timer = setTimeout(() => {
-      console.log("Loading SAMPLE_REPORT for reportId:", reportId);
-      
+ 
+    const loadReport = async () => {
       try {
-        const sampleData = JSON.parse(JSON.stringify(SAMPLE_REPORT));
-        
-        // Ensure all required structures exist
-        if (!sampleData.header) sampleData.header = { studentInformation: { firstName: '', lastName: '' } };
-        if (!sampleData.header.studentInformation) sampleData.header.studentInformation = { firstName: '', lastName: '' };
-        if (!sampleData.background) sampleData.background = {};
-        if (!sampleData.presentLevels) sampleData.presentLevels = { functioning: {} };
-        if (!sampleData.assessmentResults) sampleData.assessmentResults = { assessmentProceduresAndTools: { assessmentToolsUsed: [] }, observations: {} };
-        if (!sampleData.conclusion) sampleData.conclusion = { eligibility: { domains: {}, eligibilityStatus: {} }, conclusion: {}, recommendations: { services: {}, accommodations: [], facilitationStrategies: [] }, parentFriendlyGlossary: { terms: {} } };
-        if (!sampleData.conclusion.eligibility) sampleData.conclusion.eligibility = { domains: {}, eligibilityStatus: {} };
-        if (!sampleData.conclusion.eligibility.domains) sampleData.conclusion.eligibility.domains = {};
-        if (!sampleData.conclusion.eligibility.eligibilityStatus) sampleData.conclusion.eligibility.eligibilityStatus = {};
-        if (!sampleData.conclusion.conclusion) sampleData.conclusion.conclusion = {};
-        if (!sampleData.conclusion.recommendations) sampleData.conclusion.recommendations = { services: {}, accommodations: [], facilitationStrategies: [] };
-        if (!sampleData.conclusion.parentFriendlyGlossary) sampleData.conclusion.parentFriendlyGlossary = { terms: {} };
-        if (!sampleData.metadata) sampleData.metadata = { version: 1, lastUpdated: new Date().toISOString() };
-        
-        // Set the initial report so the hook can use it
-        setInitialReport(sampleData);
-      } catch(e) {
-        console.error("Failed to parse SAMPLE_REPORT, using skeleton:", e);
+        const response = await fetch(`/api/reports?id=${reportId}&userId=${userId}`);
+        const json = await response.json();
+ 
+        if (!response.ok) throw new Error(json.error || 'Failed to fetch report');
+ 
+        const reportData = json?.report;
+        console.log("Raw JSON response from /api/reports:", json);
+        if (!reportData || typeof reportData !== 'object') throw new Error('Invalid report data');
+ 
+        setInitialReport(reportData);
+      } catch (e) {
+        console.error("Failed to load report from Supabase, falling back to skeleton:", e);
         setInitialReport(createReportSkeleton());
+      } finally {
+        setLoading(false);
       }
-      
+    };
+ 
+    if (reportId === 'new') {
+      setInitialReport(createReportSkeleton());
       setLoading(false);
-    }, 800);
-    
-    return () => clearTimeout(timer);
+    } else {
+      loadReport();
+    }
   }, [reportId]);
   useEffect(() => { /* ... Load assessment tools ... */ try { const tools = getAllAssessmentTools(); setAssessmentTools(tools); } catch (error) { console.error("Failed to load assessment tools:", error); setAssessmentTools({}); } }, []);
 
@@ -515,39 +507,19 @@ setSectionGroups(newSectionGroups);
   
   const handleSaveContent = useCallback((id: string, content: string | object) => {
     console.log(`Saving content for ID: ${id}`);
-    
-    // Map the ID to a path in the report structure
-    let path: string[] = [];
-    
-    // Map common section IDs to their paths in the report object
-    if (id === 'student-info') {
-      path = ['header', 'studentInformation'];
-    } else if (id === 'educational-history') {
-      path = ['background', 'studentDemographicsAndBackground', 'educationalHistory'];
-    } else if (id === 'health-info') {
-      path = ['background', 'healthReport', 'medicalHistory'];
-    } else if (id === 'family-info') {
-      path = ['background', 'familyHistory', 'familyStructure'];
-    } else if (id === 'validity-statement') {
-      path = ['assessmentResults', 'assessmentProceduresAndTools', 'overviewOfAssessmentMethods'];
-    } else if (id.startsWith('domain-')) {
-      const domain = id.replace('domain-', '');
-      path = ['presentLevels', 'functioning', domain];
-    } else if (id === 'conclusion-summary') {
-      path = ['conclusion', 'conclusion', 'summary'];
-    } else if (id === 'services-recommendations') {
-      path = ['conclusion', 'recommendations', 'services'];
-    } else if (id === 'accommodations-strategies') {
-      path = ['conclusion', 'recommendations', 'accommodations'];
-    }
-    
-    // Use updateSection from our hook to update the report
-    if (path.length > 0) {
-      updateSection(path, content);
-    } else {
-      console.warn(`Unknown section ID: ${id}, content not saved`);
-    }
-  }, [updateSection]);
+    setReport(currentReport => {
+      const updatedReport = JSON.parse(JSON.stringify(currentReport));
+      let targetInfo: { parent: any; finalKey: string | number } | null = null;
+
+      // --- Map ID to the correct path --- (keep the implementation)
+      // ...
+
+      // ... update timestamp ...
+      const metaTarget = ensurePathAndGetParent(updatedReport, ['metadata', 'lastUpdated']); if (metaTarget) metaTarget.parent[metaTarget.finalKey] = new Date().toISOString();
+
+      return updatedReport;
+    });
+  }, []);
 
 
   // --- Finish/Unfinish (Mark As Done) Handler ---
@@ -692,7 +664,7 @@ setSectionGroups(newSectionGroups);
           </div>
         ) : (
           // Actual Report Content Area
-          <div className="p-6 mt-4">
+          <div className="p-6 mt-4 flex-wrap">
             {/* Empty state check */}
             {/* ... */}
 

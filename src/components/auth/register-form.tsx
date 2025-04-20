@@ -1,12 +1,13 @@
+// components/auth/register-form.tsx (or wherever it's located)
 "use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
+// Removed Link import as it's replaced by a button
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -17,9 +18,11 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { supabase } from "@/lib/supabaseClient"
+import { signupUser } from "@/app/auth/actions" // Assuming this action exists
+import { Icons } from "@/components/ui/icons"; // Import Icons if needed for spinner
 
 const formSchema = z.object({
+  // Removed name field for simplicity, add back if needed
   email: z
     .string()
     .min(1, { message: "Email is required" })
@@ -33,7 +36,13 @@ const formSchema = z.object({
   path: ["confirmPassword"],
 })
 
-export function RegisterForm({ className }: { className?: string }) {
+// --- Add onSwitchToLogin to props ---
+interface RegisterFormProps {
+    className?: string;
+    onSwitchToLogin: () => void; // Add this line
+}
+
+export function RegisterForm({ className, onSwitchToLogin }: RegisterFormProps) { // Destructure here
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,28 +59,14 @@ export function RegisterForm({ className }: { className?: string }) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
     setError(null)
-    
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        }
-      })
-      
-      if (error) {
-        throw error
-      }
-      
-      // If user confirmation is required, show a message
-      if (data.user?.identities?.length === 0) {
-        setError("An account with this email already exists. Please log in or reset your password.")
-        return
-      }
-      
-      // If no immediate verification is required, we can redirect to a success page
-      router.push("/register/confirmation")
+      const formData = new FormData()
+      formData.append('email', values.email)
+      formData.append('password', values.password)
+      formData.append('confirmPassword', values.confirmPassword)
+      const result = await signupUser(formData)
+      if (result.error) throw new Error(result.error)
+      router.push("/register/confirmation") // Redirect on success
     } catch (error: any) {
       setError(error.message || "Failed to sign up")
       console.error("Registration error:", error)
@@ -80,26 +75,25 @@ export function RegisterForm({ className }: { className?: string }) {
     }
   }
 
+  // Adjust layout if needed, removed outer div with space-y-6 to match LoginForm structure better
   return (
-    <div className="space-y-6">
-      <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-bold">Create an account</h1>
-        <p className="text-balance text-muted-foreground">
-          Enter your information to create an account
-        </p>
-      </div>
+    <div className={cn("grid gap-6", className)}>
+      {/* Removed extra title/description as it's handled by CardHeader in parent */}
+      {/* <div className="space-y-2 text-center">...</div> */}
       {error && (
-        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive font-medium">
           {error}
         </div>
       )}
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* Using grid gap-4 like LoginForm for consistency */}
+        <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+          {/* Email Field */}
           <FormField
             control={form.control}
             name="email"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="grid gap-2"> {/* Apply grid gap here */}
                 <FormLabel>Email</FormLabel>
                 <FormControl>
                   <Input
@@ -112,11 +106,12 @@ export function RegisterForm({ className }: { className?: string }) {
               </FormItem>
             )}
           />
+          {/* Password Field */}
           <FormField
             control={form.control}
             name="password"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="grid gap-2"> {/* Apply grid gap here */}
                 <FormLabel>Password</FormLabel>
                 <FormControl>
                   <Input
@@ -130,11 +125,12 @@ export function RegisterForm({ className }: { className?: string }) {
               </FormItem>
             )}
           />
+          {/* Confirm Password Field */}
           <FormField
             control={form.control}
             name="confirmPassword"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="grid gap-2"> {/* Apply grid gap here */}
                 <FormLabel>Confirm Password</FormLabel>
                 <FormControl>
                   <Input
@@ -148,17 +144,26 @@ export function RegisterForm({ className }: { className?: string }) {
               </FormItem>
             )}
           />
+          {/* Submit Button */}
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Creating Account..." : "Create Account"}
+            {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" /> }
+            Create Account
           </Button>
         </form>
       </Form>
+       {/* --- Add Switch to Login --- */}
       <div className="text-center text-sm">
         Already have an account?{" "}
-        <Link href="/login" className="underline underline-offset-4">
+        <button
+          type="button"
+          onClick={onSwitchToLogin} // Call the passed function
+          className="font-medium text-primary underline underline-offset-4 hover:text-primary/90"
+          disabled={isLoading} // Disable during loading
+        >
           Sign in
-        </Link>
+        </button>
       </div>
+       {/* --- End Switch to Login --- */}
     </div>
   )
 }

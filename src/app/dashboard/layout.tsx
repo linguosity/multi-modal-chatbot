@@ -113,7 +113,7 @@ export default function DashboardLayout({
   return (
     <ReportsProvider>
       <StoriesProvider>
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen w-full">
           <Sidebar variant="sidebar" collapsible="icon">
             <SidebarHeader>
               {/* ... Header Content ... */}
@@ -126,7 +126,6 @@ export default function DashboardLayout({
                        </div>
                        <div className="flex flex-col gap-0.5 leading-none">
                          <span className="font-semibold">Linguosity</span>
-                         <span className="">Speech & Language Suite</span>
                        </div>
                      </Link>
                    </SidebarMenuButton>

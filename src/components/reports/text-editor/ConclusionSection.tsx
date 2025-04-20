@@ -1,46 +1,59 @@
-// FILE: ConclusionSection.tsx (Refactored for Stacking Cards & Finish Logic)
+// FILE: src/components/reports/text-editor/ConclusionRecsSection.tsx
+// (Finished Items UI updated to dropdown menu)
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Added hooks
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"; // Keep Card for Tabs card
-import { ReportConclusion, californiaEdCodes, preschoolEdCode } from '@/types/reportSchemas';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, XCircle, Lock, Unlock, ChevronLeft, ChevronRight } from "lucide-react"; // Added Chevrons
-import { Badge } from "@/components/ui/badge"; // Added Badge
-import { X as LucideX } from "lucide-react"; // Added X for badges, alias to avoid conflict
-import { motion, AnimatePresence, PanInfo } from 'framer-motion'; // Added motion
-import { cn } from "@/lib/utils";
-import { EditableCard } from "@/components/reports/EditableCard";
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+// Ensure ReportConclusion type is correctly defined/exported and includes markedDoneStatus/lockStatus if used
+import { Conclusion as ReportConclusion } from '@/types/reportSchemas';
+// Removed Badge import
+// import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Lock, Unlock, ChevronLeft, ChevronRight, X as LucideX, CheckCircle } from "lucide-react"; // Added CheckCircle
+import { motion, AnimatePresence, PanInfo } from 'framer-motion';
+import { safeMotionNumber } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { EditableCard } from "@/components/reports/EditableCard";
+// --- Add DropdownMenu Imports ---
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+// --- End DropdownMenu Imports ---
+
 
 // --- Interface Definitions ---
-interface ConclusionSectionProps {
-  conclusion: ReportConclusion | undefined | null;
-  onToggleDomainEligibility: (domain: string, value: boolean) => void; // Keep this for Tabs card
-  onLockSection?: (id: string, locked: boolean) => void;
-  onToggleSynthesis?: (id: string) => void;
-  onSaveContent?: (id: string, content: string) => void;
-  onToggleMarkedDone?: (id: string, isDone: boolean) => void; // Added for finish logic
-  // Consider adding markedDoneStatus to ReportConclusion schema later
-  // markedDoneStatus?: ReportConclusion['markedDoneStatus'];
+interface ConclusionRecsSectionProps {
+    conclusionData: ReportConclusion['conclusion'] | undefined | null;
+    recommendationsData: ReportConclusion['recommendations'] | undefined | null;
+    // Assuming 'applicableEdCodeText' might not exist based on previous errors, made optional
+    eligibilityText?: string;
+    lockStatus?: ReportConclusion['lockStatus']; // Assumes lockStatus exists on ReportConclusion type
+    onLockSection?: (id: string, locked: boolean) => void;
+    onToggleSynthesis?: (id: string) => void;
+    onSaveContent?: (id: string, content: string | object) => void;
+    onToggleMarkedDone?: (id: string, isDone: boolean) => void;
+    markedDoneStatus?: ReportConclusion['markedDoneStatus']; // Assumes markedDoneStatus exists on ReportConclusion type
 }
 
-// Data structure for unified cards
-interface ConclusionCardData {
-    id: string; // e.g., 'conclusion-summary', 'eligibility-determination', 'domain-eligibility', etc.
+interface ConclusionRecsCardData {
+    id: string;
     title: string;
     isLocked?: boolean;
     hasSynthesis?: boolean;
     synthesisContent?: string;
-    initialContent?: string; // For editable cards
-    viewComponent?: React.ReactNode; // For non-editable/complex cards
+    initialContent?: string;
+    viewComponent?: React.ReactNode;
     isEditable?: boolean;
-    initialIsMarkedDone?: boolean; // Placeholder for potential future prop
-    color?: string; // Optional color theming (will be set to neutral)
+    initialIsMarkedDone?: boolean;
+    color?: string;
 }
 
-// --- Animation Constants ---
+// --- Animation Constants (remain the same) ---
 const MAX_VISIBLE_OFFSET = 1;
 const HORIZONTAL_STAGGER = 40;
 const VERTICAL_STAGGER = 6;
@@ -48,431 +61,248 @@ const SCALE_FACTOR = 0.06;
 const ROTATE_Y_FACTOR = 5;
 const TRANSITION_DURATION = 0.4;
 const EASE_FUNCTION = [0.4, 0, 0.2, 1];
-const TRANSITION_TWEEN = { type: "tween", duration: TRANSITION_DURATION, ease: EASE_FUNCTION };
+const TRANSITION_TWEEN = { type: "spring", stiffness: 120, damping: 24 };
 const SWIPE_THRESHOLD = 40;
 const SWIPE_VELOCITY_THRESHOLD = 200;
 // --- End Animation Constants ---
 
-export const ConclusionSection: React.FC<ConclusionSectionProps> = ({
-  conclusion,
-  onToggleDomainEligibility,
-  onLockSection,
-  onToggleSynthesis,
-  onSaveContent,
-  onToggleMarkedDone: notifyParentOfMarkDoneChange // Rename prop
-  // markedDoneStatus // Destructure if added later
+
+export const ConclusionRecsSection: React.FC<ConclusionRecsSectionProps> = ({
+    conclusionData,
+    recommendationsData,
+    eligibilityText,
+    lockStatus,
+    onLockSection,
+    onToggleSynthesis,
+    onSaveContent,
+    onToggleMarkedDone: notifyParentOfMarkDoneChange,
+    markedDoneStatus
 }) => {
+    // --- State (remains the same) ---
+    const [finishedCardIds, setFinishedCardIds] = useState(new Set<string>());
+    const [activeIndex, setActiveIndex] = useState(0);
+    // --- End State ---
 
-  // --- State for Stacking Cards ---
-  const [finishedCardIds, setFinishedCardIds] = useState(new Set<string>());
-  const [activeIndex, setActiveIndex] = useState(0);
-  // --- End State ---
+    // --- Data Preparation (includes reading markedDoneStatus for initial state) ---
+    const allConclusionRecsCards: ConclusionRecsCardData[] = useMemo(() => {
+        const cards: ConclusionRecsCardData[] = [];
+        // Helper to check markedDoneStatus safely
+        const getInitialDone = (id: string) => !!markedDoneStatus?.[id];
+
+        // 1. Summary Card
+        if (conclusionData) {
+            const id = 'conclusion-summary';
+            cards.push({
+                id, title: "Overall Summary", isLocked: lockStatus?.summary,
+                hasSynthesis: !!conclusionData.synthesis, synthesisContent: conclusionData.synthesis || "",
+                initialContent: conclusionData.summary || "", isEditable: true, color: "neutral",
+                initialIsMarkedDone: getInitialDone(id),
+            });
+        }
+
+        // 2. Recommended Services Card
+        if (recommendationsData) {
+            const idServices = 'services-recommendations';
+            cards.push({
+                id: idServices, title: "Recommended Services", isLocked: lockStatus?.services,
+                hasSynthesis: !!recommendationsData.synthesis, synthesisContent: recommendationsData.synthesis || "",
+                isEditable: true,
+                initialContent: `Type: ${recommendationsData.services?.typeOfService || ''}\nFrequency: ${recommendationsData.services?.frequency || ''}\nSetting: ${recommendationsData.services?.setting || ''}`,
+                color: "neutral",
+                viewComponent: recommendationsData.services ? (
+                    <table className="w-full text-xs"><tbody><tr><td className="font-medium pr-2 py-0.5">Type:</td><td>{recommendationsData.services.typeOfService}</td></tr><tr><td className="font-medium pr-2 py-0.5">Frequency:</td><td>{recommendationsData.services.frequency}</td></tr><tr><td className="font-medium pr-2 py-0.5">Setting:</td><td>{recommendationsData.services.setting}</td></tr></tbody></table>
+                ) : <p className="text-xs text-gray-500">No service details.</p>,
+                initialIsMarkedDone: getInitialDone(idServices),
+            });
+        }
+
+        // 3. Accommodations & Strategies Card
+        if (recommendationsData) {
+            const idAccomm = 'accommodations-strategies';
+            cards.push({
+                id: idAccomm, title: "Accommodations & Strategies", isLocked: lockStatus?.accommodations,
+                hasSynthesis: !!recommendationsData.synthesis, synthesisContent: recommendationsData.synthesis || "",
+                isEditable: true,
+                initialContent: [...(recommendationsData.accommodations || []).map(acc => `- ${acc}`), ...((recommendationsData.accommodations?.length || 0) > 0 && (recommendationsData.facilitationStrategies?.length || 0) > 0 ? ["\n--- STRATEGIES ---"] : []), ...(recommendationsData.facilitationStrategies || []).map(strat => `- ${strat}`)].join("\n"),
+                color: "neutral",
+                viewComponent: (<> {(recommendationsData.accommodations?.length || 0) > 0 && ( <div className="mb-2"> <h5 className="text-xs font-semibold mb-1 text-gray-600">Accommodations</h5> <ul className="list-disc pl-4 space-y-0.5 text-gray-800"> {recommendationsData.accommodations!.map((rec, index) => ( <li key={`acc-${index}`}>{rec}</li> ))} </ul> </div> )} {(recommendationsData.facilitationStrategies?.length || 0) > 0 && ( <div> <h5 className="text-xs font-semibold mb-1 text-gray-600">Facilitation Strategies</h5> <ul className="list-disc pl-4 space-y-0.5 text-gray-800"> {recommendationsData.facilitationStrategies!.map((strat, index) => ( <li key={`strat-${index}`}>{strat}</li> ))} </ul> </div> )} {!(recommendationsData.accommodations?.length || 0) && !(recommendationsData.facilitationStrategies?.length || 0) && ( <p className="text-xs text-gray-500">None listed.</p> )} </>),
+                initialIsMarkedDone: getInitialDone(idAccomm),
+            });
+        }
+
+        return cards;
+    }, [conclusionData, recommendationsData, /* eligibilityText, */ lockStatus, markedDoneStatus]);
+    // --- End Data Preparation ---
 
 
-  // --- Data Preparation (Unified Card Array) ---
-  const allConclusionCards: ConclusionCardData[] = useMemo(() => {
-    const cards: ConclusionCardData[] = [];
-    if (!conclusion) return cards; // Return empty if no conclusion data
+    // --- Derived State & Effects (remain the same) ---
+    const visibleCardsInDeck = useMemo(() => allConclusionRecsCards.filter(card => !finishedCardIds.has(card.id)), [allConclusionRecsCards, finishedCardIds]);
+    const finishedCardsForBadges = useMemo(() => allConclusionRecsCards.filter(card => finishedCardIds.has(card.id)), [allConclusionRecsCards, finishedCardIds]);
+    const numCardsInDeck = visibleCardsInDeck.length;
+    useEffect(() => { if (numCardsInDeck > 0 && activeIndex >= numCardsInDeck) { setActiveIndex(numCardsInDeck - 1); } else if (numCardsInDeck === 0) { setActiveIndex(0); } }, [numCardsInDeck, activeIndex]);
+    // --- End Derived State ---
 
-    // 1. Summary Card
-    if (conclusion.conclusion) {
-      const id = 'conclusion-summary';
-      cards.push({
-        id: id,
-        title: "Summary",
-        isLocked: conclusion.lockStatus?.summary,
-        hasSynthesis: !!conclusion.conclusion.synthesis,
-        synthesisContent: conclusion.conclusion.synthesis || "",
-        initialContent: conclusion.conclusion.summary || "",
-        isEditable: true,
-        // initialIsMarkedDone: markedDoneStatus?.[id], // Example if status prop exists
-        color: "neutral"
-      });
-    }
+    // --- Navigation & Swipe (remain the same) ---
+    const handlePrev = useCallback(() => { if (numCardsInDeck <= 1) return; setActiveIndex((prev) => (prev - 1 + numCardsInDeck) % numCardsInDeck); }, [numCardsInDeck]);
+    const handleNext = useCallback(() => { if (numCardsInDeck <= 1) return; setActiveIndex((prev) => (prev + 1) % numCardsInDeck); }, [numCardsInDeck]);
+    useEffect(() => { const handleKeyDown = (e: KeyboardEvent) => { if (numCardsInDeck <= 1) return; if (e.key === 'ArrowLeft') handlePrev(); else if (e.key === 'ArrowRight') handleNext(); }; window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [handlePrev, handleNext, numCardsInDeck]);
+    const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => { if (numCardsInDeck <= 1) return; const { offset, velocity } = info; const swipe = Math.abs(offset.x) * velocity.x; const thresh = SWIPE_THRESHOLD * SWIPE_VELOCITY_THRESHOLD / 5; if (swipe < -thresh) handleNext(); else if (swipe > thresh) handlePrev(); };
+    // --- End Navigation ---
 
-    // 2. Eligibility Determination Card
-    if (conclusion.eligibility) {
-        const id = 'eligibility-determination';
-        cards.push({
-            id: id,
-            title: "Eligibility Determination",
-            isLocked: conclusion.lockStatus?.eligibility,
-            hasSynthesis: !!conclusion.eligibility.synthesis,
-            synthesisContent: conclusion.eligibility.synthesis || "",
-            initialContent: conclusion.eligibility.californiaEdCode || "", // Or maybe a structured view?
-            isEditable: true, // Assuming the text explanation is editable
-            // initialIsMarkedDone: markedDoneStatus?.[id],
-            color: "neutral"
+    // --- Finish/Unfinish (remain the same) ---
+    const handleMarkCardFinished = useCallback((cardId: string) => { setFinishedCardIds(prev => new Set(prev).add(cardId)); notifyParentOfMarkDoneChange?.(cardId, true); }, [notifyParentOfMarkDoneChange]);
+    const handleUnfinishCard = useCallback((cardId: string) => { setFinishedCardIds(prev => { const next = new Set(prev); next.delete(cardId); return next; }); notifyParentOfMarkDoneChange?.(cardId, false); }, [notifyParentOfMarkDoneChange]);
+    // --- End Finish/Unfinish ---
+
+    // --- Initialize finished state from props (remain the same) ---
+    useEffect(() => {
+        const initialFinished = new Set<string>();
+        allConclusionRecsCards.forEach(card => {
+            if (card.initialIsMarkedDone) { initialFinished.add(card.id); }
         });
+        setFinishedCardIds(initialFinished);
+        const initialVisibleCount = allConclusionRecsCards.length - initialFinished.size;
+        if (initialVisibleCount > 0) { if (activeIndex >= initialVisibleCount) { setActiveIndex(Math.max(0, initialVisibleCount - 1)); } }
+        else { setActiveIndex(0); }
+    }, [allConclusionRecsCards, activeIndex]); // Removed markedDoneStatus dep, relying on allConclusionRecsCards
+
+    // --- Animation Calculation (remain the same) ---
+    const calculateCardStyle = (index: number) => { let offset = index - activeIndex; const half = Math.floor(numCardsInDeck / 2); if (numCardsInDeck > 1) { if (offset > half) offset -= numCardsInDeck; else if (offset < -half) offset += numCardsInDeck; } const absOffset = Math.abs(offset); const safe = (n: number) => (Number.isFinite(n) ? n : 0); const depthOffset = safe(-absOffset * 10); return { x: safe(offset * HORIZONTAL_STAGGER), y: safe(absOffset * VERTICAL_STAGGER), scale: safe(1 - absOffset * SCALE_FACTOR), rotateY: safe(-offset * ROTATE_Y_FACTOR), z: depthOffset, opacity: absOffset <= MAX_VISIBLE_OFFSET + 1 ? 1 : 0.4, zIndex: numCardsInDeck - absOffset, display: 'flex' }; };
+    // --- End Animation ---
+
+    // --- Section Lock Logic (remain the same) ---
+    const areAllRecsCardsLocked = useCallback(() => { return !!(lockStatus?.summary && lockStatus?.services && lockStatus?.accommodations); }, [lockStatus]);
+    const handleRecsSectionLock = useCallback(() => { if (onLockSection) { onLockSection('section-conclusion-recs', !areAllRecsCardsLocked()); } }, [onLockSection, areAllRecsCardsLocked]);
+    // --- End Lock ---
+
+    // --- Render ---
+    if (allConclusionRecsCards.length === 0) {
+        return <div className="mb-8"><h3 className="text-md font-semibold uppercase tracking-wide mb-3 pb-1 border-b border-neutral-200">Conclusion & Recommendations</h3><p className="p-4 text-center text-gray-500 italic">No conclusion or recommendation data available.</p></div>;
     }
 
-    // 3. Domain Eligibility Tabs Card (rendered as a single ViewComponent card)
-    const getDomainEdCode = (domain: string) => { /* ... same helper function as before ... */
-        const isPreschool = conclusion?.eligibility?.isPreschool;
-        if (isPreschool) { return preschoolEdCode; }
-        return californiaEdCodes?.[domain] || { title: domain.charAt(0).toUpperCase() + domain.slice(1), code: "N/A", description: "Ed Code information not found for this domain.", eligibilityCriteria: [] };
-    };
-    const defaultActiveTab = Object.keys(conclusion?.eligibility?.domains || {})[0] || undefined; // Simpler default
+    return (
+        <div className="mb-8">
+            {/* Section Header */}
+            <div id="conclusion-recs-section-header" className="flex justify-between items-center mb-1 pb-1 scroll-mt-20">
+                <h3 className="text-md font-semibold uppercase tracking-wide">Conclusion & Recommendations</h3>
+                {/* Optional Lock Button */}
+                 {/* <Button variant="ghost" size="icon" onClick={handleRecsSectionLock} ... > ... </Button> */}
+            </div>
+            <hr className="mb-3 border-neutral-200" />
 
-    if (conclusion.eligibility && defaultActiveTab) {
-        const id = 'domain-eligibility';
-        cards.push({
-            id: id,
-            title: "Eligibility by Domain",
-            isLocked: conclusion.lockStatus?.eligibility, // Link lock to main eligibility card
-            isEditable: false, // The content itself is interactive tabs
-            // initialIsMarkedDone: markedDoneStatus?.[id],
-            color: "neutral", // Base color, tabs have internal colors
-            viewComponent: (
-              <Card id="domain-eligibility-card-content" className="border-0 shadow-none bg-transparent p-0 h-full overflow-y-auto"> {/* Remove card shell styling */}
-                {/* <CardHeader className="py-2 px-3 bg-neutral-100"> // Remove header, title is on the main card
-                  <CardTitle className="text-sm font-medium text-neutral-800">Eligibility by Domain</CardTitle>
-                </CardHeader> */}
-                <CardContent className="p-0 pt-1"> {/* Remove padding */}
-                  <Tabs defaultValue={defaultActiveTab} className="h-full flex flex-col">
-                    <TabsList className="w-full grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 bg-neutral-100/80 p-0 h-auto flex-wrap shrink-0">
-                       {/* Use optional chaining safely */}
-                      {Object.entries(conclusion.eligibility?.domains || {}).map(([domain, isEligible]) => (
-                        <TabsTrigger
-                          key={domain} value={domain}
-                          className={cn( "text-xxs sm:text-xs py-1.5 px-1 sm:px-2 data-[state=active]:bg-amber-100 data-[state=active]:shadow data-[state=active]:text-amber-900", "whitespace-nowrap h-full", isEligible ? "text-green-700" : "text-gray-500" )}
-                        >
-                          <div className="flex items-center justify-center gap-1 flex-wrap sm:flex-nowrap">
-                            <span>{domain.charAt(0).toUpperCase() + domain.slice(1)}</span>
-                            {isEligible ? <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" /> : <XCircle className="h-3 w-3 text-gray-400 shrink-0" />}
-                          </div>
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                    <div className="grow overflow-y-auto mt-2"> {/* Allow content to scroll */}
-                      {Object.entries(conclusion.eligibility?.domains || {}).map(([domain, isEligible]) => {
-                        const edCode = getDomainEdCode(domain);
-                        return (
-                          <TabsContent key={domain} value={domain} className="mt-0 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"> {/* Remove margin top */}
-                            <div className="border border-neutral-200 rounded-md bg-white p-3 shadow-inner">
-                              <div className="flex justify-between items-start mb-2 flex-wrap gap-2">
-                                <div>
-                                  <h4 className="font-semibold text-sm">{edCode.title}</h4>
-                                  <p className="text-gray-500">{edCode.code}</p>
-                                </div>
-                                <button
-                                  onClick={() => onToggleDomainEligibility(domain, !isEligible)}
-                                  disabled={conclusion.lockStatus?.eligibility}
-                                  className={cn( "px-2 py-1 rounded text-xs border flex items-center gap-1 transition-colors", isEligible ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100", conclusion.lockStatus?.eligibility ? "opacity-50 cursor-not-allowed" : "" )}
-                                >
-                                  {isEligible ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                  {isEligible ? 'Mark Not Eligible' : 'Mark Eligible'}
-                                </button>
-                              </div>
-                              <p className="text-xs text-gray-700 mb-3">{edCode.description}</p>
-                              {edCode.eligibilityCriteria.length > 0 && ( <div> <h5 className="font-medium mb-1 text-gray-600">Eligibility Criteria Examples:</h5> <ul className="list-disc pl-4 space-y-1 text-gray-700"> {edCode.eligibilityCriteria.map((criteria, i) => ( <li key={i}>{criteria}</li> ))} </ul> </div> )}
-                            </div>
-                          </TabsContent>
-                        );
-                      })}
-                    </div>
-                  </Tabs>
-                </CardContent>
-              </Card>
-            )
-        });
-    }
-
-    // 4. Recommended Services Card
-    if (conclusion.recommendations) {
-        const id = 'services-recommendations';
-        cards.push({
-            id: id,
-            title: "Recommended Services",
-            isLocked: conclusion.lockStatus?.services,
-            hasSynthesis: !!conclusion.recommendations?.synthesis, // Use optional chaining
-            synthesisContent: conclusion.recommendations?.synthesis || "",
-            isEditable: true, // Allow editing the raw text representation
-            initialContent: `Type: ${conclusion.recommendations.services?.typeOfService || ''}\nFrequency: ${conclusion.recommendations.services?.frequency || ''}\nSetting: ${conclusion.recommendations.services?.setting || ''}`,
-            // initialIsMarkedDone: markedDoneStatus?.[id],
-            color: "neutral",
-            viewComponent: conclusion.recommendations.services ? ( // Check if services object exists
-                <table className="w-full text-xs">
-                  <tbody>
-                    <tr><td className="font-medium pr-2 py-0.5">Type:</td><td>{conclusion.recommendations.services.typeOfService}</td></tr>
-                    <tr><td className="font-medium pr-2 py-0.5">Frequency:</td><td>{conclusion.recommendations.services.frequency}</td></tr>
-                    <tr><td className="font-medium pr-2 py-0.5">Setting:</td><td>{conclusion.recommendations.services.setting}</td></tr>
-                  </tbody>
-                </table> ) : <p className="text-xs text-gray-500">No service details provided.</p>
-        });
-    }
-
-     // 5. Accommodations & Strategies Card
-     if (conclusion.recommendations) {
-        const id = 'accommodations-strategies';
-        cards.push({
-            id: id,
-            title: "Accommodations & Strategies",
-            isLocked: conclusion.lockStatus?.accommodations,
-            hasSynthesis: !!conclusion.recommendations?.synthesis,
-            synthesisContent: conclusion.recommendations?.synthesis || "",
-            isEditable: true, // Allow editing the raw text representation
-             // Use optional chaining and default arrays safely
-            initialContent: [
-                ...(conclusion.recommendations.accommodations || []).map(acc => `- ${acc}`),
-                ...((conclusion.recommendations.accommodations?.length || 0) > 0 && (conclusion.recommendations.facilitationStrategies?.length || 0) > 0 ? ["\n"] : []),
-                ...(conclusion.recommendations.facilitationStrategies || []).map(strat => `- ${strat}`)
-              ].join("\n"),
-            // initialIsMarkedDone: markedDoneStatus?.[id],
-            color: "neutral",
-            viewComponent: (
-                <>
-                  {(conclusion.recommendations.accommodations?.length || 0) > 0 && ( <div className="mb-2"> <h5 className="text-xs font-semibold mb-1 text-gray-600">Accommodations</h5> <ul className="list-disc pl-4 space-y-0.5 text-gray-800"> {conclusion.recommendations.accommodations!.map((rec, index) => ( <li key={`acc-${index}`}>{rec}</li> ))} </ul> </div> )}
-                  {(conclusion.recommendations.facilitationStrategies?.length || 0) > 0 && ( <div> <h5 className="text-xs font-semibold mb-1 text-gray-600">Facilitation Strategies</h5> <ul className="list-disc pl-4 space-y-0.5 text-gray-800"> {conclusion.recommendations.facilitationStrategies!.map((strat, index) => ( <li key={`strat-${index}`}>{strat}</li> ))} </ul> </div> )}
-                  {(conclusion.recommendations.accommodations?.length || 0) === 0 && (conclusion.recommendations.facilitationStrategies?.length || 0) === 0 && ( <p className="text-xs text-gray-500">No accommodations or strategies listed.</p> )}
-                </> )
-        });
-    }
-
-    // Future: Add Glossary Card if needed
-
-    return cards;
-    // Add dependencies based on props used (conclusion object and potentially markedDoneStatus)
-  }, [conclusion, onToggleDomainEligibility]); // onToggleDomainEligibility needed for Tabs card viewComponent
-
-
-  // --- Derived State ---
-  const visibleCardsInDeck = useMemo(() =>
-      allConclusionCards.filter(card => !finishedCardIds.has(card.id)),
-      [allConclusionCards, finishedCardIds]
-  );
-  const finishedCardsForBadges = useMemo(() =>
-      allConclusionCards.filter(card => finishedCardIds.has(card.id)),
-      [allConclusionCards, finishedCardIds]
-  );
-  const numCardsInDeck = visibleCardsInDeck.length;
-
-  // Effect to adjust activeIndex
-  useEffect(() => {
-      if (numCardsInDeck > 0 && activeIndex >= numCardsInDeck) {
-          setActiveIndex(numCardsInDeck - 1);
-      } else if (numCardsInDeck === 0) {
-          setActiveIndex(0);
-      }
-  }, [numCardsInDeck, activeIndex]);
-
-
-  // --- Lock Logic (Updated to check based on allConclusionCards) ---
-  const areAllCardsLocked = useCallback(() => {
-    if (!conclusion || allConclusionCards.length === 0) return false;
-    // Check if *every* card derived from the data is locked
-    return allConclusionCards.every(card => card.isLocked);
-  }, [conclusion, allConclusionCards]);
-
-  const isAnySectionLocked = useCallback(() => {
-    if (!conclusion || allConclusionCards.length === 0) return false;
-    // Check if *any* card derived from the data is locked
-    return allConclusionCards.some(card => card.isLocked);
-  }, [conclusion, allConclusionCards]);
-
-  const handleSectionLock = useCallback(() => {
-    const shouldLock = !areAllCardsLocked();
-    if (onLockSection) {
-      // Parent needs to handle locking based on this section ID
-      onLockSection('section-conclusion', shouldLock);
-    }
-  }, [onLockSection, areAllCardsLocked]);
-  // --- End Lock Logic ---
-
-
-  // --- Navigation & Swipe Logic ---
-  const handlePrev = useCallback(() => { /* ... same logic ... */
-      if (numCardsInDeck <= 1) return;
-      setActiveIndex((prev) => (prev - 1 + numCardsInDeck) % numCardsInDeck);
-  }, [numCardsInDeck]);
-
-  const handleNext = useCallback(() => { /* ... same logic ... */
-      if (numCardsInDeck <= 1) return;
-      setActiveIndex((prev) => (prev + 1) % numCardsInDeck);
-  }, [numCardsInDeck]);
-
-  useEffect(() => { /* ... same keyboard listener logic ... */
-       const handleKeyDown = (event: KeyboardEvent) => {
-          if (numCardsInDeck <= 1) return;
-          if (event.key === 'ArrowLeft') handlePrev();
-          else if (event.key === 'ArrowRight') handleNext();
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handlePrev, handleNext, numCardsInDeck]);
-
-  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => { /* ... same logic ... */
-      if (numCardsInDeck <= 1) return;
-      const { offset, velocity } = info;
-      if (Math.abs(offset.x) > Math.abs(offset.y) && Math.abs(offset.x) > SWIPE_THRESHOLD) {
-        const swipePower = offset.x * velocity.x;
-        if (swipePower < -SWIPE_VELOCITY_THRESHOLD * 10) handleNext();
-        else if (swipePower > SWIPE_VELOCITY_THRESHOLD * 10) handlePrev();
-      }
-  };
-
-  const calculateCardStyle = (index: number) => { /* ... same animation logic ... */
-       let offset = index - activeIndex; const half = Math.floor(numCardsInDeck / 2);
-      if (numCardsInDeck > 1) { if (offset > half) offset -= numCardsInDeck; else if (offset < -half) offset += numCardsInDeck; }
-      const absOffset = Math.abs(offset); const safe = (n: number) => (Number.isFinite(n) ? n : 0);
-      if (offset === 0) return { x: 0, y: 0, scale: 1, rotateY: 0, opacity: 1, zIndex: numCardsInDeck + 1, display: 'flex' };
-      else if (absOffset <= MAX_VISIBLE_OFFSET) return { x: safe(offset * HORIZONTAL_STAGGER), y: safe(absOffset * VERTICAL_STAGGER), scale: safe(1 - (absOffset * SCALE_FACTOR)), rotateY: safe(-offset * ROTATE_Y_FACTOR), opacity: 1, zIndex: numCardsInDeck - absOffset, display: 'flex' };
-      else { const sign = Math.sign(offset); return { x: safe(sign * HORIZONTAL_STAGGER * (MAX_VISIBLE_OFFSET + 0.5)), y: safe(VERTICAL_STAGGER * MAX_VISIBLE_OFFSET), scale: safe(1 - (MAX_VISIBLE_OFFSET * SCALE_FACTOR)), rotateY: safe(-sign * ROTATE_Y_FACTOR * MAX_VISIBLE_OFFSET), opacity: 0, zIndex: 0, display: 'flex' }; }
-   };
-  // --- End Navigation & Swipe ---
-
-  // --- Finish/Unfinish Card Handlers ---
-  const handleMarkCardFinished = useCallback((cardId: string) => {
-      setFinishedCardIds(prev => new Set(prev).add(cardId));
-      notifyParentOfMarkDoneChange?.(cardId, true);
-  }, [notifyParentOfMarkDoneChange]);
-
-  const handleUnfinishCard = useCallback((cardId: string) => {
-      setFinishedCardIds(prev => {
-          const next = new Set(prev);
-          next.delete(cardId);
-          return next;
-      });
-       notifyParentOfMarkDoneChange?.(cardId, false);
-  }, [notifyParentOfMarkDoneChange]);
-
-   // Initialize finished state (Placeholder - adapt if status prop exists)
-   useEffect(() => {
-       const initialFinished = new Set<string>();
-       allConclusionCards.forEach(card => {
-            // Example: if (markedDoneStatus?.[card.id]) initialFinished.add(card.id);
-            if (card.initialIsMarkedDone) { // Check the property we added
-                 initialFinished.add(card.id);
-            }
-       });
-       setFinishedCardIds(initialFinished);
-        const initialVisibleCount = allConclusionCards.length - initialFinished.size;
-         if (initialVisibleCount > 0) {
-             setActiveIndex(0);
-         }
-   }, [allConclusionCards]); // Rerun if the list of cards changes
-  // --- End Finish/Unfinish ---
-
-
-  // Early return if no conclusion data at all
-  if (!conclusion) {
-     return <div className="p-4 text-gray-500 italic">Conclusion data not available.</div>;
-   }
-
-  // --- Render ---
-  return (
-    <div className="mb-8">
-      {/* Section Header - Updated HR color and Lock Button logic */}
-      <div className="flex justify-between items-center mb-1 pb-1"> {/* Removed border bottom here */}
-        <h3 className="text-md font-semibold uppercase tracking-wide">Conclusion & Recommendations</h3>
-        {onLockSection && (
-            <Button
-              size="sm"
-              variant={areAllCardsLocked() ? "secondary" : "ghost"}
-              onClick={handleSectionLock} // Uses useCallback version
-              className={`transition-all hover:scale-110 ${
-                areAllCardsLocked() ? "text-gray-600 bg-gray-200 border-gray-300" :
-                isAnySectionLocked() ? "text-amber-600" : "text-gray-500 hover:text-gray-700"
-              }`}
-              title={areAllCardsLocked() ? "Unlock all cards in this section" : "Lock all cards in this section"}
-            >
-              {areAllCardsLocked() ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
-              {areAllCardsLocked() ? "Section Locked" : "Lock Section"}
-            </Button>
-        )}
-      </div>
-      <hr className="mb-3 border-neutral-200" /> {/* Changed color */}
-
-
-      {/* Finished Cards Badge List */}
-      {finishedCardsForBadges.length > 0 && (
-         <div className="mb-4 px-2 py-2 border border-dashed border-gray-300 rounded-md">
-             <h5 className="text-xs font-semibold mb-2 text-gray-500 uppercase">Finished Items</h5>
-             <div className="flex flex-wrap gap-2">
-                 {finishedCardsForBadges.map(card => (
-                     <Badge key={card.id} variant="secondary" className="flex items-center gap-1 pl-2 pr-1 py-0.5">
-                         <span className="text-xs font-medium">{card.title}</span>
-                         <button onClick={() => handleUnfinishCard(card.id)} className="rounded-full hover:bg-gray-300 p-0.5 focus:outline-none focus:ring-1 focus:ring-gray-400" aria-label={`Remove ${card.title} from finished`}>
-                           <LucideX className="h-3 w-3 text-gray-600" /> {/* Use aliased X icon */}
-                         </button>
-                     </Badge>
-                 ))}
+            {/* --- V V V REPLACED FINISHED ITEMS UI V V V --- */}
+            <div className="flex justify-end mb-2 h-8"> {/* Added fixed height */}
+                 {finishedCardsForBadges.length > 0 && (
+                     <DropdownMenu>
+                         <DropdownMenuTrigger asChild>
+                             <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 className="text-xs text-muted-foreground hover:text-muted-foreground hover:bg-accent transition-colors px-2 h-full" // Use neutral colors
+                             >
+                                 <span className="inline-flex items-center gap-1">
+                                     <CheckCircle className="w-3.5 h-3.5" />
+                                     Finished ({finishedCardsForBadges.length})
+                                 </span>
+                             </Button>
+                         </DropdownMenuTrigger>
+                         <DropdownMenuContent align="end" className="w-56">
+                             <DropdownMenuLabel className="text-xs px-2 py-1.5">Marked as Finished</DropdownMenuLabel>
+                             <DropdownMenuSeparator />
+                             {finishedCardsForBadges.map((card) => (
+                                 <DropdownMenuItem
+                                     key={card.id}
+                                     className="group flex justify-between items-center gap-2 px-2 py-1 text-xs hover:bg-accent" // Use neutral hover
+                                     onSelect={(e) => e.preventDefault()} // Prevent close on item click
+                                 >
+                                     <span className="truncate text-muted-foreground">
+                                         {card.title}
+                                     </span>
+                                     <button
+                                         onClick={(e) => {
+                                             e.stopPropagation();
+                                             handleUnfinishCard(card.id);
+                                         }}
+                                         className="ml-auto rounded-full p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/20 hover:text-destructive focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-ring transition-opacity"
+                                         aria-label={`Remove ${card.title} from finished`}
+                                     >
+                                         <LucideX className="h-3.5 w-3.5" />
+                                     </button>
+                                 </DropdownMenuItem>
+                             ))}
+                         </DropdownMenuContent>
+                     </DropdownMenu>
+                 )}
              </div>
-         </div>
-      )}
+             {/* --- ^ ^ ^ END REPLACED FINISHED ITEMS UI ^ ^ ^ --- */}
 
-      {/* --- Stacking Card Container (Replaces old Grid) --- */}
-      {/* Set explicit height - adjust as needed based on content */}
-      <div className="relative h-[500px] w-full max-w-lg mx-auto flex items-center justify-center overflow-hidden">
-          {/* Empty states */}
-          {allConclusionCards.length === 0 && ( <div className="text-center text-gray-500 italic">No conclusion cards available.</div> )}
-          {numCardsInDeck === 0 && allConclusionCards.length > 0 && ( <div className="text-center text-gray-500 italic">All conclusion cards marked as finished.</div> )}
 
-          {/* Animated Cards */}
-          {numCardsInDeck > 0 && (
-            <AnimatePresence initial={false}>
-                {visibleCardsInDeck.map((cardData, index) => {
-                    const isActive = index === activeIndex;
-                    const calculatedStyle = calculateCardStyle(index);
+            {/* Stacking Card Container */}
+            <div className="relative h-[450px] w-full max-w-lg mx-auto flex items-center justify-center overflow-hidden">
+                {/* Empty State */}
+                {numCardsInDeck === 0 && allConclusionRecsCards.length > 0 && (
+                    <div className="text-center text-gray-500 italic">All conclusion cards marked finished.</div>
+                )}
 
-                    return (
-                        <motion.div
-                            key={cardData.id}
-                            animate={calculatedStyle}
-                            initial={false}
-                            exit={{ opacity: 0, y: 50, scale: 0.8, transition: { duration: 0.3, ease: "easeIn" } }}
-                            transition={TRANSITION_TWEEN}
-                            className="absolute top-0 left-0 w-full h-full flex items-center justify-center origin-center cursor-grab active:cursor-grabbing"
-                            style={{
-                                perspective: "1000px",
-                                pointerEvents: isActive ? 'auto' : 'none'
-                            }}
-                            drag={isActive && numCardsInDeck > 1 ? "x" : false}
-                            dragConstraints={{ left: 0, right: 0 }}
-                            dragElastic={0.2}
-                            onDragEnd={isActive ? handleDragEnd : undefined}
-                        >
-                            {/* Inner container for sizing */}
-                            <div className="w-full max-w-md h-[95%]">
-                                <EditableCard
-                                    // --- Core Card Data ---
-                                    id={cardData.id}
-                                    title={cardData.title}
-                                    initialContent={cardData.initialContent} // Undefined for viewComponent cards is fine
-                                    viewComponent={cardData.viewComponent} // Render Tabs card content here
-                                    isEditable={cardData.isEditable}
-                                    // --- State & Callbacks ---
-                                    isLocked={cardData.isLocked}
-                                    hasSynthesis={cardData.hasSynthesis}
-                                    synthesisContent={cardData.synthesisContent}
-                                    onSave={(content) => onSaveContent && onSaveContent(cardData.id, content)}
-                                    onToggleMarkedDone={() => handleMarkCardFinished(cardData.id)} // Hook up finish action
-                                    onToggleSynthesis={() => onToggleSynthesis?.(cardData.id)}
-                                    onLock={(id, lockState) => onLockSection?.(id, lockState)} // Pass direct lock if needed
-                                    // --- Styling ---
-                                    color={cardData.color || "neutral"} // Use neutral color
-                                    className="border border-neutral-200 shadow-lg bg-white h-full flex flex-col" // Neutral card style
-                                    headerClassName="py-2 px-3 bg-neutral-100 shrink-0" // Neutral header, prevent shrinking
-                                    contentClassName="p-3 text-xs text-neutral-700 grow overflow-y-auto" // Content style
-                                    disableHoverEffect={true} // Disable hover in draggable container
-                                />
-                            </div>
-                        </motion.div>
-                    );
-                })}
-            </AnimatePresence>
-          )}
+                {/* Animated Cards */}
+                {numCardsInDeck > 0 && (
+                    <AnimatePresence initial={false}>
+                        {visibleCardsInDeck.map((cardData, index) => {
+                            const isActive = index === activeIndex;
+                            const calculatedStyle = calculateCardStyle(index);
 
-          {/* Navigation Buttons */}
-          {numCardsInDeck > 1 && (
-            <>
-              <Button variant="ghost" size="icon" onClick={handlePrev} className="absolute left-2 sm:-left-8 top-1/2 -translate-y-1/2 z-30 text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full" aria-label="Previous Conclusion Card"> <ChevronLeft className="h-6 w-6" /> </Button>
-              <Button variant="ghost" size="icon" onClick={handleNext} className="absolute right-2 sm:-right-8 top-1/2 -translate-y-1/2 z-30 text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full" aria-label="Next Conclusion Card"> <ChevronRight className="h-6 w-6" /> </Button>
-            </>
-          )}
-      </div> {/* End Stacking Card Container */}
-    </div> // End Main Section Div
-  );
+                            return (
+                                <motion.div
+                                    key={cardData.id}
+                                    animate={calculatedStyle}
+                                    initial={false}
+                                    exit={{ opacity: 0, y: 50, scale: 0.8, transition: { duration: 0.3, ease: "easeIn" } }}
+                                    transition={TRANSITION_TWEEN}
+                                    className="absolute top-0 left-0 w-full h-full flex items-center justify-center origin-center cursor-grab active:cursor-grabbing"
+                                    style={{ perspective: "1000px", pointerEvents: isActive ? 'auto' : 'none' }}
+                                    drag={isActive && numCardsInDeck > 1 ? "x" : false}
+                                    dragConstraints={{ left: 0, right: 0 }}
+                                    dragElastic={0.2}
+                                    onDragEnd={isActive ? handleDragEnd : undefined}
+                                >
+                                    <div className="w-full max-w-md h-[95%]">
+                                        <EditableCard
+                                            id={cardData.id}
+                                            title={cardData.title}
+                                            isLocked={cardData.isLocked}
+                                            hasSynthesis={cardData.hasSynthesis}
+                                            synthesisContent={cardData.synthesisContent}
+                                            isEditable={cardData.isEditable}
+                                            initialContent={cardData.initialContent}
+                                            viewComponent={cardData.viewComponent}
+                                            color={"neutral"}
+                                            onToggleMarkedDone={() => handleMarkCardFinished(cardData.id)}
+                                            isMarkedDone={finishedCardIds.has(cardData.id)}
+                                            onSave={(content) => onSaveContent && onSaveContent(cardData.id, typeof content === 'string' ? content : JSON.stringify(content))}
+                                            onToggleSynthesis={() => onToggleSynthesis?.(cardData.id)}
+                                            onLock={(id, lockState) => onLockSection?.(id, lockState)}
+                                            className="border border-neutral-200 shadow-lg bg-white h-full flex flex-col"
+                                            headerClassName="py-2 px-3 bg-neutral-100 shrink-0"
+                                            contentClassName="p-3 text-xs text-neutral-700 grow overflow-y-auto"
+                                            disableHoverEffect={true}
+                                        />
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </AnimatePresence>
+                )}
+
+                {/* Navigation Buttons */}
+                {numCardsInDeck > 1 && (
+                    <>
+                        <Button variant="ghost" size="icon" onClick={handlePrev} className="absolute left-2 sm:-left-8 top-1/2 -translate-y-1/2 z-30 text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full" aria-label="Previous Card"> <ChevronLeft className="h-6 w-6" /> </Button>
+                        <Button variant="ghost" size="icon" onClick={handleNext} className="absolute right-2 sm:-right-8 top-1/2 -translate-y-1/2 z-30 text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full" aria-label="Next Card"> <ChevronRight className="h-6 w-6" /> </Button>
+                    </>
+                )}
+            </div> {/* End Stacking Card Container */}
+        </div> // End Main Section Div
+    );
 };
 
-export default ConclusionSection;
+export default ConclusionRecsSection;

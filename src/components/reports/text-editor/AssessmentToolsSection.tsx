@@ -4,6 +4,22 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Added hooks
 import { EditableCard } from "@/components/reports/EditableCard";
 // Removed unused Card, CardHeader, CardTitle, CardContent
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"; // Add this if not already imported
+import { CheckCircle } from "lucide-react"; // Already used in BackgroundSection
+import { PocketKnife } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -11,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge"; // Added Badge
 import { BookOpen, Plus, Search, Lock, Unlock, ChevronLeft, ChevronRight, X } from "lucide-react"; // Added ChevronLeft, ChevronRight, X
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'; // Added framer-motion
+import { safeMotionNumber } from '@/lib/utils'; // For safe animation values
 // Use correct types from schema file
 import { AssessmentTool, AssessmentResults } from '@/types/reportSchemas'; // Adjust path if needed
 import { AssessmentLibraryPanel } from "@/components/reports/AssessmentLibraryPanel";
@@ -333,8 +350,7 @@ export const AssessmentToolsSection: React.FC<AssessmentToolsSectionProps> = ({
 
     const absOffset = Math.abs(offset);
 
-    // Safety check for NaN or Infinity results from calculations
-    const safe = (n: number) => (Number.isFinite(n) ? n : 0);
+    // Using the safeMotionNumber helper instead of inline function
 
     // Style for the active card (center)
     if (offset === 0) {
@@ -346,10 +362,10 @@ export const AssessmentToolsSection: React.FC<AssessmentToolsSectionProps> = ({
     // Style for visible cards behind the active card
     else if (absOffset <= MAX_VISIBLE_OFFSET) {
         return {
-            x: safe(offset * HORIZONTAL_STAGGER),
-            y: safe(absOffset * VERTICAL_STAGGER),
-            scale: safe(1 - (absOffset * SCALE_FACTOR)),
-            rotateY: safe(-offset * ROTATE_Y_FACTOR), // Rotate away from the center
+            x: safeMotionNumber(offset * HORIZONTAL_STAGGER),
+            y: safeMotionNumber(absOffset * VERTICAL_STAGGER),
+            scale: safeMotionNumber(1 - (absOffset * SCALE_FACTOR)),
+            rotateY: safeMotionNumber(-offset * ROTATE_Y_FACTOR), // Rotate away from the center
             opacity: 1, // Fully visible
             zIndex: numCardsInDeck - absOffset, // Lower zIndex based on distance
             display: 'flex',
@@ -360,10 +376,10 @@ export const AssessmentToolsSection: React.FC<AssessmentToolsSectionProps> = ({
         const sign = Math.sign(offset);
         return {
             // Position further out, matching the last visible card's position/rotation/scale
-            x: safe(sign * HORIZONTAL_STAGGER * (MAX_VISIBLE_OFFSET + 0.5)), // Slightly further than last visible
-            y: safe(VERTICAL_STAGGER * MAX_VISIBLE_OFFSET),
-            scale: safe(1 - (MAX_VISIBLE_OFFSET * SCALE_FACTOR)),
-            rotateY: safe(-sign * ROTATE_Y_FACTOR * MAX_VISIBLE_OFFSET),
+            x: safeMotionNumber(sign * HORIZONTAL_STAGGER * (MAX_VISIBLE_OFFSET + 0.5)), // Slightly further than last visible
+            y: safeMotionNumber(VERTICAL_STAGGER * MAX_VISIBLE_OFFSET),
+            scale: safeMotionNumber(1 - (MAX_VISIBLE_OFFSET * SCALE_FACTOR)),
+            rotateY: safeMotionNumber(-sign * ROTATE_Y_FACTOR * MAX_VISIBLE_OFFSET),
             opacity: 0, // Hidden
             zIndex: 0, // Lowest zIndex
             // 'display: flex' is kept to allow AnimatePresence to track it for exit animations
@@ -380,77 +396,201 @@ export const AssessmentToolsSection: React.FC<AssessmentToolsSectionProps> = ({
     <div className="mb-8"> {/* Main wrapper */}
 
         {/* Section Header */}
-        <div id="assessment-tools-section-header" className="flex justify-between items-center mb-1 scroll-mt-20">
+        <div id="assessment-tools-section-header" className="flex justify-between items-center mb-4 border-b border-neutral-200 scroll-mt-20">
             <h3 className="text-md font-semibold uppercase tracking-wide">Assessment Tools</h3>
-             <div className="flex gap-2 items-center">
-                 {/* Use the correct lock check functions */}
-                 {onLockSection && (
-                     <Button
-                         size="sm"
-                         variant={areAllToolsCardsLocked() ? "secondary" : "ghost"}
-                         onClick={handleSectionLock}
-                         className={`transition-all hover:scale-110 ${
-                             areAllToolsCardsLocked() ? "text-gray-600 bg-gray-200 border-gray-300" // All locked style
-                             : isAnyToolCardLocked() ? "text-amber-600" // Some locked style
-                             : "text-gray-500 hover:text-gray-700" // None locked style
-                         }`}
-                         title={areAllToolsCardsLocked() ? "Unlock all cards in this section" : "Lock all cards in this section"}
-                     >
-                         {areAllToolsCardsLocked() ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
-                         {/* Text change from original: "Unlock Section" vs "Section Locked" */}
-                         {areAllToolsCardsLocked() ? "Section Locked" : "Lock Section"}
-                     </Button>
-                 )}
-             </div>
-        </div>
-        <hr className="mb-3 border-green-200" /> {/* Color matching internal cards */}
-
-        {/* Add/Search Tools Controls (Keep this section as is) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 mb-4 items-start">
-            {/* Left side: Add buttons */}
-            <div className="flex gap-2 items-center">
-                {/* Popover for Quick Add */}
-                <Popover>
-                    <PopoverTrigger asChild>
-                         <Button size="sm" variant="outline" className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50"> <Plus className="h-3.5 w-3.5 mr-1" /> Quick Add </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 p-3" align="start">
-                       {/* Quick Add Form Content... */}
-                       <div className="space-y-3"> <h3 className="text-sm font-medium">Add Assessment Tool</h3> <div className="space-y-2"> <div className="space-y-1"> <Label htmlFor="quick-tool-name" className="text-xs">Tool Name</Label> <Input id="quick-tool-name" placeholder="E.g., CELF-5" className="h-8 text-xs" value={quickToolForm.name} onChange={(e) => setQuickToolForm({ ...quickToolForm, name: e.target.value, id: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') })} /> </div> <div className="space-y-1"> <Label htmlFor="quick-tool-id" className="text-xs">ID/Acronym</Label> <Input id="quick-tool-id" placeholder="e.g., celf-5" className="h-8 text-xs" value={quickToolForm.id} onChange={(e) => setQuickToolForm({ ...quickToolForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') })} /> </div> <div className="space-y-1"> <Label className="text-xs">Domains</Label> <div className="flex flex-wrap gap-1"> {["receptive", "expressive", "pragmatic", "articulation", "voice", "fluency"].map(domain => ( <Button key={domain} variant={quickToolForm.domains.includes(domain) ? "default" : "outline"} size="sm" className={`h-6 text-xs py-0 ${quickToolForm.domains.includes(domain) ? "bg-green-600 hover:bg-green-700 text-white" : ""}`} onClick={() => setQuickToolForm(prev => ({ ...prev, domains: prev.domains.includes(domain) ? prev.domains.filter(d => d !== domain) : [...prev.domains, domain] }))} > {domain.charAt(0).toUpperCase() + domain.slice(1)} </Button> ))} </div> </div> </div> <div className="pt-2 flex justify-between"> <Button variant="ghost" size="sm" className="text-xs h-7" onClick={onOpenLibrary} > Open Library </Button> <Button size="sm" className="text-xs h-7 bg-green-600 hover:bg-green-700" disabled={!quickToolForm.name || !quickToolForm.id} onClick={() => { onAddTool(quickToolForm.id); console.log("Quick Added Tool:", quickToolForm); setQuickToolForm({ name: '', id: '', domains: [] }); document.body.click(); }} > Add Tool </Button> </div> </div>
-                    </PopoverContent>
-                </Popover>
-                 <AssessmentLibraryPanel onAddTool={(tool) => { onAddTool(tool.id); }} selectedDomain={null} />
             </div>
+            {/* Add/Search Tools Controls (Keep this section as is) */}
+            <div className="relative mb-4 flex justify-between items-start">
+              <Popover className="absolute">
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 text-xs border-green-200 text-green-700 hover:bg-green-50">
+                    <PocketKnife className="h-3.5 w-3.5 mr-1" /> Add Tool
+                  </Button>
+                </PopoverTrigger>
 
-            {/* Right side: Inline Search */}
-            <div className="relative">
-                 <div className="flex items-center border rounded-md overflow-hidden"> <div className="pl-3 text-gray-500"><Search className="h-4 w-4" /></div> <Input placeholder="Search available assessment tools..." className="border-0 focus-visible:ring-0 text-sm h-8" value={toolSearchQuery} onChange={(e) => { const query=e.target.value.toLowerCase(); setToolSearchQuery(e.target.value); if(query.trim()){ const results=Object.values(allTools).filter((tool: AssessmentTool) => tool.name.toLowerCase().includes(query) || tool.id.toLowerCase().includes(query) || (tool.authors || []).some((author: string) => author.toLowerCase().includes(query))); setToolSearchResults(results); setShowToolSearchResults(true); } else { setShowToolSearchResults(false); }}} onFocus={()=> toolSearchQuery.trim() && setShowToolSearchResults(true)} onBlur={()=> setTimeout(() => setShowToolSearchResults(false), 200)} /> </div>
-                 {showToolSearchResults && ( <div className="absolute w-full bg-white border rounded-md shadow-lg p-1 z-10 max-h-60 overflow-y-auto mt-1"> {toolSearchResults.length > 0 ? ( <> <div className="text-xs text-gray-500 px-2 py-1.5">Found {toolSearchResults.length} tools</div> {toolSearchResults.map((tool)=>( <div key={tool.id} className="px-2 py-1.5 hover:bg-gray-100 rounded-sm cursor-pointer flex items-center text-sm" onMouseDown={() => { onAddTool(tool.id); setToolSearchQuery(''); setShowToolSearchResults(false); }}> <BookOpen className={`h-3.5 w-3.5 mr-2 ${tool.type === 'quantitative' ? 'text-blue-500' : 'text-green-500'}`} /> <div><span>{tool.name}</span><span className="text-xs text-gray-500 ml-2">({tool.id})</span></div> </div> ))} </> ) : ( <div className="p-3 text-sm text-center text-gray-500">No matching tools found.</div> )} </div> )}
-             </div>
-        </div>
+                <PopoverContent className="w-[480px] p-4" align="start">
+                  <Tabs defaultValue="quick" className="w-full">
+                    <TabsList className="mb-3 w-full">
+                      <TabsTrigger value="quick" className="flex-1 text-xs">Quick Add</TabsTrigger>
+                      <TabsTrigger value="library" className="flex-1 text-xs">Library</TabsTrigger>
+                      <TabsTrigger value="search" className="flex-1 text-xs">Search</TabsTrigger>
+                    </TabsList>
 
+                    <TabsContent value="quick">
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-medium">Add Assessment Tool</h3>
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <Label htmlFor="quick-tool-name" className="text-xs">Tool Name</Label>
+                            <Input
+                              id="quick-tool-name"
+                              placeholder="E.g., CELF-5"
+                              className="h-8 text-xs"
+                              value={quickToolForm.name}
+                              onChange={(e) =>
+                                setQuickToolForm({
+                                  ...quickToolForm,
+                                  name: e.target.value,
+                                  id: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="quick-tool-id" className="text-xs">ID/Acronym</Label>
+                            <Input
+                              id="quick-tool-id"
+                              placeholder="e.g., celf-5"
+                              className="h-8 text-xs"
+                              value={quickToolForm.id}
+                              onChange={(e) =>
+                                setQuickToolForm({
+                                  ...quickToolForm,
+                                  id: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Domains</Label>
+                            <div className="flex flex-wrap gap-1">
+                              {["receptive", "expressive", "pragmatic", "articulation", "voice", "fluency"].map((domain) => (
+                                <Button
+                                  key={domain}
+                                  variant={quickToolForm.domains.includes(domain) ? "default" : "outline"}
+                                  size="sm"
+                                  className={`h-6 text-xs py-0 ${
+                                    quickToolForm.domains.includes(domain) ? "bg-green-600 hover:bg-green-700 text-white" : ""
+                                  }`}
+                                  onClick={() =>
+                                    setQuickToolForm((prev) => ({
+                                      ...prev,
+                                      domains: prev.domains.includes(domain)
+                                        ? prev.domains.filter((d) => d !== domain)
+                                        : [...prev.domains, domain],
+                                    }))
+                                  }
+                                >
+                                  {domain.charAt(0).toUpperCase() + domain.slice(1)}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="pt-2 flex justify-between">
+                          <Button variant="ghost" size="sm" className="text-xs h-7" onClick={onOpenLibrary}>
+                            Open Library
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="text-xs h-7 bg-green-600 hover:bg-green-700"
+                            disabled={!quickToolForm.name || !quickToolForm.id}
+                            onClick={() => {
+                              onAddTool(quickToolForm.id);
+                              console.log("Quick Added Tool:", quickToolForm);
+                              setQuickToolForm({ name: "", id: "", domains: [] });
+                              document.body.click(); // close the popover
+                            }}
+                          >
+                            Add Tool
+                          </Button>
+                        </div>
+                      </div>
+                    </TabsContent>
 
-       {/* Finished Cards Badge List (Adapted from BackgroundSection) */}
-       {finishedCardsForBadges.length > 0 && (
-           <div className="mb-4 px-2 py-2 border border-dashed border-gray-300 rounded-md">
-               <h5 className="text-xs font-semibold mb-2 text-gray-500 uppercase">Finished Items</h5>
-               <div className="flex flex-wrap gap-2">
-                   {finishedCardsForBadges.map(card => (
-                       <Badge key={card.id} variant="secondary" className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-gray-100 border border-gray-200 text-gray-700"> {/* Added color */}
-                           <span className="text-xs font-medium">{card.title}</span>
-                           {/* Make unfinish button slightly larger and use X icon */}
-                           <button
-                               onClick={() => handleUnfinishCard(card.id)}
-                               className="rounded-full hover:bg-green-200 p-0.5 focus:outline-none focus:ring-1 focus:ring-green-400"
-                               aria-label={`Remove ${card.title} from finished`}
-                           >
-                               <X className="h-3 w-3 text-green-700" /> {/* Adjusted icon size/color */}
-                           </button>
-                       </Badge>
-                   ))}
-               </div>
-           </div>
-       )}
+                    <TabsContent value="library">
+                      <AssessmentLibraryPanel onAddTool={(tool) => onAddTool(tool.id)} selectedDomain={null} />
+                    </TabsContent>
+
+                    <TabsContent value="search">
+                      <div className="relative">
+                        <Input
+                          placeholder="Search available tools..."
+                          className="border mb-2 text-xs h-8"
+                          value={toolSearchQuery}
+                          onChange={(e) => {
+                            const query = e.target.value.toLowerCase();
+                            setToolSearchQuery(query);
+                            const results = Object.values(allTools).filter((tool: AssessmentTool) =>
+                              tool.name.toLowerCase().includes(query) ||
+                              tool.id.toLowerCase().includes(query) ||
+                              (tool.authors || []).some((author) => author.toLowerCase().includes(query))
+                            );
+                            setToolSearchResults(results);
+                            setShowToolSearchResults(true);
+                          }}
+                        />
+                        {showToolSearchResults && (
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {toolSearchResults.length ? (
+                              toolSearchResults.map((tool) => (
+                                <Button
+                                  key={tool.id}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start text-left text-xs"
+                                  onClick={() => {
+                                    onAddTool(tool.id);
+                                    setToolSearchQuery('');
+                                    setShowToolSearchResults(false);
+                                  }}
+                                >
+                                  <BookOpen className="w-3.5 h-3.5 mr-2" />
+                                  {tool.name} <span className="text-gray-400 ml-2">({tool.id})</span>
+                                </Button>
+                              ))
+                            ) : (
+                              <div className="text-xs text-center text-gray-500 py-2">No matching tools found.</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </PopoverContent>
+              </Popover>
+            
+
+            {finishedCardsForBadges.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-green-700 hover:bg-green-50 transition-colors px-2 mb-2"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Finished ({finishedCardsForBadges.length})
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel className="text-xs">Marked as Finished</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {finishedCardsForBadges.map((card) => (
+                    <DropdownMenuItem
+                      key={card.id}
+                      className="group flex justify-between items-center gap-2 px-2 py-1 text-xs text-green-900 hover:bg-green-50 rounded-md"
+                    >
+                      <span className="truncate text-muted-foreground">{card.title}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUnfinishCard(card.id);
+                        }}
+                        className="rounded-full p-1 group-hover:bg-green-200 group-hover:text-green-900 transition-colors"
+                        aria-label={`Remove ${card.title}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        
 
 
         {/* --- Stacking Card Container (Replaces the old grid) --- */}

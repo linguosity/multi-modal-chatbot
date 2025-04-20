@@ -18,7 +18,7 @@ export default function UserReportsLayout({ children }: { children: React.ReactN
   const isReportDetail = pathname.includes("/reports/") && pathname.split("/").length > 4;
 
   return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col w-full">
         <div className="sticky top-0 z-30 flex h-12 w-full items-center gap-4 border-b bg-background px-4 py-3 md:px-6">
           <Breadcrumb className="mb-1">
             <BreadcrumbList>

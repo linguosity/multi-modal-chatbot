@@ -1,13 +1,13 @@
 import React from 'react';
 import DomainCard from './DomainCard';
 import AssessmentToolsSection from './AssessmentToolsSection';
-import { ReportAssessmentResults } from '@/types/reportSchemas';
+import { AssessmentResults } from '@/types/reportSchemas';
 import { AssessmentTool } from '@/lib/assessment-tools';
 import { Button } from "@/components/ui/button";
 import { Lock, Unlock, BookOpen, Plus } from "lucide-react";
 
 interface AssessmentResultsSectionProps {
-  assessmentResults: ReportAssessmentResults;
+  assessmentResults: AssessmentResults;
   allTools: Record<string, AssessmentTool>;
   onAddToolToGlobal: (tool: string) => void;
   onOpenLibrary: () => void;

@@ -11,45 +11,46 @@
     --card-foreground: 0 0% 20%; /* #333333 */
     --popover: 40 30% 97%; /* #F8F7F4 */
     --popover-foreground: 0 0% 20%; /* #333333 */
-    
+
     /* Primary = Sage Green */
-    --primary: 150 14% 45%; /* #6C8578 - sage green accent */
+    --primary: 150 14% 45%; /* #6C8578 */
     --primary-foreground: 0 0% 100%;
-    
+
     /* Secondary = Muted Plum */
-    --secondary: 300 10% 40%; /* #785F73 - muted plum */
+    --secondary: 300 10% 40%; /* #785F73 */
     --secondary-foreground: 0 0% 100%;
-    
+
     /* Muted tones for subtle elements */
-    --muted: 40 20% 92%; /* #F1EEE9 - soft cream */
-    --muted-foreground: 0 0% 45%; /* #737373 - muted text */
-    
-    /* Accent = Burnt Sienna */
-    --accent: 15 65% 50%; /* #C45336 - burnt sienna */
-    --accent-foreground: 0 0% 100%;
-    
+    --muted: 40 20% 92%; /* #F1EEE9 */
+    --muted-foreground: 0 0% 45%; /* #737373 */
+
+    /* Accent = Softer Sienna */
+    --accent: 15 55% 64%; /* #E18C73 */
+    --accent-foreground: 40 30% 94%; /* light mode */
+
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    
+
     /* Softer borders */
-    --border: 40 15% 85%; /* #E6E0D6 - soft beige border */
+    --border: 40 15% 85%; /* #E6E0D6 */
     --input: 40 15% 85%;
     --ring: 150 14% 45%;
-    
+
     /* Increased border radius */
     --radius: 0.75rem;
-    
+
     /* Chart colors in earth tones */
-    --chart-1: 15 65% 50%; /* burnt sienna */
-    --chart-2: 150 14% 45%; /* sage green */
+    --chart-1: 15 55% 64%; /* #E18C73 */
+    --chart-2: 150 14% 45%; /* #6C8578 */
     --chart-3: 45 70% 60%; /* warm gold */
     --chart-4: 25 85% 55%; /* terracotta */
     --chart-5: 195 25% 50%; /* dusty blue */
-    
+
     /* Sidebar in neutral tones */
     --sidebar-background: 40 25% 95%;
     --sidebar-foreground: 0 0% 25%;
-    --sidebar-primary: 150 14% 45%; /* sage green */
+    --sidebar-primary: 150 14% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 40 20% 90%;
     --sidebar-accent-foreground: 0 0% 20%;
@@ -59,53 +60,47 @@
 
   .dark {
     /* Dark mode with earthy tones */
-    --background: 220 15% 16%; /* #222429 - dark slate */
-    --foreground: 40 30% 94%; /* #F2EFE6 - off-white */
-    --card: 220 15% 16%; /* #222429 */
-    --card-foreground: 40 30% 94%; /* #F2EFE6 */
-    --popover: 220 15% 16%; /* #222429 */
-    --popover-foreground: 40 30% 94%; /* #F2EFE6 */
+    --background: 220 15% 16%; /* #222429 */
+    --foreground: 40 30% 94%; /* #F2EFE6 */
+    --card: 220 15% 16%;
+    --card-foreground: 40 30% 94%;
+    --popover: 220 15% 16%;
+    --popover-foreground: 40 30% 94%;
+
+    --primary: 150 14% 62%; /* #9AB5A9 */
+    --primary-foreground: 0 0% 9%;
+
+    --secondary: 300 10% 57%; /* #A18E9A */
+    --secondary-foreground: 0 0% 9%;
+
+    --muted: 220 10% 22%; /* #303136 */
+    --muted-foreground: 40 15% 70%;
+
+    /* Accent = lighter sienna for dark mode */
+    --accent: 15 55% 72%; /* #F3B29D */
+    --accent-foreground: 40 30% 94%; /* dark mode */
     
-    /* Primary = Sage Green */
-    --primary: 150 14% 62%; /* #9AB5A9 - lighter sage */
-    --primary-foreground: 0 0% 9%; /* #161616 */
-    
-    /* Secondary = Muted Plum */
-    --secondary: 300 10% 57%; /* #A18E9A - lighter plum */
-    --secondary-foreground: 0 0% 9%; /* #161616 */
-    
-    /* Muted tones for subtle elements */
-    --muted: 220 10% 22%; /* #303136 - dark gray */
-    --muted-foreground: 40 15% 70%; /* #C2BAA9 - muted tan */
-    
-    /* Accent = Burnt Sienna */
-    --accent: 15 65% 65%; /* #E17859 - lighter sienna */
-    --accent-foreground: 0 0% 100%; /* #FFFFFF */
-    
-    --destructive: 0 62.8% 42%; /* #9D2E2E - deeper red */
-    --destructive-foreground: 40 30% 94%; /* #F2EFE6 */
-    
-    /* Softer borders */
-    --border: 220 12% 24%; /* #343538 - dark gray border */
-    --input: 220 12% 24%; /* #343538 */
-    --ring: 150 14% 62%; /* #9AB5A9 */
-    
-    /* Chart colors in earthy tones - but slightly brighter for dark mode */
-    --chart-1: 15 65% 65%; /* sienna */
-    --chart-2: 150 14% 62%; /* sage */
-    --chart-3: 45 70% 65%; /* gold */
-    --chart-4: 25 85% 60%; /* terracotta */
-    --chart-5: 195 25% 60%; /* blue */
-    
-    /* Sidebar in neutral tones */
-    --sidebar-background: 220 15% 14%; /* #1E1F24 */
-    --sidebar-foreground: 40 30% 94%; /* #F2EFE6 */
-    --sidebar-primary: 150 14% 62%; /* #9AB5A9 */
-    --sidebar-primary-foreground: 0 0% 9%; /* #161616 */
-    --sidebar-accent: 220 12% 20%; /* #2C2D31 */
-    --sidebar-accent-foreground: 40 30% 94%; /* #F2EFE6 */
-    --sidebar-border: 220 12% 24%; /* #343538 */
-    --sidebar-ring: 150 14% 62%; /* #9AB5A9 */
+    --destructive: 0 62.8% 42%;
+    --destructive-foreground: 40 30% 94%;
+
+    --border: 220 12% 24%;
+    --input: 220 12% 24%;
+    --ring: 150 14% 62%;
+
+    --chart-1: 15 55% 72%; /* #F3B29D */
+    --chart-2: 150 14% 62%;
+    --chart-3: 45 70% 65%;
+    --chart-4: 25 85% 60%;
+    --chart-5: 195 25% 60%;
+
+    --sidebar-background: 220 15% 14%;
+    --sidebar-foreground: 40 30% 94%;
+    --sidebar-primary: 150 14% 62%;
+    --sidebar-primary-foreground: 0 0% 9%;
+    --sidebar-accent: 220 12% 20%;
+    --sidebar-accent-foreground: 40 30% 94%;
+    --sidebar-border: 220 12% 24%;
+    --sidebar-ring: 150 14% 62%;
   }
 }
 
@@ -116,33 +111,33 @@
   body {
     @apply bg-background text-foreground;
   }
-  
-  /* Custom typography classes */
+
+  /* Typography */
   .font-sans {
     font-family: var(--font-inter), var(--font-source-sans), system-ui, sans-serif;
   }
-  
+
   .font-display {
     font-family: var(--font-cormorant), serif;
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-display;
   }
-  
+
   .section-title {
     @apply font-display text-2xl font-medium tracking-tight text-foreground border-b border-muted pb-2 mb-4;
   }
-  
+
   .section-header {
     @apply font-display text-xl font-medium tracking-tight border-b border-muted pb-1 mb-3;
   }
-  
-  /* Subtle animations for interactions */
+
+  /* Subtle animations */
   .animate-fadeIn {
     animation: fadeIn 0.3s ease-in-out;
   }
-  
+
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -153,12 +148,11 @@
       transform: scale(1);
     }
   }
-  
-  /* Drawer slide-in animation */
+
   .animate-slideIn {
     animation: slideIn 0.3s ease-out forwards;
   }
-  
+
   @keyframes slideIn {
     from {
       transform: translateX(100%);
@@ -169,12 +163,11 @@
       opacity: 1;
     }
   }
-  
-  /* Slide-out animation */
+
   .animate-slideOut {
     animation: slideOut 0.3s ease-in forwards;
   }
-  
+
   @keyframes slideOut {
     from {
       transform: translateX(0);
@@ -185,8 +178,7 @@
       opacity: 0;
     }
   }
-  
-  /* Auth page animations */
+
   @keyframes fadeUp {
     from {
       opacity: 0;
@@ -201,7 +193,7 @@
   .animate-fade-up {
     animation: fadeUp 0.8s ease-out forwards;
   }
-  
+
   @keyframes fadeInRight {
     from {
       opacity: 0;
@@ -216,7 +208,7 @@
   .animate-fade-in-right {
     animation: fadeInRight 0.5s ease-out forwards;
   }
-  
+
   /* Staggered animation for children */
   .stagger-animation > *:nth-child(1) {
     animation-delay: 0ms;

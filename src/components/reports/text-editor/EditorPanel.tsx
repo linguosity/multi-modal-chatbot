@@ -5,10 +5,12 @@
 
 import React, { useState, useEffect /* Added useEffect if needed later */ } from 'react';
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button"; // Import buttonVariants
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { Save } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -23,7 +25,6 @@ import { ExportDocxButton } from "@/components/reports/ExportDocxButton";
 import { Edit3, Zap, ChevronDown, X, Check, FileText, Target, PenLine, Wand2 } from "lucide-react";
 // Use types derived from your Zod schema file
 import { SpeechLanguageReport } from '@/types/reportSchemas'; // Adjust path if needed
-import { GlossaryDrawer } from '@/components/ui/glossary-drawer';
 import BatchRequestStatus from './BatchRequestStatus';
 import SummarizePanel from './SummarizePanel';
 import { cn } from "@/lib/utils";
@@ -163,24 +164,58 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         {/* Dialog Trigger Button */}
         <Dialog open={editorOpen} onOpenChange={setEditorOpen} modal={true}>
         
-        <DialogTrigger>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(/* styles */)}
+        {/* === Workaround: Use asChild with native button + variants === */}
+        <DialogTrigger asChild>
+          <button
+            type="button" // Add type="button" for non-submit buttons
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon" }), // Apply variants
+              "rounded-full bg-[#F1EEE9]/80 shadow-lg p-2.5 hover:bg-[#E6E0D6] transition-all", // Your specific styles
+              "border border-[#E6E0D6] hover:border-[#D8CFC1]", // Your specific styles
+              batchStatus.active ? "invisible pointer-events-none" : "" // Your conditional styles
+            )}
             aria-label="Open Report Editor"
           >
             <Edit3 className="h-4 w-4 text-[#6C8578]" />
-          </Button>
+          </button>
         </DialogTrigger>
-
+        {/*}
+        <button
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon" }),
+            "ml-2 rounded-full bg-[#F1EEE9]/80 shadow-lg p-2.5 hover:bg-[#E6E0D6] transition-all",
+            "border border-[#E6E0D6] hover:border-[#D8CFC1]"
+          )}
+          aria-label="Save Report"
+        >
+          {savingReport ? (
+            <Loader2 className="h-4 w-4 animate-spin text-[#6C8578]" />
+          ) : (
+            <Save className="h-4 w-4 text-[#6C8578]" />
+          )} 
+        </button>
+        */}
+        
+        {/* ========================================================== */}
         <DialogContent className="max-w-4xl w-full p-0 rounded-xl border-0 animate-fadeIn">
           <DialogTitle className="sr-only">Update Report</DialogTitle>
           <Card className="rounded-xl px-8 py-8 border border-[#E6E0D6] bg-[#F8F7F4] shadow-sm">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-display text-2xl font-medium text-foreground tracking-tight">Update Report</h2>
-              <DialogClose> <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-[#E6E0D6]/50"> </Button> </DialogClose>
+              {/* === Workaround: Use asChild with native button + variants === */}
+              <DialogClose asChild>
+                <button
+                  type="button" // Add type="button"
+                  className={cn(
+                      buttonVariants({ variant: 'ghost', size: 'sm' }), // Apply variants
+                      "h-7 w-7 p-0 rounded-full hover:bg-[#E6E0D6]/50" // Your specific styles
+                  )}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </DialogClose>
+              {/* ========================================================== */}
             </div>
 
             {/* Tabs */}
@@ -339,10 +374,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         </div>
       )}
 
-      {/* Glossary Drawer */}
-      <div className={cn( "absolute top-0 right-0 transition-opacity duration-300", batchStatus.active ? "opacity-0 pointer-events-none" : "opacity-100" )}>
-        <GlossaryDrawer onSave={(terms) => { console.log("Saving glossary terms:", terms); /* Implement save logic */ }} />
-      </div>
+      {/* Glossary Drawer removed */}
       </div>
     </div>
   );

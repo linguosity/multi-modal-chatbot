@@ -3,16 +3,17 @@
 
 import React from 'react';
 import { EditableCard } from '@/components/reports/EditableCard';
-import { DomainSection } from '@/types/reportSchemas';
+import { FunctioningSchema, FunctioningSection } from '@/types/reportSchemas';
 
 // --- Interface Updated ---
 interface DomainCardProps {
   domain: string;
-  domainData: DomainSection;
+  domainData: FunctioningSection;
   onLockSection?: (id: string, locked: boolean) => void;
   onToggleSynthesis?: (id: string) => void;
   onSaveContent?: (id: string, content: string) => void;
   onMarkFinished?: () => void; // <<< ADD THIS PROP
+  isMarkedDone?: boolean; // <<< ADD THIS PROP to receive status
 }
 
 /**
@@ -39,10 +40,10 @@ export const DomainCard: React.FC<DomainCardProps> = ({
   };
 
   // Helper function to parse saved content (remains same)
-  const parseSavedContent = (content: string): Partial<DomainSection> => {
+  const parseSavedContent = (content: string): Partial<FunctioningSection> => {
     // ... same function ...
     const lines = content.split('\n').map(l => l.trim()).filter(l => l);
-    const updatedData: Partial<DomainSection> = { strengths: [], needs: [] };
+    const updatedData: Partial<FunctioningSection> = { strengths: [], needs: [] };
     let currentSection: 'topic' | 'strengths' | 'needs' | 'impact' | null = 'topic';
     lines.forEach(line => {
         const lowerLine = line.toLowerCase();
@@ -61,7 +62,7 @@ export const DomainCard: React.FC<DomainCardProps> = ({
     <EditableCard
       id={`domain-${domain}`}
       title={`${domain.charAt(0).toUpperCase() + domain.slice(1)} Language`}
-      className="border border-neutral-200 bg-white shadow-sm"
+      className="border border-neutral-200 bg-white shadow-sm h-full flex flex-col"
       headerClassName="py-2 px-3 bg-neutral-100"
       contentClassName="p-3 text-xs"
       color="neutral"

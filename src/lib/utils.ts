@@ -93,6 +93,11 @@ export function parseErrorMessage(error: any): string {
   return 'An unknown error occurred'
 }
 
+// Safe motion number helper to handle NaN or Infinity values that may occur in animation calculations
+export function safeMotionNumber(value: number): number {
+  return Number.isFinite(value) ? value : 0;
+}
+
 // Format a number as a file size (e.g., "1.5 MB")
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 Bytes'

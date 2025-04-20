@@ -61,7 +61,14 @@ const config = {
   				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
-  			}
+  			},
+			orangeTheme: {
+			DEFAULT: '#ea580c',       // similar to Tailwind's orange-600
+			background: '#fff7ed',    // similar to orange-50 (very soft)
+			hover: '#fb923c',         // similar to orange-400
+			text: '#ea580c',          // for consistency
+			white: '#ffffff'          // used for hover text on dark bg
+			},
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
