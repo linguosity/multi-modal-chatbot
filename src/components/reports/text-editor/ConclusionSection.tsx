@@ -93,9 +93,14 @@ export const ConclusionRecsSection: React.FC<ConclusionRecsSectionProps> = ({
         if (conclusionData) {
             const id = 'conclusion-summary';
             cards.push({
-                id, title: "Overall Summary", isLocked: lockStatus?.summary,
-                hasSynthesis: !!conclusionData.synthesis, synthesisContent: conclusionData.synthesis || "",
-                initialContent: conclusionData.summary || "", isEditable: true, color: "neutral",
+                id, 
+                title: "Overall Summary", 
+                isLocked: lockStatus?.summary,
+                hasSynthesis: !!conclusionData?.synthesis, 
+                synthesisContent: conclusionData?.synthesis || "",
+                initialContent: conclusionData?.summary || "", 
+                isEditable: true, 
+                color: "neutral",
                 initialIsMarkedDone: getInitialDone(id),
             });
         }
@@ -104,13 +109,22 @@ export const ConclusionRecsSection: React.FC<ConclusionRecsSectionProps> = ({
         if (recommendationsData) {
             const idServices = 'services-recommendations';
             cards.push({
-                id: idServices, title: "Recommended Services", isLocked: lockStatus?.services,
-                hasSynthesis: !!recommendationsData.synthesis, synthesisContent: recommendationsData.synthesis || "",
+                id: idServices, 
+                title: "Recommended Services", 
+                isLocked: lockStatus?.services,
+                hasSynthesis: !!recommendationsData?.synthesis, 
+                synthesisContent: recommendationsData?.synthesis || "",
                 isEditable: true,
-                initialContent: `Type: ${recommendationsData.services?.typeOfService || ''}\nFrequency: ${recommendationsData.services?.frequency || ''}\nSetting: ${recommendationsData.services?.setting || ''}`,
+                initialContent: `Type: ${recommendationsData?.services?.typeOfService || ''}\nFrequency: ${recommendationsData?.services?.frequency || ''}\nSetting: ${recommendationsData?.services?.setting || ''}`,
                 color: "neutral",
-                viewComponent: recommendationsData.services ? (
-                    <table className="w-full text-xs"><tbody><tr><td className="font-medium pr-2 py-0.5">Type:</td><td>{recommendationsData.services.typeOfService}</td></tr><tr><td className="font-medium pr-2 py-0.5">Frequency:</td><td>{recommendationsData.services.frequency}</td></tr><tr><td className="font-medium pr-2 py-0.5">Setting:</td><td>{recommendationsData.services.setting}</td></tr></tbody></table>
+                viewComponent: recommendationsData?.services ? (
+                    <table className="w-full text-xs">
+                      <tbody>
+                        <tr><td className="font-medium pr-2 py-0.5">Type:</td><td>{recommendationsData?.services?.typeOfService}</td></tr>
+                        <tr><td className="font-medium pr-2 py-0.5">Frequency:</td><td>{recommendationsData?.services?.frequency}</td></tr>
+                        <tr><td className="font-medium pr-2 py-0.5">Setting:</td><td>{recommendationsData?.services?.setting}</td></tr>
+                      </tbody>
+                    </table>
                 ) : <p className="text-xs text-gray-500">No service details.</p>,
                 initialIsMarkedDone: getInitialDone(idServices),
             });
@@ -120,12 +134,47 @@ export const ConclusionRecsSection: React.FC<ConclusionRecsSectionProps> = ({
         if (recommendationsData) {
             const idAccomm = 'accommodations-strategies';
             cards.push({
-                id: idAccomm, title: "Accommodations & Strategies", isLocked: lockStatus?.accommodations,
-                hasSynthesis: !!recommendationsData.synthesis, synthesisContent: recommendationsData.synthesis || "",
+                id: idAccomm, 
+                title: "Accommodations & Strategies", 
+                isLocked: lockStatus?.accommodations,
+                hasSynthesis: !!recommendationsData?.synthesis, 
+                synthesisContent: recommendationsData?.synthesis || "",
                 isEditable: true,
-                initialContent: [...(recommendationsData.accommodations || []).map(acc => `- ${acc}`), ...((recommendationsData.accommodations?.length || 0) > 0 && (recommendationsData.facilitationStrategies?.length || 0) > 0 ? ["\n--- STRATEGIES ---"] : []), ...(recommendationsData.facilitationStrategies || []).map(strat => `- ${strat}`)].join("\n"),
+                initialContent: [
+                  ...(recommendationsData?.accommodations || []).map(acc => `- ${acc}`), 
+                  ...((recommendationsData?.accommodations?.length || 0) > 0 && (recommendationsData?.facilitationStrategies?.length || 0) > 0 ? ["\n--- STRATEGIES ---"] : []), 
+                  ...(recommendationsData?.facilitationStrategies || []).map(strat => `- ${strat}`)
+                ].join("\n"),
                 color: "neutral",
-                viewComponent: (<> {(recommendationsData.accommodations?.length || 0) > 0 && ( <div className="mb-2"> <h5 className="text-xs font-semibold mb-1 text-gray-600">Accommodations</h5> <ul className="list-disc pl-4 space-y-0.5 text-gray-800"> {recommendationsData.accommodations!.map((rec, index) => ( <li key={`acc-${index}`}>{rec}</li> ))} </ul> </div> )} {(recommendationsData.facilitationStrategies?.length || 0) > 0 && ( <div> <h5 className="text-xs font-semibold mb-1 text-gray-600">Facilitation Strategies</h5> <ul className="list-disc pl-4 space-y-0.5 text-gray-800"> {recommendationsData.facilitationStrategies!.map((strat, index) => ( <li key={`strat-${index}`}>{strat}</li> ))} </ul> </div> )} {!(recommendationsData.accommodations?.length || 0) && !(recommendationsData.facilitationStrategies?.length || 0) && ( <p className="text-xs text-gray-500">None listed.</p> )} </>),
+                viewComponent: (
+                  <> 
+                    {(recommendationsData?.accommodations?.length || 0) > 0 && (
+                      <div className="mb-2">
+                        <h5 className="text-xs font-semibold mb-1 text-gray-600">Accommodations</h5>
+                        <ul className="list-disc pl-4 space-y-0.5 text-gray-800">
+                          {recommendationsData?.accommodations?.map((rec, index) => (
+                            <li key={`acc-${index}`}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {(recommendationsData?.facilitationStrategies?.length || 0) > 0 && (
+                      <div>
+                        <h5 className="text-xs font-semibold mb-1 text-gray-600">Facilitation Strategies</h5>
+                        <ul className="list-disc pl-4 space-y-0.5 text-gray-800">
+                          {recommendationsData?.facilitationStrategies?.map((strat, index) => (
+                            <li key={`strat-${index}`}>{strat}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {!(recommendationsData?.accommodations?.length || 0) && !(recommendationsData?.facilitationStrategies?.length || 0) && (
+                      <p className="text-xs text-gray-500">None listed.</p>
+                    )}
+                  </>
+                ),
                 initialIsMarkedDone: getInitialDone(idAccomm),
             });
         }

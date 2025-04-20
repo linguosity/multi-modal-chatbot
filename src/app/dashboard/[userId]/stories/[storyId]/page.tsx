@@ -10,10 +10,11 @@ import { useStories } from '@/components/contexts/stories-context';
 import { Story } from '@/lib/schemas/story';
 
 export default function StoryViewPage() {
-  const params = useParams();
   const router = useRouter();
-  const userId = params?.userId as string;
-  const storyId = params?.storyId as string;
+  // Properly handle route parameters in Next.js 15+
+  const params = useParams();
+  const userId = params.userId;
+  const storyId = params.storyId;
   const { loadStory, deleteStory, loading, error } = useStories();
   
   const [story, setStory] = useState<Story | null>(null);

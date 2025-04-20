@@ -89,6 +89,23 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     headerMarkedDoneStatus, // If added later
     backgroundMarkedDoneStatus // If added later
 }) => {
+    // Debug studentInfo prop when component mounts
+    React.useEffect(() => {
+        console.log('----------- BACKGROUND SECTION PROPS INSPECTION -----------');
+        console.log('studentInfo prop type:', typeof studentInfo);
+        if (studentInfo) {
+            console.log('studentInfo keys:', Object.keys(studentInfo));
+            console.log('studentInfo values:', {
+                firstName: studentInfo.firstName,
+                lastName: studentInfo.lastName,
+                DOB: studentInfo.DOB,
+                homeLanguage: studentInfo.homeLanguage,
+            });
+        } else {
+            console.warn('studentInfo is null or undefined in BackgroundSection');
+        }
+        console.log('----------- END BACKGROUND SECTION INSPECTION -----------');
+    }, [studentInfo]);
     const [finishedCardIds, setFinishedCardIds] = useState(new Set<string>());
     const [activeIndex, setActiveIndex] = useState(0);
     const [isStudentInfoDialogOpen, setIsStudentInfoDialogOpen] = useState(false); // State for Dialog

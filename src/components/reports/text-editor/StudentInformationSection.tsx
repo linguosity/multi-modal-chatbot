@@ -28,10 +28,29 @@ export const StudentInformationSection: React.FC<StudentInformationSectionProps>
   onSaveContent,
   onToggleMarkedDone // Pass for checkmark
 }) => {
+  // Test 1: Log the header prop to see what we're working with
+  console.log('StudentInformationSection header:', header);
+  console.log('StudentInformationSection studentInformation:', header?.studentInformation);
+  
   // State to control the Dialog visibility
   const [isStudentInfoDialogOpen, setIsStudentInfoDialogOpen] = useState(false);
 
+  // Test 2: Create a hard-coded minimal object to see if it renders properly
+  const hardcodedStudentInfo = {
+    firstName: 'Test',
+    lastName: 'Student',
+    DOB: '2020-01-01',
+    parents: ['Parent 1', 'Parent 2'],
+    homeLanguage: 'English',
+    grade: '3rd',
+    school: 'Test School',
+    teacher: 'Ms. Teacher',
+    evaluator: 'Dr. Evaluator'
+  };
+  
   // Extract student info, provide default empty object if null/undefined
+  // Uncomment this line to use the hardcoded data for testing
+  // const studentInfo = hardcodedStudentInfo;
   const studentInfo = header?.studentInformation ?? { firstName: '', lastName: '', parents: [], homeLanguage: '' };
 
   // Derive lock and done status from the header prop
@@ -133,6 +152,14 @@ export const StudentInformationSection: React.FC<StudentInformationSectionProps>
       // Dialog component manages the modal's open/closed state
        <Dialog open={isStudentInfoDialogOpen} onOpenChange={setIsStudentInfoDialogOpen}>
          <div className="mb-6">
+             {/* Test 3: Raw view of student info data outside of components */}
+             <div className="bg-yellow-50 p-3 mb-4 border border-yellow-300 rounded">
+                <h3 className="font-bold text-sm mb-2">Debug: Raw Student Info Data</h3>
+                <pre className="text-xs overflow-auto max-h-32">
+                  {JSON.stringify(studentInfo, null, 2)}
+                </pre>
+             </div>
+           
              {/* EditableCard displays the information and provides header controls */}
              <EditableCard
                  id="student-info" // Unique ID for this card instance
@@ -154,11 +181,14 @@ export const StudentInformationSection: React.FC<StudentInformationSectionProps>
              />
             
              {/* The Dialog Content itself - rendered conditionally by Dialog */}
+             {/* Test 3: Temporarily comment out Dialog to see if it's causing issues */}
+             {/* 
              <StudentInfoDialog
                  initialData={studentInfo} // Data to populate the dialog form
                  onSave={handleSaveFromDialog} // Callback when dialog saves
                  onClose={() => setIsStudentInfoDialogOpen(false)} // Explicit way to close dialog if needed inside it
              />
+             */}
          </div>
        </Dialog>
   );

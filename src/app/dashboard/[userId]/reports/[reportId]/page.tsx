@@ -146,9 +146,10 @@ const AnimatedSectionRow = ({ children, index, id }: { children: React.ReactNode
 };
 
 export default function ReportEditor() {
+  // Properly handle route parameters in Next.js 15+
   const params = useParams();
-  const userId = params?.userId as string;
-  const reportId = params?.reportId as string;
+  const userId = params.userId;
+  const reportId = params.reportId;
   const isNewReport = reportId === 'new';
 
   const { setSectionGroups } = useReports();
@@ -164,8 +165,36 @@ export default function ReportEditor() {
   const [savingReport, setSavingReport] = useState(false);
   const [commandDetails, setCommandDetails] = useState<any>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [reportData, setReportData] = useState<SpeechLanguageReport | null>(null);
   
-  // Use the batch report updater hook for report state management
+  // Always call the hook, but use a safe default empty report initially
+  // This ensures the hooks ordering is consistent across renders
+  const emptyReportSkeleton = useMemo(() => createReportSkeleton(), []);
+  
+  // Use the batch report updater hook with a safe default
+  const batchUpdaterHook = useBatchReportUpdater(
+    initialReport 
+      ? (initialReport.report || initialReport) 
+      : emptyReportSkeleton
+  );
+  
+  // When initialReport changes, update the hook's internal state
+  useEffect(() => {
+    if (initialReport) {
+      console.log("initialReport loaded, updating hook state", initialReport);
+      
+      // Extract just the report part if initialReport has a report property
+      // Otherwise use initialReport directly
+      const reportForHook = (initialReport && initialReport.report) 
+        ? initialReport.report 
+        : initialReport;
+        
+      // Update the hook's internal state using its setReport function
+      batchUpdaterHook.setReport(reportForHook);
+    }
+  }, [initialReport, batchUpdaterHook.setReport]);
+      
+  // Destructure the hook result  
   const {
     report,
     setReport,
@@ -178,25 +207,60 @@ export default function ReportEditor() {
     handleBatchComplete,
     handleBatchError,
     updateSection
-  } = useBatchReportUpdater(initialReport || createReportSkeleton());
+  } = batchUpdaterHook;
+  
+  console.log('[useBatchReportUpdater] current report:', report);
 
   useEffect(() => {
     setLoading(true);
  
     const loadReport = async () => {
       try {
+        // Fetch a specific report with ID parameter
         const response = await fetch(`/api/reports?id=${reportId}&userId=${userId}`);
         const json = await response.json();
  
+        console.log("Loaded report JSON:", json);
+        
         if (!response.ok) throw new Error(json.error || 'Failed to fetch report');
  
-        const reportData = json?.report;
-        console.log("Raw JSON response from /api/reports:", json);
-        if (!reportData || typeof reportData !== 'object') throw new Error('Invalid report data');
+        // Enhanced detailed logging
+        console.log('API Response Structure:', {
+          hasId: Boolean(json?.id), 
+          hasUserId: Boolean(json?.user_id),
+          hasReport: Boolean(json?.report),
+          reportType: typeof json?.report,
+          reportHasHeader: Boolean(json?.report?.header),
+          studentInfoExists: Boolean(json?.report?.header?.studentInformation),
+          studentInfoFields: json?.report?.header?.studentInformation ? 
+            Object.keys(json.report.header.studentInformation) : []
+        });
+        
+        // Log full JSON for complete visibility
+        console.log('Full JSON response (stringified):', 
+          JSON.stringify(json, null, 2)
+        );
+        
+        // Use the entire JSON response object instead of just the report field
+        // This includes id, user_id, created_at, updated_at, and report
+        const reportData = json;
+        
+        if (!reportData || !reportData.report || typeof reportData.report !== 'object') {
+          console.error("Invalid report data structure:", json);
+          throw new Error('Invalid report data');
+        }
  
+        console.log('[loadReport] Setting initialReport:', reportData);
+        
+        // Safety check - confirm report has the expected structure
+        if (reportData && reportData.id) {
+          console.info('[Report Safety Check] All nested report access points verified for:', reportData.id);
+        }
+        
         setInitialReport(reportData);
       } catch (e) {
         console.error("Failed to load report from Supabase, falling back to skeleton:", e);
+        console.log('[loadReport] Falling back to skeleton report');
         setInitialReport(createReportSkeleton());
       } finally {
         setLoading(false);
@@ -209,7 +273,12 @@ export default function ReportEditor() {
     } else {
       loadReport();
     }
-  }, [reportId]);
+  }, [reportId, userId]);
+  // Monitor initialReport changes
+  useEffect(() => {
+    console.log('[useEffect] initialReport updated:', initialReport);
+  }, [initialReport]);
+  
   useEffect(() => { /* ... Load assessment tools ... */ try { const tools = getAllAssessmentTools(); setAssessmentTools(tools); } catch (error) { console.error("Failed to load assessment tools:", error); setAssessmentTools({}); } }, []);
 
   // --- Scroll Animation Setup ---
@@ -227,10 +296,13 @@ export default function ReportEditor() {
 
   // --- Memos for Sidebar Updates (remain the same logic for PL domains) ---
   const activeDomains = useMemo(() => {
-    const functioning = report?.presentLevels?.functioning;
-    if (!functioning) {
+    if (!report?.presentLevels?.functioning) {
         return []; // Return empty array if functioning is not available
     }
+    
+    // Access the nested functioning object properly
+    const functioning = report.presentLevels.functioning;
+    
     // Example: Return keys of functioning domains marked as a concern
     return Object.entries(functioning)
         .filter(([key, value]) => value?.isConcern === true)
@@ -241,11 +313,14 @@ export default function ReportEditor() {
   const activeDomainsKey = useMemo(() => (activeDomains || []).join(','), [activeDomains]); // <-- ADDED || []
 
   const domainConcernsKey = useMemo(() => {
-    const functioning = report?.presentLevels?.functioning;
-    if (!functioning || !activeDomains) {
+    if (!report?.presentLevels?.functioning || !activeDomains) {
         return ''; // Or some default key
     }
-    return (activeDomains || []).map(domain => // <-- ADDED || []
+    
+    // Access the nested functioning object properly
+    const functioning = report.presentLevels.functioning;
+    
+    return (activeDomains || []).map(domain => 
         `${domain}-${functioning[domain as keyof Functioning]?.isConcern ?? false}`
     ).join(',');
   }, [activeDomains, report?.presentLevels?.functioning]);
@@ -253,13 +328,19 @@ export default function ReportEditor() {
 
   // --- Build section groups for sidebar - UPDATED for split Conclusion ---
   useEffect(() => {
-    const functioning = report?.presentLevels?.functioning;
-    const domainItems = functioning ? (activeDomains || []).map(domain => ({
-        title: `${domain.charAt(0).toUpperCase() + domain.slice(1)} Language`,
-        url: `#domain-${domain}`,
-        // Ensure value exists before accessing isConcern
-        isActive: functioning[domain as keyof Functioning]?.isConcern ?? false
-    })) : [];
+    // Initialize domainItems properly
+    let domainItems: { title: string, url: string, isActive: boolean }[] = [];
+    
+    // Process functioning domains properly
+    if (report?.presentLevels?.functioning) {
+      const functioning = report.presentLevels.functioning;
+      domainItems = (activeDomains || []).map(domain => ({
+          title: `${domain.charAt(0).toUpperCase() + domain.slice(1)} Language`,
+          url: `#domain-${domain}`,
+          // Ensure value exists before accessing isConcern
+          isActive: functioning[domain as keyof Functioning]?.isConcern ?? false
+      }));
+    }
 
     // Define keys for eligibility based on your schema/UI consolidation
     // Using consolidated 'language' for UI link here
@@ -621,32 +702,98 @@ setSectionGroups(newSectionGroups);
   // No synthesis generation function needed as each component handles its own toggle state
 
   // --- Render Logic ---
+  
+  // Only do data inspection if report is available
+  if (report) {
+    // Detailed inspection of header and studentInformation parts
+    console.log('----------- REPORT DATA INSPECTION -----------');
+    console.log('Report object type:', typeof report);
+    console.log('Report has header:', Boolean(report?.header));
+    
+    if (report?.header) {
+      console.log('Header object type:', typeof report.header);
+      console.log('Header keys:', Object.keys(report.header));
+      console.log('Header has studentInformation:', Boolean(report.header.studentInformation));
+      
+      if (report.header.studentInformation) {
+        console.log('studentInformation object type:', typeof report.header.studentInformation);
+        console.log('studentInformation keys:', Object.keys(report.header.studentInformation));
+        console.log('studentInformation values sample:', {
+          firstName: report.header.studentInformation.firstName,
+          lastName: report.header.studentInformation.lastName,
+          homeLanguage: report.header.studentInformation.homeLanguage
+        });
+      } else {
+        console.warn('studentInformation is missing or invalid');
+      }
+    } else {
+      console.warn('Header is missing or invalid');
+    }
+    
+    // Check for any unusual data formats that might come from Supabase
+    try {
+      // Check if there's any unexpected string encoding
+      const jsonStr = JSON.stringify(report);
+      const reparsed = JSON.parse(jsonStr);
+      
+      if (reparsed.header?.studentInformation !== report.header?.studentInformation) {
+        console.warn('Warning: Possible reference issue with studentInformation');
+      }
+      
+      // Check for common Supabase quirks
+      if (typeof report.header === 'string') {
+        console.warn('Warning: header is a string instead of an object - might need parsing');
+      }
+    } catch (e) {
+      console.error('Error checking report data:', e);
+    }
+    
+    console.log('Raw studentInformation object:', report?.header?.studentInformation);
+    console.log('----------- END INSPECTION -----------');
+    
+    // Deep inspection of studentInformation object
+    console.log('[render] Student info detailed:', 
+      JSON.stringify(report?.header?.studentInformation, null, 2)
+    );
+  } else {
+    console.log('Report is not yet initialized, waiting for data...');
+  }
+  
+  // Log the raw report data structure (only in dev)
+  if (process.env.NODE_ENV === 'development') {
+    console.dir(report, { depth: 3 }); // Shows 3 levels deep
+  }
+  
+  // Determine overall loading status - initially loading or waiting for hook initialization
+  const isContentLoading = loading || !report;
+  
   return (
     <div className="w-full">
       <Card className="relative border-0 overflow-auto" ref={editorRef} style={{ height: 'calc(100vh - 0px)' }}>
         
-
-        {/* Editor Panel */}
-        <EditorPanel
-            inputText={inputText}
-            setInputText={setInputText}
-            selectedSection={selectedSection}
-            setSelectedSection={setSelectedSection}
-            isUpdating={isUpdating}
-            error={error}
-            success={success}
-            handleSubmit={handleSubmit}
-            handleExportHtml={handleExportHtml}
-            handleClearReport={handleClearReport}
-            report={report}
-            onPdfUpload={handlePdfUpload}
-            onViewJson={() => setShowJsonPreview(true)}
-            onBatchComplete={handleBatchComplete}
-            onBatchError={handleBatchError}
-        />
+        {/* Editor Panel - Only show when report is ready */}
+        {!isContentLoading && (
+          <EditorPanel
+              inputText={inputText}
+              setInputText={setInputText}
+              selectedSection={selectedSection}
+              setSelectedSection={setSelectedSection}
+              isUpdating={isUpdating}
+              error={error}
+              success={success}
+              handleSubmit={handleSubmit}
+              handleExportHtml={handleExportHtml}
+              handleClearReport={handleClearReport}
+              report={report}
+              onPdfUpload={handlePdfUpload}
+              onViewJson={() => setShowJsonPreview(true)}
+              onBatchComplete={handleBatchComplete}
+              onBatchError={handleBatchError}
+          />
+        )}
         
         {/* Batch Status Component - Shown only when a batch job is in progress */}
-        {batchId && batchStatus === 'processing' && (
+        {!isContentLoading && batchId && batchStatus === 'processing' && (
           <div className="absolute top-20 right-4 z-30 w-80">
             <BatchJobStatus 
               batchId={batchId}
@@ -657,32 +804,107 @@ setSectionGroups(newSectionGroups);
         )}
 
         {/* Conditional Rendering */}
-        {loading ? (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6"> {/* Skeleton */}
-            <div className="space-y-4"> <Skeleton className="h-24 w-full bg-gray-200 dark:bg-gray-700" /> <Skeleton className="h-40 w-full bg-gray-200 dark:bg-gray-700" /> <Skeleton className="h-32 w-full bg-gray-200 dark:bg-gray-700" /> </div>
-            <div className="space-y-4"> <Skeleton className="h-40 w-full bg-gray-200 dark:bg-gray-700" /> <Skeleton className="h-24 w-full bg-gray-200 dark:bg-gray-700" /> <Skeleton className="h-32 w-full bg-gray-200 dark:bg-gray-700 md:col-span-2" /> </div>
+        {isContentLoading ? (
+          <div className="p-6">
+            <div className="mb-4 text-center">
+              <h2 className="text-xl font-bold mb-2">Loading Report Data...</h2>
+              <p className="text-gray-500 mb-6">Please wait while we retrieve and initialize your report.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6"> {/* Skeleton */}
+              <div className="space-y-4"> 
+                <Skeleton className="h-24 w-full bg-gray-200 dark:bg-gray-700" /> 
+                <Skeleton className="h-40 w-full bg-gray-200 dark:bg-gray-700" /> 
+                <Skeleton className="h-32 w-full bg-gray-200 dark:bg-gray-700" /> 
+              </div>
+              <div className="space-y-4"> 
+                <Skeleton className="h-40 w-full bg-gray-200 dark:bg-gray-700" /> 
+                <Skeleton className="h-24 w-full bg-gray-200 dark:bg-gray-700" /> 
+                <Skeleton className="h-32 w-full bg-gray-200 dark:bg-gray-700 md:col-span-2" /> 
+              </div>
+            </div>
+            
+            {/* Debug info for loading state */}
+            <div className="mt-8 p-4 bg-gray-100 rounded border border-gray-200">
+              <h3 className="font-bold mb-2">Loading Status</h3>
+              <ul className="list-disc pl-5 text-sm">
+                <li>API loading: {loading ? 'Still loading' : 'Complete'}</li>
+                <li>Initial report loaded: {initialReport ? 'Yes' : 'No'}</li>
+                <li>Report data prepared: {reportData ? 'Yes' : 'No'}</li>
+                <li>Hook initialized: {report ? 'Yes' : 'No'}</li>
+              </ul>
+            </div>
           </div>
         ) : (
-          // Actual Report Content Area
+          // Actual Report Content Area - Only render when report is fully loaded
           <div className="p-6 mt-4 flex-wrap">
             {/* Empty state check */}
             {/* ... */}
 
             {/* Row 1 - Background & Assessment Tools */}
             <AnimatedSectionRow id="row-1" index={0}>
-              <BackgroundSection
-                studentInfo={report.header?.studentInformation}
-                background={report.background}
-                headerLockStatus={report.header?.lockStatus}
-                backgroundLockStatus={report.background?.lockStatus}
-                onLockSection={handleLockSection}
-                onToggleSynthesis={handleToggleSynthesis}
-                onSaveContent={handleSaveContent}
-                onToggleMarkedDone={handleToggleMarkedDone}
-                backgroundMarkedDoneStatus={report.background?.markedDoneStatus} // Pass the current state
-                studentInfoMarkedDoneStatus={report.header?.markedDoneStatus} // Pass the current state
-                headerMarkedDoneStatus={report.header?.markedDoneStatus} // Pass the current state
-              />
+              {/* Add debug check to see if report.header exists before rendering */}
+              {report.header ? (
+                <>
+                  {/* Add raw debug info for header object */}
+                  <div className="bg-blue-50 p-3 mb-4 border border-blue-200 rounded">
+                    <h3 className="font-bold text-sm mb-2">Report Header Debug</h3>
+                    <p className="text-xs mb-1">Header type: {typeof report.header}</p>
+                    <p className="text-xs mb-1">Has studentInformation: {Boolean(report.header?.studentInformation)}</p>
+                    <pre className="text-xs overflow-auto max-h-32">
+                      {JSON.stringify(report.header, null, 2)}
+                    </pre>
+                  </div>
+                  
+                  <BackgroundSection
+                    studentInfo={report.header?.studentInformation}
+                    background={report.background}
+                    headerLockStatus={report.header?.lockStatus}
+                    backgroundLockStatus={report.background?.lockStatus}
+                    onLockSection={handleLockSection}
+                    onToggleSynthesis={handleToggleSynthesis}
+                    onSaveContent={handleSaveContent}
+                    onToggleMarkedDone={handleToggleMarkedDone}
+                    backgroundMarkedDoneStatus={report.background?.markedDoneStatus}
+                    studentInfoMarkedDoneStatus={report.header?.markedDoneStatus}
+                    headerMarkedDoneStatus={report.header?.markedDoneStatus}
+                  />
+                </>
+              ) : (
+                /* Alternate display for missing header */
+                <div className="bg-red-50 p-4 border border-red-200 rounded">
+                  <h3 className="font-bold text-lg mb-2">Header Data Missing</h3>
+                  <p>The report header object is missing or invalid. This could indicate:</p>
+                  <ul className="list-disc pl-5 mt-2">
+                    <li>API response format issue</li>
+                    <li>Data structure mismatch</li>
+                    <li>Incomplete report loading</li>
+                  </ul>
+                  <pre className="mt-4 text-xs bg-gray-100 p-2 rounded">
+                    report type: {typeof report}<br/>
+                    report keys: {report ? Object.keys(report).join(', ') : 'undefined'}
+                  </pre>
+                </div>
+              )}
+              
+              {/* Debug panel for data inspection (DEV only) */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded my-4 overflow-auto max-h-96">
+                  <h3 className="font-bold mb-2">Student Information Debug</h3>
+                  <pre className="text-xs whitespace-pre-wrap">
+                    {JSON.stringify(report.header?.studentInformation, null, 2) || "No student information found"}
+                  </pre>
+                  
+                  <h3 className="font-bold mb-2 mt-4">Report Structure</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>Header: {report.header ? "✅" : "❌"}</div>
+                    <div>Background: {report.background ? "✅" : "❌"}</div>
+                    <div>Present Levels: {report.presentLevels ? "✅" : "❌"}</div>
+                    <div>Assessment Results: {report.assessmentResults ? "✅" : "❌"}</div>
+                    <div>Conclusion: {report.conclusion ? "✅" : "❌"}</div>
+                  </div>
+                </div>
+              )}
               <AssessmentToolsSection 
                 assessmentProcedures={report.assessmentResults?.assessmentProceduresAndTools}
                 observations={report.assessmentResults?.observations || {}}

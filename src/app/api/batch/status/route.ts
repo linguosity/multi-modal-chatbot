@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
   }
   
   // Check authentication
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   
   // Get the current user session
@@ -284,7 +284,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   // Check authentication
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   
   // Get the current user session

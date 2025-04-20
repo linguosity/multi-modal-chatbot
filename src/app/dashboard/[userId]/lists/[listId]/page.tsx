@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,8 +52,10 @@ const MOCK_WORD_LIST = {
 
 export default function WordListDetailsPage() {
   const router = useRouter();
+  // Properly handle route parameters in Next.js 15+
   const params = useParams();
-  const { userId, listId } = params as { userId: string; listId: string };
+  const userId = params.userId;
+  const listId = params.listId;
   
   const [loading, setLoading] = useState(true);
   const [wordList, setWordList] = useState<any>(null);

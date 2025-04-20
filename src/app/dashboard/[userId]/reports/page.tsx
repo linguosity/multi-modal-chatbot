@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Plus, FileText, Search } from 'lucide-react';
 import { useReports } from '@/components/contexts/reports-context';
@@ -33,8 +33,9 @@ const MOCK_REPORTS = [
 
 export default function UserReportsPage() {
   const router = useRouter();
+  // Properly handle route parameters in Next.js 15+
   const params = useParams();
-  const userId = params?.userId as string;
+  const userId = params.userId;
   
   // State for reports
   const [reports, setReports] = useState<any[]>([]);
