@@ -1,6 +1,6 @@
 // src/app/api/auth/logout/route.ts
 import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabaseTypes';
 
@@ -15,10 +15,17 @@ const cookieOptions = {
 
 export async function POST() {
   try {
-    // Initialize Supabase client using the route handler client
-    const supabase = createRouteHandlerClient<Database>(
-      { cookies: () => cookies() }, // Invoke cookies() at request time
-      { cookieOptions }
+    // Initialize Supabase client using the server client
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get: (name) => cookies().get(name)?.value,
+          set: (name, value, options) => cookies().set({ name, value, ...options }),
+          remove: (name, options) => cookies().delete(name, options)
+        }
+      }
     );
     
     // Let Supabase handle cookie clearing properly
