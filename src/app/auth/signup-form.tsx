@@ -47,19 +47,54 @@ export function RegisterForm({ className, onSwitchToLogin }: RegisterFormProps) 
     setIsLoading(true)
     setError(null) // Clear previous errors
     try {
-      const formData = new FormData()
-      formData.append('email', values.email)
-      formData.append('password', values.password)
-      formData.append('confirmPassword', values.confirmPassword)
-      const result = await signupUser(formData)
-      if (result.error) throw new Error(result.error) // Error is set in catch block
-      // Consider redirecting based on result, e.g., if confirmationNeeded
-      router.push("/auth/confirmation") // <<< Changed redirect path
+      // Primary approach: Use the API route handler
+      try {
+        console.log('Attempting signup via API route...');
+        
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: values.email,
+            password: values.password,
+            confirmPassword: values.confirmPassword,
+          }),
+          credentials: 'include', // Important for cookies
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Registration failed');
+        }
+        
+        console.log('Signup successful via API route');
+        
+        // Redirect to confirmation page based on result
+        router.push("/auth/confirmation");
+      } catch (apiError: any) {
+        console.error('API route signup error:', apiError.message);
+        
+        // Fallback: Use server action if API route fails
+        console.log('Falling back to server action...');
+        const formData = new FormData();
+        formData.append('email', values.email);
+        formData.append('password', values.password);
+        formData.append('confirmPassword', values.confirmPassword);
+        
+        const result = await signupUser(formData);
+        if (result.error) throw new Error(result.error);
+        
+        // Redirect to confirmation page
+        router.push("/auth/confirmation");
+      }
     } catch (error: any) {
-      setError(error.message || "Failed to sign up") // Set error state here
-      console.error("Registration error:", error)
+      setError(error.message || "Failed to sign up");
+      console.error("Registration error:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 

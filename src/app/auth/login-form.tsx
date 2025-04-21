@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Icons } from "@/components/ui/icons" // Keep this for spinner (and fix google!)
-import { supabase } from "@/lib/supabaseClient"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/types/supabaseTypes'
+// Server action for login fallback
 import { loginUser } from "@/app/auth/actions"
 // --- Add Alert Imports ---
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -45,16 +47,59 @@ export function LoginForm({ className, onSuccess, onSwitchToSignup, ...props }: 
     setIsLoading(true)
     setError(null) // Clear previous errors
     try {
-      const formData = new FormData()
-      formData.append('email', values.email)
-      formData.append('password', values.password)
-      const result = await loginUser(formData)
-      if (result.error) throw new Error(result.error) // Error is set in catch block
-      if (onSuccess) onSuccess()
-      else {
-        router.push("/dashboard")
-        router.refresh() // Refresh to update server component data if needed
+      console.log('Login attempt for:', values.email);
+      
+      // Primary approach: Use the API route handler
+      try {
+        console.log('Attempting login via API route...');
+        
+        const response = await fetch('/api/auth/signin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: values.email,
+            password: values.password,
+          }),
+          credentials: 'include', // Important for cookies
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Authentication failed');
+        }
+        
+        if (result.success) {
+          console.log('Login successful via API route');
+        } else {
+          throw new Error('Login response missing success status');
+        }
+      } catch (apiError: any) {
+        console.error('API route login error:', apiError.message);
+        
+        // Fallback: Use server action if API route fails
+        console.log('Falling back to server action...');
+        const formData = new FormData();
+        formData.append('email', values.email);
+        formData.append('password', values.password);
+        
+        const result = await loginUser(formData);
+        if (result.error) throw new Error(result.error);
       }
+      
+      console.log('Login successful, redirecting to dashboard')
+      
+      // Wait briefly to ensure auth state has updated
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess()
+        } else {
+          router.replace("/dashboard")
+        }
+      }, 200)
+      
     } catch (error: any) {
       setError(error.message || "Failed to sign in") // Set error state here
       console.error("Login error:", error)
@@ -67,14 +112,40 @@ export function LoginForm({ className, onSuccess, onSwitchToSignup, ...props }: 
     setIsOAuthLoading(true);
     setError(null); // Clear previous errors
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const supabase = createClientComponentClient<Database>();
+      
+      console.log("Initiating Google OAuth flow");
+      
+      // Set the callback URL with origin
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      console.log("Redirect URL:", redirectTo);
+      
+      // Start the OAuth flow
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      })
-      if (error) throw error
+        options: { 
+          redirectTo,
+          // Add these parameters to help with possible certificate issues
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      });
+      
+      if (error) {
+        console.error("OAuth error:", error);
+        throw error;
+      }
+      
+      // If we have a URL to redirect to, use it
+      if (data?.url) {
+        console.log("OAuth flow started, redirecting to provider");
+        window.location.href = data.url;
+      }
     } catch (error: any) {
-      setError(error.message || "Failed to sign in with Google"); // Set error state here
-      console.error("OAuth error:", error)
+      console.error("OAuth error:", error);
+      setError(error.message || "Failed to sign in with Google");
       setIsOAuthLoading(false);
     }
   }

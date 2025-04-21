@@ -4,6 +4,15 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabaseTypes';
 
+// Default cookie options to ensure consistency
+const cookieOptions = {
+  path: "/",
+  maxAge: 0, // Expire immediately for logout
+  sameSite: "none" as const, // Enable cross-site refresh
+  secure: true, // Required with SameSite=None
+  httpOnly: true
+};
+
 export async function POST() {
   try {
     // Create Supabase client using the server client
@@ -17,10 +26,10 @@ export async function POST() {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: any) {
-            cookieStore.set({ name, value, ...options });
+            cookieStore.set({ name, value, ...{ ...cookieOptions, ...options } });
           },
           remove(name: string, options: any) {
-            cookieStore.delete(name, options);
+            cookieStore.delete(name, { ...cookieOptions, ...options });
           },
         },
       }

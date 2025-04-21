@@ -51,8 +51,9 @@ export async function GET(request: NextRequest) {
         const cookieOptions = {
             path: "/",
             maxAge: 60 * 60 * 24 * 7, // 1 week
-            sameSite: "lax" as const,
-            secure: process.env.NODE_ENV === "production"
+            sameSite: "none" as const, // Enable cross-site refresh
+            secure: true, // Required with SameSite=None
+            httpOnly: true
         };
         
         // Set session cookie
