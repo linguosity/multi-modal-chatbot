@@ -1,6 +1,6 @@
 // src/app/api/auth/signin/route.ts
 import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabaseTypes';
 
@@ -25,25 +25,12 @@ export async function POST(request: Request) {
       );
     }
     
-    // Initialize Supabase client
-    const cookieStore = cookies();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options: any) {
-            cookieStore.set({ name, value, ...{ ...cookieOptions, ...options } });
-          },
-          remove(name: string, options: any) {
-            cookieStore.delete(name, { ...cookieOptions, ...options });
-          },
-        },
-      }
-    );
+    // Initialize Supabase client using the route handler client
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies 
+    }, {
+      cookieOptions
+    });
     
     // Sign in with email and password
     const { data, error } = await supabase.auth.signInWithPassword({

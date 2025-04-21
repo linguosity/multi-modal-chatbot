@@ -1,7 +1,8 @@
 // src/app/auth/callback/route.ts
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabaseTypes';
 
 export async function GET(request: NextRequest) {
     const requestUrl = new URL(request.url);
@@ -16,9 +17,21 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        // Initialize Supabase client with error handling
-        const cookieStore = await cookies();
-        const supabase = await createClient(cookieStore);
+        // Default cookie options to ensure consistency
+        const cookieOptions = {
+            path: "/",
+            maxAge: 60 * 60 * 24 * 7, // 1 week
+            sameSite: "none" as const, // Enable cross-site refresh
+            secure: true, // Required with SameSite=None
+            httpOnly: true
+        };
+        
+        // Initialize Supabase client using the route handler client
+        const supabase = createRouteHandlerClient<Database>({ 
+            cookies 
+        }, {
+            cookieOptions
+        });
 
         // Exchange the code for a session
         console.log("[Auth Callback] Exchanging code for session...");
@@ -37,38 +50,9 @@ export async function GET(request: NextRequest) {
 
         console.log("[Auth Callback] Success, redirecting to:", next);
         
-        // Create a response with redirect
-        const response = NextResponse.redirect(new URL(next, request.url));
-        
-        // Explicitly set the session cookie (belt and suspenders approach)
-        // This helps in case the automatic cookie setting has issues
-        // Use standardized cookie options
-        const sessionKey = `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL}-auth-token`;
-        const accessTokenKey = 'sb-access-token';
-        const refreshTokenKey = 'sb-refresh-token';
-        
-        // Default cookie options to ensure consistency
-        const cookieOptions = {
-            path: "/",
-            maxAge: 60 * 60 * 24 * 7, // 1 week
-            sameSite: "none" as const, // Enable cross-site refresh
-            secure: true, // Required with SameSite=None
-            httpOnly: true
-        };
-        
-        // Set session cookie
-        response.cookies.set(sessionKey, JSON.stringify(data.session), cookieOptions);
-        
-        // Also explicitly set access and refresh tokens for redundancy
-        if (data.session?.access_token) {
-            response.cookies.set(accessTokenKey, data.session.access_token, cookieOptions);
-        }
-        
-        if (data.session?.refresh_token) {
-            response.cookies.set(refreshTokenKey, data.session.refresh_token, cookieOptions);
-        }
-        
-        return response;
+        // Just redirect to the next URL
+        // createRouteHandlerClient has already set the cookies correctly
+        return NextResponse.redirect(new URL(next, request.url));
     } catch (e) {
         console.error("[Auth Callback] Unhandled error:", e);
         // On error, always redirect to auth page
