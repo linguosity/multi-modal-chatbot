@@ -16,11 +16,10 @@ const cookieOptions = {
 export async function POST() {
   try {
     // Initialize Supabase client using the route handler client
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies 
-    }, {
-      cookieOptions
-    });
+    const supabase = createRouteHandlerClient<Database>(
+      { cookies: () => cookies() }, // Invoke cookies() at request time
+      { cookieOptions }
+    );
     
     // Let Supabase handle cookie clearing properly
     await supabase.auth.signOut();

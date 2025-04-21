@@ -27,11 +27,10 @@ export async function GET(request: NextRequest) {
         };
         
         // Initialize Supabase client using the route handler client
-        const supabase = createRouteHandlerClient<Database>({ 
-            cookies 
-        }, {
-            cookieOptions
-        });
+        const supabase = createRouteHandlerClient<Database>(
+            { cookies: () => cookies() }, // Invoke cookies() at request time
+            { cookieOptions }
+        );
 
         // Exchange the code for a session
         console.log("[Auth Callback] Exchanging code for session...");

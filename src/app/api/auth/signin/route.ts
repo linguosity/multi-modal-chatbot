@@ -26,11 +26,10 @@ export async function POST(request: Request) {
     }
     
     // Initialize Supabase client using the route handler client
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies 
-    }, {
-      cookieOptions
-    });
+    const supabase = createRouteHandlerClient<Database>(
+      { cookies: () => cookies() }, // Invoke cookies() at request time
+      { cookieOptions }
+    );
     
     // Sign in with email and password
     const { data, error } = await supabase.auth.signInWithPassword({

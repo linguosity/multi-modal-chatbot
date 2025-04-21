@@ -21,6 +21,9 @@ export async function createClient(cookieStore: ReadonlyRequestCookies) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
+        /**
+         * Get a cookie value. This is the only operation allowed with ReadonlyRequestCookies.
+         */
         async get(name: string) {
           try {
             const cookie = await cookieStore.get(name);
@@ -30,20 +33,35 @@ export async function createClient(cookieStore: ReadonlyRequestCookies) {
             return undefined;
           }
         },
+        /**
+         * WARNING: This won't work with ReadonlyRequestCookies!
+         * Only use in Route Handlers or Server Actions.
+         */
         async set(name: string, value: string, options: any) {
           try {
-            const mergedOptions = { ...defaultCookieOptions, ...options };
-            cookieStore.set({ name, value, ...mergedOptions });
+            if ('set' in cookieStore) {
+              const mergedOptions = { ...defaultCookieOptions, ...options };
+              // @ts-ignore - ReadonlyRequestCookies doesn't have set
+              cookieStore.set({ name, value, ...mergedOptions });
+            } else {
+              console.warn('Cannot set cookie: ReadonlyRequestCookies does not support set operation');
+            }
           } catch (error) {
-            // In production, setting cookies in middleware or server actions may throw
-            // This is a known issue: https://github.com/vercel/next.js/issues/49259
             console.warn('Error setting cookie', error);
           }
         },
+        /**
+         * WARNING: This won't work with ReadonlyRequestCookies!
+         * Only use in Route Handlers or Server Actions.
+         */
         async remove(name: string, options: any) {
           try {
-            // In Next.js server components, we should use delete instead of set with empty value
-            cookieStore.delete(name);
+            if ('delete' in cookieStore) {
+              // @ts-ignore - ReadonlyRequestCookies doesn't have delete
+              cookieStore.delete(name);
+            } else {
+              console.warn('Cannot delete cookie: ReadonlyRequestCookies does not support delete operation');
+            }
           } catch (error) {
             console.warn('Error removing cookie', error);
           }
