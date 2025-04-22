@@ -1,18 +1,25 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const userId = url.searchParams.get('userId');
   const reportId = url.searchParams.get('id'); // optional specific report
-
-  const cookieStore = await import('next/headers').then(m => m.cookies());
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-  }
-
+  const userId = url.searchParams.get('userId'); // optional for backward compatibility
+  
+  // Initialize server-side Supabase client
+  const cookieStore = await cookies();
   const supabase = await createClient(cookieStore);
+  
+  // Get user ID from the session
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+  
+  // Use authenticated user ID (or fall back to query param for backward compatibility)
+  const authenticatedUserId = user.id;
 
   // If reportId is provided, fetch a single report
   if (reportId) {
@@ -20,7 +27,7 @@ export async function GET(req: Request) {
       .from('speech_language_reports')
       .select('*') // Return full row
       .eq('id', reportId)
-      .eq('user_id', userId)
+      .eq('user_id', authenticatedUserId)
       .single();
 
     if (error) {
@@ -49,7 +56,7 @@ export async function GET(req: Request) {
   const { data, error } = await supabase
     .from('speech_language_reports')
     .select('id, report')
-    .eq('user_id', userId);
+    .eq('user_id', authenticatedUserId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

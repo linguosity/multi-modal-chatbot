@@ -2,57 +2,77 @@
   "node": {
     "0042b457e75d6723852e02e72e6be5e1cbaaf877ec": {
       "workers": {
-        "app/dashboard/[userId]/reports/[reportId]/page": {
+        "app/auth/page": {
+          "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
+          "async": false
+        },
+        "app/dashboard/page": {
           "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
           "async": false
         }
       },
       "layer": {
-        "app/dashboard/[userId]/reports/[reportId]/page": "action-browser"
+        "app/auth/page": "action-browser",
+        "app/dashboard/page": "action-browser"
       }
     },
     "00b80637bda5a6d9a0a0e26e371a616e4f4e087498": {
       "workers": {
-        "app/dashboard/[userId]/reports/[reportId]/page": {
+        "app/auth/page": {
+          "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
+          "async": false
+        },
+        "app/dashboard/page": {
           "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
           "async": false
         }
       },
       "layer": {
-        "app/dashboard/[userId]/reports/[reportId]/page": "action-browser"
+        "app/auth/page": "action-browser",
+        "app/dashboard/page": "action-browser"
       }
     },
     "40b96448baf166b8e57a61b0e8bdc42160480bc988": {
       "workers": {
-        "app/dashboard/[userId]/reports/[reportId]/page": {
+        "app/auth/page": {
+          "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
+          "async": false
+        },
+        "app/dashboard/page": {
           "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
           "async": false
         }
       },
       "layer": {
-        "app/dashboard/[userId]/reports/[reportId]/page": "action-browser"
+        "app/auth/page": "action-browser",
+        "app/dashboard/page": "action-browser"
       }
     },
     "40ec0eb9fca13ee0a38cf125842d466ce604cfa2fa": {
       "workers": {
-        "app/dashboard/[userId]/reports/[reportId]/page": {
+        "app/auth/page": {
+          "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
+          "async": false
+        },
+        "app/dashboard/page": {
           "moduleId": "(action-browser)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fauth%2Factions.tsx%22%2C%5B%7B%22id%22%3A%220042b457e75d6723852e02e72e6be5e1cbaaf877ec%22%2C%22exportedName%22%3A%22getCurrentUser%22%7D%2C%7B%22id%22%3A%2200b80637bda5a6d9a0a0e26e371a616e4f4e087498%22%2C%22exportedName%22%3A%22logoutUser%22%7D%2C%7B%22id%22%3A%2240b96448baf166b8e57a61b0e8bdc42160480bc988%22%2C%22exportedName%22%3A%22loginUser%22%7D%2C%7B%22id%22%3A%2240ec0eb9fca13ee0a38cf125842d466ce604cfa2fa%22%2C%22exportedName%22%3A%22signupUser%22%7D%5D%5D%5D&__client_imported__=true!",
           "async": false
         }
       },
       "layer": {
-        "app/dashboard/[userId]/reports/[reportId]/page": "action-browser"
+        "app/auth/page": "action-browser",
+        "app/dashboard/page": "action-browser"
       }
     },
-    "40d97b4f7d3b36c1b5abbf6b5e2ef754202e2eb278": {
+    "00072175065df8c873998760630da1b6f6d20e3806": {
       "workers": {
-        "app/api/batch/submit/route": {
-          "moduleId": "(rsc)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fapi%2Fbatch%2Fsubmit%2Froute.ts%22%2C%5B%7B%22id%22%3A%2240d97b4f7d3b36c1b5abbf6b5e2ef754202e2eb278%22%2C%22exportedName%22%3A%22POST%22%7D%5D%5D%5D&__client_imported__=!",
+        "app/dashboard/page": {
+          "moduleId": "(rsc)/./node_modules/.pnpm/next@15.2.2_@opentelemetry+api@1.9.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fbrandonbrewer%2FDocuments%2FLinguosity%2FLinguosity%2Fsrc%2Fapp%2Fdashboard%2Fpage.tsx%22%2C%5B%7B%22id%22%3A%2200072175065df8c873998760630da1b6f6d20e3806%22%2C%22exportedName%22%3A%22default%22%7D%5D%5D%5D&__client_imported__=!",
           "async": false
         }
       },
       "layer": {
-        "app/api/batch/submit/route": "rsc"
+        "app/dashboard/page": "rsc"
       }
     }
   },

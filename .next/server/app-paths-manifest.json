@@ -1,4 +1,7 @@
 {
-  "/api/batch/submit/route": "app/api/batch/submit/route.js",
-  "/dashboard/[userId]/reports/[reportId]/page": "app/dashboard/[userId]/reports/[reportId]/page.js"
+  "/api/auth/signin/route": "app/api/auth/signin/route.js",
+  "/auth/page": "app/auth/page.js",
+  "/page": "app/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

@@ -1,48 +1,21 @@
 // src/app/dashboard/page.tsx
-'use client';
+'use server';
 
-import React, { useEffect } from "react";
-import {
-    Breadcrumb, // Keep if used
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator"; // Keep if used
-import { SidebarTrigger } from "@/components/ui/sidebar"; // Keep if used
+import { cookies } from 'next/headers';
+import { requireAuth } from '@/lib/supabase/server';
+import type { Database } from '@/types/supabaseTypes';
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/auth/auth-provider";
-// --- Import the new spinner ---
-import { LoaderIcon } from "lucide-react";
-// --- Removed old Icons import if no longer needed ---
-// import { Icons } from '@/components/ui/icons';
-// --- Import specific icons used in the dashboard content ---
+// Import icons directly for server component
 import { FileText, Globe, Mic, Plus } from "lucide-react";
 
-export default function Page() {
-    const { user, isLoading } = useAuth();
-    const router = useRouter();
-
-    // Redirect to /auth if not authenticated (client-side fallback)
-    useEffect(() => {
-        if (!isLoading && !user) {
-            router.replace('/auth');
-        }
-    }, [user, isLoading, router]);
-
-    // --- Show centered LoaderIcon while checking auth ---
-    if (isLoading || !user) {
-        return (
-            <div className="flex h-[calc(100vh-theme(spacing.16))] w-full items-center justify-center"> {/* Adjust height calc if needed */}
-                {/* --- Use LoaderIcon --- */}
-                <LoaderIcon className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        );
-    }
+export default async function DashboardPage() {
+  // Get the cookie store
+  const cookieStore = await cookies();
+  
+  // Use our helper function that checks both getUser and getSession
+  // This will redirect to /auth if the user is not authenticated
+  const user = await requireAuth(cookieStore);
 
     // --- Render actual page content ONLY if authenticated and not loading ---
     return (
@@ -58,8 +31,7 @@ export default function Page() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {/* Reports card */}
                 <Link
-                    // Make href dynamic if possible, e.g., `/dashboard/${user.id}/reports`
-                    href={`/dashboard/${user.id || 'user'}/reports`} // Example using user ID
+                    href="/dashboard/reports"
                     className="block group"
                 >
                     <div className="col-span-1 rounded-xl border bg-card p-6 shadow-sm h-full hover:shadow-md transition-shadow duration-200 ease-in-out">
@@ -110,8 +82,7 @@ export default function Page() {
                 <h2 className="text-2xl font-medium mb-4">Recent Activity</h2>
                 <div className="border rounded-lg p-6 bg-card text-center">
                     <p className="text-muted-foreground">Create your first report to see activity here</p>
-                    {/* Make href dynamic if possible, e.g., `/dashboard/${user.id}/reports/new` */}
-                    <Link href={`/dashboard/${user.id || 'user'}/reports/new`}> {/* Example using user ID */}
+                    <Link href="/dashboard/reports/new">
                         <Button className="mt-4">
                             <Plus className="h-4 w-4 mr-2" />
                             Create a Report

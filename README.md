@@ -335,7 +335,22 @@ This implementation provides a much more intuitive workflow for speech-language 
 
 ## Getting Started
 
-First, run the development server:
+### Development with SSL Certificate Issues
+
+If you're encountering SSL/TLS certificate issues (common in development):
+
+```bash
+# Use the safe dev command that disables TLS verification
+npm run dev:safe
+# or 
+yarn dev:safe
+# or
+pnpm dev:safe
+```
+
+### Standard Development
+
+For normal development without SSL issues:
 
 ```bash
 npm run dev
@@ -343,13 +358,31 @@ npm run dev
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+### Authentication
+
+The application now uses Supabase for authentication with server-side routes. Make sure to:
+
+1. Have a Supabase project with authentication enabled
+2. Set the following environment variables in `.env.local`:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+   ```
+
+### Troubleshooting
+
+If you encounter issues:
+
+1. Try using `npm run dev:safe` to bypass SSL certificate issues
+2. Check browser console for error messages
+3. Clear browser cookies and localStorage
+4. Ensure Supabase project settings match your environment variables
 
 This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
 

@@ -3,6 +3,13 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
+// Set NODE_TLS_REJECT_UNAUTHORIZED=0 only in development
+// This will allow self-signed certificates to be accepted
+if (process.env.NODE_ENV === 'development') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  console.log('⚠️ TLS certificate verification disabled for development');
+}
+
 const nextConfig = {
   // Simplified config - rely on Next.js default handling
   eslint: {
@@ -21,6 +28,11 @@ const nextConfig = {
   experimental: {
     // Disable automatic static optimization for pages that need getStaticProps
     optimizeServerReact: true,
+  },
+  
+  // Add this to help with fetch issues
+  httpAgentOptions: {
+    keepAlive: true,
   },
   
   // Ensure proper MIME types are set for DOCX files
@@ -49,6 +61,12 @@ const nextConfig = {
       type: 'asset/resource',
     });
     return config;
+  },
+  
+  // Add environment variables to be available at build time
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   },
 };
 

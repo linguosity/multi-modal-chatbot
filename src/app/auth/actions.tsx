@@ -121,25 +121,50 @@ export async function signupUser(formData: FormData) {
  * Server action for user logout
  */
 export async function logoutUser() {
+  console.log('[Logout Action] Starting logout process');
   const cookieStore = await cookies();
-   // --- FIX: Add await ---
   const supabase = await createClient(cookieStore);
 
   if (!supabase) {
-    console.error('[Logout Action Error] Supabase client failed');
+    console.error('[Logout Action] Supabase client could not be initialized');
     return { error: 'Logout failed: Server error' };
   }
 
-  const { error } = await supabase.auth.signOut();
+  try {
+    // Use signOut with scope: 'local' to only sign out on this device
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
 
-  if (error) {
-    console.error('[Logout Action Error]', error.message);
-    return { error: `Logout failed: ${error.message}` };
+    if (error) {
+      console.error('[Logout Action] Error during signOut:', error.message);
+      return { error: `Logout failed: ${error.message}` };
+    }
+
+    // Manually clear auth cookies to prevent issues
+    const cookiesToClear = [
+      'sb-access-token',
+      'sb-refresh-token',
+      `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL}-auth-token`
+    ];
+
+    // Delete each potential auth cookie
+    for (const cookieName of cookiesToClear) {
+      try {
+        cookieStore.delete(cookieName);
+        console.log(`[Logout Action] Deleted cookie: ${cookieName}`);
+      } catch (e) {
+        console.warn(`[Logout Action] Error deleting cookie ${cookieName}:`, e);
+      }
+    }
+
+    console.log('[Logout Action] User successfully signed out');
+    
+    // Return success instead of redirecting
+    // This lets the client handle the redirect to avoid potential issues
+    return { success: true };
+  } catch (e) {
+    console.error('[Logout Action] Unexpected error during logout:', e);
+    return { error: 'Logout failed due to an unexpected error' };
   }
-
-  console.log('[Logout Action] User signed out');
-   // --- FIX: Redirect to /auth ---
-  redirect('/auth');
 }
 
 /**
