@@ -4,17 +4,225 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 
 ## Project Overview
 
-Linguosity is an AI-powered application designed to assist Speech-Language Pathologists (SLPs) in creating comprehensive assessment reports. The application leverages Claude's capabilities to process and analyze assessment data, generate professional reports, and export them in various formats.
+Linguosity is an AI-powered application designed to assist Speech-Language Pathologists (SLPs) in creating comprehensive assessment reports. The application leverages advanced AI capabilities, including Claude and OpenAI models, to streamline data analysis, automate report generation, and facilitate easy export of documents.
 
 ### Key Features
 
-- **Intelligent Report Generation**: Create professional speech-language assessment reports with AI assistance
-- **PDF Document Processing**: Upload assessment PDFs for automatic data extraction
-- **DOCX Export**: Export reports as Microsoft Word documents with customizable templates
-- **Interactive Editing**: Modify report sections with real-time AI feedback
-- **Domain-Specific Tools**: Organize assessment tools by language domain (receptive, expressive, etc.)
-- **Multi-format Export**: Export reports as DOCX or HTML
-- **User-Specific Reports**: Each user has their own reports section with proper navigation
+*   **AI-Assisted Report Generation**: Utilizes OpenAI and Claude models to create professional speech-language assessment reports.
+*   **PDF Data Extraction**: Upload assessment PDFs for automated data extraction and integration into reports.
+*   **Multi-Format Export**: Export reports as DOCX and HTML, with support for customizable templates.
+*   **Real-Time Interactive AI Editing**: Modify and refine report sections with real-time AI assistance using Claude's text editor tool.
+*   **Domain-Specific Assessment Tool Management**: Organize and manage assessment tools categorized by specific language domains (e.g., receptive, expressive).
+*   **User Account Management**: Secure, user-specific accounts for managing individual reports and settings, powered by a Supabase backend.
+*   **Batch Processing for Reports**: Efficiently generate multiple report sections in parallel for faster turnaround.
+*   **Secure Authentication**: Robust user authentication and management to ensure data privacy and security.
+
+## Project Structure
+
+This project follows a standard Next.js application structure, with some specific additions for our features:
+
+*   **`src/app/`**: Contains the core Next.js application logic, including:
+    *   Pages and API routes (e.g., `src/app/dashboard/`, `src/app/api/auth/`).
+    *   Global layout files (`layout.tsx`) and stylesheets (`globals.css`).
+    *   Route-specific components and logic.
+*   **`src/components/`**: Houses shared UI components used throughout the application.
+    *   Includes subdirectories like `ui/` for shadcn/ui components.
+    *   Contains custom components such as `header.tsx`, `app-sidebar.tsx`, and feature-specific components (e.g., `reports/`, `assessment/`).
+*   **`src/lib/`**: Provides utility functions, helper scripts, and core logic modules.
+    *   Examples: AI integration logic (e.g., `aiProvider.ts`, `claudeListGenerator.ts`), Supabase client setup (`supabase/`), DOCX generation (`docx-generator.ts`), and various utility functions (`utils.ts`).
+*   **`src/hooks/`**: Contains custom React hooks to encapsulate reusable stateful logic (e.g., `useMobile.tsx`, `useReportUpdater.ts`).
+*   **`public/`**: Stores static assets that are publicly accessible.
+    *   Includes images (`linguosity_logo.jpg`, `landing-page-image.png`), favicons, and document templates (`public/templates/`).
+
+### Key Configuration Files
+
+*   **`next.config.js`**: Configures Next.js build settings, environment variables, webpack modifications, and server behavior.
+*   **`middleware.ts`**: Implements request middleware for authentication, authorization, and URL redirections.
+*   **`tailwind.config.ts`**: Defines the Tailwind CSS theme, customizations, and plugins.
+*   **`components.json`**: Configuration file for shadcn/ui, tracking installed components.
+*   **`.env.local`**: (Not committed, use `.env.example` as a template) Stores environment variables like API keys and Supabase credentials.
+*   **`package.json`**: Lists project dependencies, scripts (for development, building, linting), and project metadata.
+*   **`tsconfig.json`**: Specifies TypeScript compiler options for the project.
+*   **`pnpm-lock.yaml`**: Lockfile for pnpm, ensuring consistent dependency installations.
+
+## Core Technologies/Stack
+
+Linguosity is built with a modern, robust technology stack:
+
+### Frameworks & Frontend
+*   **Next.js**: React framework for server-side rendering, static site generation, and API routes.
+*   **React**: JavaScript library for building dynamic user interfaces.
+*   **TypeScript**: Typed superset of JavaScript, enhancing code quality and maintainability.
+*   **Tailwind CSS**: Utility-first CSS framework for rapid UI development.
+*   **shadcn/ui**: Accessible and customizable UI components.
+*   **Framer Motion**: Animation library for creating fluid user experiences.
+
+### AI & Machine Learning
+*   **Vercel AI SDK**: Simplifies integration with various AI models and providers.
+*   **OpenAI API**: Leveraged for diverse AI-driven features, including text generation and analysis.
+*   **Anthropic Claude API**: Utilized for advanced language processing, particularly its text editing and document understanding capabilities.
+
+### Backend & Database
+*   **Supabase**: Provides backend-as-a-service, including user authentication, a PostgreSQL database, and real-time capabilities.
+
+### Document Generation
+*   **Docxtemplater**: Library for generating .docx documents from templates.
+*   **Pizzip**: Used by Docxtemplater for handling .zip file operations (as .docx files are zipped XML).
+
+### State Management & Forms
+*   **Zustand**: Lightweight and flexible state management solution for React.
+*   **React Hook Form**: Efficient library for managing forms and validation.
+
+### Data Validation & Integrity
+*   **Zod**: TypeScript-first schema declaration and validation library, ensuring data consistency.
+
+### Development & Tooling
+*   **pnpm**: Fast and disk space-efficient package manager.
+
+## API Endpoints Overview
+
+The backend API provides various endpoints to support the application's features. These are primarily located under `src/app/api/`.
+
+*   **`/api/auth/`**: Manages all aspects of user authentication, including login, signup, logout, and session handling.
+*   **`/api/batch/`**: Handles batch processing requests, such as the simultaneous generation of multiple report sections or complete documents.
+*   **`/api/check-api-key/`**: Provides endpoints for validating external API keys (e.g., for OpenAI, Anthropic/Claude).
+*   **`/api/generate-image/`**: Contains logic for any image generation capabilities within the application.
+*   **`/api/generate-template/`**: Manages the creation, retrieval, and customization of report templates.
+*   **`/api/lists/`**: Supports CRUD operations for customizable lists, like wordlists or other assessment-related lists.
+*   **`/api/reports/`**: Offers endpoints for creating, reading, updating, and deleting user-specific reports.
+*   **`/api/stories/`**: Includes functionality related to story generation or narrative creation tools.
+*   **`/api/text-editor-test/`**: Houses specific API routes for testing and integrating with the Claude text editor tool.
+
+**Note:** For more detailed information on user-facing application routes used for testing various report functionalities, please refer to the `test_routes.md` file in the repository.
+
+## Authentication and Authorization
+
+The application employs a robust system for managing user access and protecting routes, primarily leveraging Supabase and Next.js middleware.
+
+### Supabase for Authentication
+
+*   **User Management**: All core authentication processes, including user signup, login, password recovery, and session management, are handled by [Supabase](https://supabase.com/).
+*   **Prerequisites**: To use the authentication features, developers need an active Supabase project with the Authentication service correctly configured and enabled.
+
+### Route Protection with `middleware.ts`
+
+*   **Access Control**: The `src/middleware.ts` file is central to the application's security model. It intercepts incoming requests to protected routes and API endpoints.
+*   **Authentication Checks**: The middleware verifies the user's authentication status (e.g., by checking for a valid session cookie managed by Supabase) before allowing access to sensitive areas of the application.
+
+### Redirection Logic
+
+The middleware implements the following redirection rules:
+
+*   **Authenticated Users on Auth Pages**: If an already authenticated user attempts to access authentication-related pages (e.g., `/auth/login`, `/auth/signup`), they are redirected to their main dashboard (typically `/dashboard`).
+*   **Unauthenticated Users on Protected Routes**: If an unauthenticated user tries to access protected routes (e.g., `/dashboard/*`, `/api/reports/*`, `/api/batch/*`), they are redirected to the login page (`/auth`).
+*   **Root Path (`/`) Handling**:
+    *   Authenticated users accessing the root path are redirected to `/dashboard`.
+    *   Unauthenticated users accessing the root path are redirected to `/auth`.
+*   **Legacy URL Redirection**: The middleware also handles redirects for legacy URL structures. For instance, requests to old `/reports/*` paths are intelligently redirected to the new user-specific report URLs (e.g., `/dashboard/[userId]/reports/[reportId]`) after ensuring the user is authenticated.
+
+### User-Specific Data Access
+
+*   Once a user is authenticated, the application's frontend and backend logic ensure that they can only access and manage data relevant to their account. For example, when a user views their reports, the system fetches and displays only the reports belonging to that specific user, based on their authenticated user ID.
+
+## DOCX Generation and Templates
+
+The application provides robust functionality for exporting reports into DOCX format, utilizing a templating system for flexibility and customization.
+
+### Core Libraries
+
+*   The primary libraries responsible for DOCX generation are:
+    *   **`docxtemplater`**: A library that replaces tags in a DOCX template with provided data.
+    *   **`pizzip`**: Used by `docxtemplater` to handle the underlying ZIP file structure of DOCX documents.
+
+### Template Storage
+
+*   All DOCX templates are stored in the `public/templates/` directory.
+*   An example of a key template is `las-assessment-report-template.docx`. Other templates may exist for different report types or layouts.
+
+### Template Engine Basics
+
+*   `docxtemplater` works by parsing `.docx` template files that contain specific tags (e.g., `{firstName}`, `{report_date}`, `{assessment_results}`). These tags are placeholders that get dynamically replaced with actual data from the application when a document is generated.
+*   The templating engine supports more advanced features such as:
+    *   **Loops**: For iterating over lists of items, such as strengths, needs, or recommendations, and rendering them appropriately (e.g., as bullet points).
+    *   **Conditional rendering**: While not extensively detailed here, `docxtemplater` can support showing or hiding blocks of content based on data conditions.
+
+### Data Preparation
+
+*   Before generating a DOCX file, the application gathers and structures the necessary data (e.g., student information, observations, assessment scores, narrative sections). This structured data object is then passed to `docxtemplater` to populate the template.
+
+### Customization and Best Practices
+
+*   Users can customize the appearance and content of their exported reports by:
+    *   Modifying the existing templates located in `public/templates/`.
+    *   Creating new `.docx` template files and ensuring they use the correct `docxtemplater` tag syntax.
+*   **Important Considerations for Custom Templates:**
+    *   **Valid DOCX Format**: Templates must be valid DOCX files. A common issue in the past was a template being a text file with a .docx extension, which lacks the necessary PK ZIP signature. Ensure templates are saved correctly from an editor like Microsoft Word.
+    *   **Tag Notation**: Pay close attention to tag notation. The system has been enhanced to handle data transformation (e.g., flattening nested objects like `header.studentInformation.firstName` to `header_studentInformation_firstName`), but consistency is key. Check existing templates for guidance.
+    *   **Data Structure for Loops**: When dealing with loops (e.g., for lists), ensure the data passed to the template matches the structure expected by `docxtemplater`'s loop tags.
+
+By understanding these basics, users can effectively manage and customize their DOCX report outputs.
+
+## AI Integration
+
+Linguosity harnesses the power of various AI models and services to provide its core features, streamlining the workflow for Speech-Language Pathologists.
+
+### Core AI Technologies
+
+The application integrates with the following primary AI services and SDKs:
+
+*   **Vercel AI SDK**: Used to simplify interactions with various AI models and providers, offering a unified interface for managing AI-driven functionalities.
+*   **OpenAI API**: Leveraged for a range of AI tasks, including text generation, data analysis, and potentially other utility functions within the application.
+*   **Anthropic (Claude) API**: Specifically utilized for advanced language processing, most notably through Claude's powerful text editing capabilities and document understanding.
+
+### Key AI-Powered Features
+
+*   **Automated Report Generation**: AI plays a crucial role in drafting various sections of speech-language assessment reports. This includes generating initial content for background information, summarizing assessment results, forming clinical impressions, and suggesting recommendations based on the input data.
+*   **PDF Data Extraction**: Users can upload PDF documents (e.g., standardized test protocols, previous reports). The AI then processes these documents to extract relevant data, such as test scores, behavioral observations, and other key information, integrating it into the current report structure.
+*   **Interactive Text Editing (Claude)**: A significant feature is the real-time, AI-assisted text editing powered by Claude's text editor tool. This allows users to select report sections and have Claude help refine, rephrase, or expand upon the content interactively.
+*   **Other AI Utilities**: The application may also employ AI for other specialized tasks such as generating domain-specific word lists or assisting in the creation of narrative components for reports, depending on the specific tools being used.
+
+### API Key Management
+
+*   **Crucial for Functionality**: The AI-powered features heavily rely on valid API keys for both OpenAI and Anthropic (Claude) services. Without these keys, most AI functionalities will not operate.
+*   **Configuration**: Users must configure these API keys in their local environment. This is done by adding the respective keys to the `.env.local` file:
+    ```env
+    OPENAI_API_KEY=your_openai_api_key
+    ANTHROPIC_API_KEY=your_anthropic_api_key
+    ```
+    (Note: The exact variable name for Claude might vary based on the integration provider; refer to the `.env.example` for specifics.)
+
+### Notes on Claude Integration
+
+The integration with Anthropic's Claude, especially its text editor tool, has specific considerations:
+
+*   **Two-Step Conversation Flow**: Claude's text editor tool often follows a two-step process: it first requests to `view` the content before making edits with commands like `str_replace`. The application is designed to handle this conversational flow.
+*   **Explicit Prompting**: For reliable and accurate results from Claude, especially when using its tools, system messages and user prompts need to be clear and explicit. The application incorporates carefully crafted prompts to guide the AI.
+*   **Server-Side Configuration**: For full functionality, especially for advanced features like the Model Completion Protocol (MCP) demo, proper server-side API configuration is essential. Client-side simulations are for development fallbacks only.
+
+### System Prompts and Prompt Engineering
+
+The quality and relevance of AI-generated content are significantly influenced by the design of system messages and user prompts. The application employs prompt engineering techniques to ensure that interactions with the AI models are optimized for the specific context of speech-language pathology reporting.
+
+## Linting and Code Quality
+
+To maintain a high standard of code quality, consistency, and to prevent common errors, the project utilizes the following tools and practices:
+
+### ESLint for Linting
+
+*   **Purpose**: The project uses [ESLint](https://eslint.org/) to analyze JavaScript/TypeScript code for patterns and potential issues. It helps enforce coding standards and improves overall code consistency.
+*   **Configuration**: ESLint's configuration can be found in the `.eslintrc.json` file (and potentially `eslint.config.js` if present, though `.eslintrc.json` is the primary Next.js default). This file defines the rules and plugins used for linting.
+
+### Running the Linter
+
+*   To manually check the codebase for linting errors, use the following command:
+    ```bash
+    pnpm lint
+    ```
+    This command will scan the project files and report any violations of the configured ESLint rules.
+
+### TypeScript for Type Safety
+
+*   The extensive use of [TypeScript](https://www.typescriptlang.org/) throughout the project is a core aspect of our code quality strategy. TypeScript's static type checking helps detect many common errors during development, leading to more robust and maintainable code.
 
 ## March 30, 2025 Update: User-Specific Reports Structure and Navigation
 
@@ -335,54 +543,77 @@ This implementation provides a much more intuitive workflow for speech-language 
 
 ## Getting Started
 
-### Development with SSL Certificate Issues
+This guide will help you set up and run the Linguosity project locally.
 
-If you're encountering SSL/TLS certificate issues (common in development):
+### Prerequisites
 
-```bash
-# Use the safe dev command that disables TLS verification
-npm run dev:safe
-# or 
-yarn dev:safe
-# or
-pnpm dev:safe
-```
+Before you begin, ensure you have the following installed:
 
-### Standard Development
+*   **Node.js**: LTS version (e.g., 18.x or 20.x) is recommended. You can download it from [nodejs.org](https://nodejs.org/).
+*   **pnpm**: This project uses pnpm as its package manager. If you don't have it installed, follow the instructions at [pnpm.io/installation](https://pnpm.io/installation).
 
-For normal development without SSL issues:
+### Setup Instructions
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-```
+1.  **Clone the repository:**
+    First, clone your forked repository to your local machine. If you haven't forked it yet, please do so first.
+    ```bash
+    git clone https://github.com/your-username/linguosity.git # Replace with your fork's URL
+    cd linguosity
+    ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2.  **Install dependencies:**
+    Navigate to the project directory and install the required packages using pnpm:
+    ```bash
+    pnpm install
+    ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3.  **Set up environment variables:**
+    Environment variables are crucial for the application to connect to various services.
+    *   Copy the example environment file to create your local configuration:
+        ```bash
+        cp .env.example .env.local
+        ```
+    *   Open the `.env.local` file and update it with your actual credentials.
+        ```env
+        # OpenAI API Key
+        OPENAI_API_KEY=your_openai_api_key
 
-### Authentication
+        # Supabase Project Credentials
+        # Obtain these from your Supabase project settings
+        NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+        NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+        SUPABASE_SERVICE_KEY=your_supabase_service_key # Required for service-level functions
 
-The application now uses Supabase for authentication with server-side routes. Make sure to:
+        # Anthropic/Claude API Key
+        # This key is necessary for features utilizing Claude.
+        # The exact environment variable name (e.g., ANTHROPIC_API_KEY or using OPENAI_API_KEY for Claude access via certain providers)
+        # should be confirmed based on the specific Claude integration points in the application.
+        # For now, we'll use ANTHROPIC_API_KEY as a placeholder.
+        ANTHROPIC_API_KEY=your_anthropic_api_key
+        ```
 
-1. Have a Supabase project with authentication enabled
-2. Set the following environment variables in `.env.local`:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-   ```
+4.  **Supabase Project Setup:**
+    *   You will need an active Supabase project. If you don't have one, create it at [supabase.com](https://supabase.com/).
+    *   Ensure that Supabase Authentication is enabled in your project settings.
+    *   The necessary database schema and tables should be set up. (Refer to any specific schema migration guides if available, though detailed schema setup is beyond the scope of this README).
 
-### Troubleshooting
+### Running the Development Server
 
-If you encounter issues:
+Once the setup is complete, you can start the development server:
 
-1. Try using `npm run dev:safe` to bypass SSL certificate issues
-2. Check browser console for error messages
-3. Clear browser cookies and localStorage
-4. Ensure Supabase project settings match your environment variables
+*   **Standard mode:**
+    ```bash
+    pnpm dev
+    ```
+
+*   **For SSL/TLS issues (unsafe mode):**
+    If you encounter SSL certificate errors (often in corporate environments or with custom local network configurations), you can use the `dev:safe` script. This command sets `NODE_TLS_REJECT_UNAUTHORIZED=0`, disabling TLS certificate verification.
+    ```bash
+    pnpm dev:safe
+    ```
+
+*   **Accessing the application:**
+    After the server starts (typically on port 3000), open [http://localhost:3000](http://localhost:3000) in your web browser to see the application.
 
 This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
 
