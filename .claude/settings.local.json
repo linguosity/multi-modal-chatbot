@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn-ui:*)",
+      "Bash(rm:*)",
+      "Bash(rg:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint)",
+      "Bash(mv:*)",
+      "Bash(/Users/brandonbrewer/.nvm/versions/node/v20.18.3/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"import.*from [''\"\"]@\" src -g \"*.ts\" -g \"*.tsx\")",
+      "Bash(/Users/brandonbrewer/.nvm/versions/node/v20.18.3/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"(supabase|radix|openai|aws-sdk|framer-motion|lucide|zod|zustand|react-hook-form|docxtemplater|pizzip|file-saver|uuid|date-fns)\" src -g \"*.ts\" -g \"*.tsx\")",
+      "Bash(/Users/brandonbrewer/.nvm/versions/node/v20.18.3/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"from ['\\\"](@radix-ui|@supabase|@aws-sdk|@ai-sdk|@hookform|ai|openai|framer-motion|lucide-react|zod|zustand|react-hook-form|docxtemplater|pizzip|file-saver|uuid|date-fns|class-variance-authority|clsx|tailwind-merge|tailwindcss-animate|react-day-picker|react-scroll|react-use-measure|mcp-server-text-editor)\" src -g \"*.ts\" -g \"*.tsx\")",
+      "Bash(npm audit:*)",
+      "Bash(node:*)",
+      "Bash(/Users/brandonbrewer/.nvm/versions/node/v20.18.3/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"react-scroll|react-use-measure|@types/react-scroll|mcp-server-text-editor\" src -g \"*.ts\" -g \"*.tsx\")",
+      "Bash(ANALYZE=true npm run build)",
+      "Bash(sed:*)",
+      "Bash(npm run dev:*)",
+      "Bash(pnpm install:*)",
+      "Bash(/Users/brandonbrewer/.nvm/versions/node/v20.18.3/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -A 10 -B 5 \"useEffect.*\\[.*state\\.|useEffect.*\\[.*report\\.|useEffect.*\\[.*props\\.\" src/)",
+      "Bash(/Users/brandonbrewer/.nvm/versions/node/v20.18.3/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -A 5 -B 2 \"useEffect.*\\[.*state\\.\" src/)",
+      "Bash(unset TURBOPACK)",
+      "Bash(DEBUG=next:*)",
+      "Bash(pnpm run dev:*)",
+      "Bash(/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -A 20 \"EditorPanel\" src/components/reports/ReportSections.tsx)"
+    ],
+    "deny": []
+  }
+}
