@@ -6,31 +6,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Format date as a string (e.g., "Jan 1, 2023")
-export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
 // Generate a unique ID
 export function generateId(length: number = 8): string {
   return Math.random().toString(36).substring(2, 2 + length)
-}
-
-// Calculate age from date of birth
-export function calculateAge(dateOfBirth: string): number {
-  const dob = new Date(dateOfBirth)
-  const today = new Date()
-  let age = today.getFullYear() - dob.getFullYear()
-  const m = today.getMonth() - dob.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
-    age--
-  }
-  return age
 }
 
 // Deep merge two objects
@@ -40,16 +18,21 @@ export function deepMerge<T>(target: T, source: Partial<T>): T {
   if (isObject(target) && isObject(source)) {
     Object.keys(source).forEach(key => {
       if (isObject(source[key as keyof typeof source])) {
-        if (!(key in target)) {
-          Object.assign(output, { [key]: source[key as keyof typeof source] })
-        } else {
+        // Ensure target[key] is an object before attempting to merge into it.
+        // If target[key] is not an object (e.g., null, undefined, primitive),
+        // it should be overwritten by source[key] if source[key] is an object.
+        if (isObject(target[key as keyof T])) {
           output[key as keyof T] = deepMerge(
             target[key as keyof T],
             source[key as keyof typeof source] as any
-          )
+          );
+        } else {
+          // target[key] is not an object, so source[key] (which is an object) overwrites it.
+          Object.assign(output, { [key]: source[key as keyof typeof source] });
         }
       } else {
-        Object.assign(output, { [key]: source[key as keyof typeof source] })
+        // source[key] is not an object (primitive or array), so assign it directly.
+        Object.assign(output, { [key]: source[key as keyof typeof source] });
       }
     })
   }

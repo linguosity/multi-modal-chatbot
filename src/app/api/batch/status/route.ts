@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { deepMerge } from '@/lib/report-utilities';
+import { deepMerge } from '@/lib/utils'; // Changed import path
 import { SpeechLanguageReportSchema } from '@/types/reportSchemas';
 import { ZodError } from 'zod';
 import { createServerClient, createRouteHandlerClient } from '@supabase/ssr';

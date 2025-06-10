@@ -121,39 +121,6 @@ export function safeCloneReport(report: SpeechLanguageReport): SpeechLanguageRep
   }
 }
 
-/**
- * Deep merge utility function for properly merging nested objects and arrays
- */
-export function deepMerge(target: any, source: any): any {
-  if (!source || typeof source !== 'object') return source;
-  if (!target || typeof target !== 'object') return { ...source };
-  
-  const result = { ...target };
-  
-  Object.keys(source).forEach(key => {
-    const targetValue = result[key];
-    const sourceValue = source[key];
-    
-    if (Array.isArray(sourceValue)) {
-      result[key] = [...sourceValue];
-    }
-    else if (
-      typeof sourceValue === 'object' && 
-      sourceValue !== null && 
-      typeof targetValue === 'object' && 
-      targetValue !== null &&
-      !Array.isArray(targetValue)
-    ) {
-      result[key] = deepMerge(targetValue, sourceValue);
-    }
-    else {
-      result[key] = sourceValue;
-    }
-  });
-  
-  return result;
-}
-
 // ====================
 // REPORT CREATION & VALIDATION
 // ====================

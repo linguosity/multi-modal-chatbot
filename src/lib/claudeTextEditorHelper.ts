@@ -4,19 +4,26 @@
  */
 
 import { normalizeInput } from '@/lib/report-utilities';
-import { getFullSchemaOutline } from './batchApiHelper';
+import { getFullSchemaOutline } from './batchApiHelper'; // Assuming this is still needed for schema
+import {
+  ANTHROPIC_MODELS,
+  TEXT_EDITOR_TOOL_TYPES,
+  DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_MAX_TOKENS_TEXT_EDITOR,
+  DEFAULT_SLP_ASSISTANT_PERSONA
+} from '@/lib/config';
+import { anthropicApiCall } from './anthropicApiClient';
 
 /**
  * Get the appropriate text editor tool type based on the model
  */
 export function getTextEditorToolType(model: string): string {
-  if (model.includes('claude-3-5-sonnet')) {
-    return 'text_editor_20241022';
-  } else if (model.includes('claude-3-7-sonnet')) {
-    return 'text_editor_20250124';
+  if (model.includes(ANTHROPIC_MODELS.CLAUDE_3_5_SONNET)) {
+    return TEXT_EDITOR_TOOL_TYPES.FOR_CLAUDE_3_5_SONNET;
+  } else if (model.includes(ANTHROPIC_MODELS.CLAUDE_3_7_SONNET_20250219) || model.includes('claude-3-7-sonnet')) {
+    return TEXT_EDITOR_TOOL_TYPES.FOR_CLAUDE_3_7_SONNET;
   } else {
-    // Default to Claude 4 tool type
-    return 'text_editor_20250429';
+    return TEXT_EDITOR_TOOL_TYPES.DEFAULT_CLAUDE_4_TOOL;
   }
 }
 
@@ -24,13 +31,11 @@ export function getTextEditorToolType(model: string): string {
  * Create a structured prompt for the text editor tool to update reports
  */
 export async function createTextEditorPrompt(input: string, currentReport: any): Promise<string> {
-  const schemaOutline = getFullSchemaOutline();
+  const schemaOutline = getFullSchemaOutline(); // This implies batchApiHelper is still a relevant import
   const normalizedInput = await normalizeInput(input);
   
-  console.log('Creating prompt with input:', normalizedInput);
-  console.log('Current report passed to prompt:', JSON.stringify(currentReport, null, 2));
-  
-  return `You are an expert speech-language pathologist's assistant. I need you to analyze the provided input and update the existing report JSON using the text editor tool.
+  // Using DEFAULT_SLP_ASSISTANT_PERSONA from config
+  let promptContent = `${DEFAULT_SLP_ASSISTANT_PERSONA} I need you to analyze the provided input and update the existing report JSON using the text editor tool.
 
 Target Schema Structure:
 ${schemaOutline}
@@ -58,21 +63,19 @@ IMPORTANT:
 
 Please proceed step by step to update the report.`;
 
-  return prompt + '\n\nCurrent Report Content to Start With:\n```json\n' + JSON.stringify(currentReport, null, 2) + '\n```';
+  // Append current report content for Claude to use as starting point
+  // The original had a line: return prompt + '\n\nCurrent Report Content to Start With:\n```json\n' + JSON.stringify(currentReport, null, 2) + '\n```';
+  // This was problematic as it returned from within the function before the actual return.
+  // The current report content is added to the initial message in callClaudeWithTextEditor.
+  return promptContent;
 }
 
 /**
  * Create the tools array for Claude API call with text editor
  */
-export function createTextEditorTools(model: string = 'claude-3-7-sonnet-20250219') {
+export function createTextEditorTools(model: string = DEFAULT_ANTHROPIC_MODEL) {
   const toolType = getTextEditorToolType(model);
-  
-  return [
-    {
-      type: toolType,
-      name: 'str_replace_editor'
-    }
-  ];
+  return [{ type: toolType, name: 'str_replace_editor' }];
 }
 
 /**
@@ -88,145 +91,110 @@ export function prepareReportFile(report: any): string {
 export async function callClaudeWithTextEditor(
   prompt: string,
   initialFileContent: string,
-  model: string = 'claude-3-7-sonnet-20250219'
+  model: string = DEFAULT_ANTHROPIC_MODEL
 ): Promise<any> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is not set');
-  }
-
   const tools = createTextEditorTools(model);
   
+  let conversationMessages = [
+    {
+      role: 'user' as const, // Explicitly type role
+      content: prompt + '\n\nInitial report content to edit:\n```json\n' + initialFileContent + '\n```'
+    }
+  ];
+
+  let maxTurns = 8;
+  let finalApiResponse = null;
+  let allClaudeResponses = [];
+  let currentFileContent = initialFileContent;
+
   try {
-    // Initial message to Claude
-    let messages = [
-      {
-        role: 'user',
-        content: prompt + '\n\nInitial report content to edit:\n```json\n' + initialFileContent + '\n```'
-      }
-    ];
-
-    let maxTurns = 8; // Increased to allow for final view command
-    let finalResponse = null;
-    let allClaudeResponses = []; // Store all Claude responses to find file content
-    let currentFileContent = initialFileContent; // Track file state manually
-
     for (let turn = 0; turn < maxTurns; turn++) {
       console.log(`Claude conversation turn ${turn + 1}`);
       
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 8000,
-          tools,
-          messages
-        })
-      });
+      const requestBody = {
+        // model will be set by anthropicApiCall using the 'model' parameter passed to it
+        max_tokens: DEFAULT_MAX_TOKENS_TEXT_EDITOR,
+        tools,
+        messages: conversationMessages,
+      };
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Claude API request failed: ${response.status} ${response.statusText}. Details: ${errorText}`);
-      }
+      const data = await anthropicApiCall('messages', requestBody, model);
       
-      const data = await response.json();
       console.log(`Turn ${turn + 1} stop reason:`, data.stop_reason);
-      
-      // Store this response for later analysis
       allClaudeResponses.push(data);
       
-      // Add Claude's response to conversation
-      messages.push({
-        role: 'assistant',
+      conversationMessages.push({
+        role: 'assistant' as const, // Explicitly type role
         content: data.content
       });
 
-      // Check if Claude used tools
       if (data.stop_reason === 'tool_use') {
-        // Process tool uses and create tool results
         const toolResults = [];
-        
-        for (const content of data.content) {
-          if (content.type === 'tool_use') {
-            console.log(`Processing tool use: ${content.input?.command}`);
+        for (const contentBlock of data.content) { // Renamed 'content' to 'contentBlock' to avoid conflict
+          if (contentBlock.type === 'tool_use') {
+            console.log(`Processing tool use: ${contentBlock.input?.command}`);
             
-            let toolResult = {
-              type: 'tool_result',
-              tool_use_id: content.id,
-              content: 'Tool executed successfully'
-            };
+            let toolResultContent = 'Tool executed successfully'; // Default content
 
             // Simulate proper file operations and track content
-            if (content.input?.command === 'create') {
-              if (content.input.file_text) {
-                currentFileContent = content.input.file_text;
+            if (contentBlock.input?.command === 'create') {
+              if (contentBlock.input.file_text) {
+                currentFileContent = contentBlock.input.file_text;
                 console.log(`File created with ${currentFileContent.length} characters`);
               }
-              toolResult.content = 'File created successfully';
-            } else if (content.input?.command === 'str_replace') {
-              // Apply the string replacement to our tracked file content
-              const oldStr = content.input.old_str;
-              const newStr = content.input.new_str;
-              
-              if (oldStr && newStr !== undefined && currentFileContent.includes(oldStr)) {
+              toolResultContent = 'File created successfully';
+            } else if (contentBlock.input?.command === 'str_replace' && contentBlock.input.old_str !== undefined && contentBlock.input.new_str !== undefined) {
+              const oldStr = contentBlock.input.old_str;
+              const newStr = contentBlock.input.new_str;
+              if (currentFileContent.includes(oldStr)) {
                 currentFileContent = currentFileContent.replace(oldStr, newStr);
                 console.log(`Applied str_replace: "${oldStr.substring(0, 50)}..." -> "${newStr.substring(0, 50)}..."`);
-                console.log(`File now ${currentFileContent.length} characters`);
-                toolResult.content = 'Text replaced successfully';
+                toolResultContent = 'Text replaced successfully';
               } else {
                 console.warn(`str_replace failed: old_str not found in current content`);
-                toolResult.content = 'String not found in file';
+                toolResultContent = 'String not found in file';
               }
-            } else if (content.input?.command === 'view') {
-              // Return the current file content for view commands
-              toolResult.content = currentFileContent;
+            } else if (contentBlock.input?.command === 'view') {
+              toolResultContent = currentFileContent;
               console.log(`Returning file content for view: ${currentFileContent.length} characters`);
             }
 
-            toolResults.push(toolResult);
+            toolResults.push({
+              type: 'tool_result' as const, // Explicitly type role
+              tool_use_id: contentBlock.id,
+              content: toolResultContent
+            });
           }
         }
 
         if (toolResults.length > 0) {
-          // Add tool results to conversation
-          messages.push({
-            role: 'user',
-            content: toolResults
+          conversationMessages.push({
+            role: 'user' as const, // Response to tool_use should be 'user' with tool_result content blocks
+            content: toolResults as any, // Cast as any if TS complains about structure, though it should match expected
           });
           
-          // If we've had several tool uses, ask Claude to view the final file
-          if (turn >= 4) {
-            messages.push({
-              role: 'user',
+          if (turn >= 4) { // Heuristic to ask for final view
+            conversationMessages.push({
+              role: 'user' as const,
               content: 'CRITICAL: Use str_replace_editor with "view" command on report.json and return ONLY the complete JSON content with no explanations.'
             });
           }
-          
-          // Continue conversation
           continue;
         }
       }
 
-      // If Claude stopped for any other reason, this is our final response
-      finalResponse = data;
+      finalApiResponse = data;
       break;
     }
 
-    // Return an object that includes all responses for better content extraction
     return {
-      finalResponse: finalResponse || messages[messages.length - 1],
+      finalResponse: finalApiResponse || conversationMessages[conversationMessages.length - 1],
       allResponses: allClaudeResponses,
       conversationLength: allClaudeResponses.length,
       finalFileContent: currentFileContent
     };
   } catch (error) {
-    console.error('Error calling Claude with text editor:', error);
+    console.error('Error in callClaudeWithTextEditor (using anthropicApiCall):', error);
     throw error;
   }
 }
@@ -239,144 +207,74 @@ export function extractEditedContent(claudeResponse: any): any {
     console.log('Parsing Claude response for final content...');
     
     let finalContent = null;
-    let latestFileContent = null;
-    
-    // Check if we have the tracked final file content (new approach)
+    // Prioritize the manually tracked finalFileContent
     if (claudeResponse.finalFileContent) {
       console.log('Using tracked final file content from file simulation');
       finalContent = claudeResponse.finalFileContent;
-    }
-    // Check if this is a conversation response with multiple Claude responses (fallback)
-    else if (claudeResponse.allResponses && Array.isArray(claudeResponse.allResponses)) {
-      console.log(`Analyzing ${claudeResponse.allResponses.length} Claude responses...`);
-      
-      // Look through all responses in chronological order to find the most recent file content
-      for (let i = 0; i < claudeResponse.allResponses.length; i++) {
+    } else if (claudeResponse.allResponses && Array.isArray(claudeResponse.allResponses)) {
+      // Fallback: try to find the last 'view' command or 'create' command's file_text
+      console.log(`Analyzing ${claudeResponse.allResponses.length} Claude responses for fallback content extraction...`);
+      for (let i = claudeResponse.allResponses.length - 1; i >= 0; i--) {
         const response = claudeResponse.allResponses[i];
-        console.log(`Checking response ${i + 1}...`);
-        
         if (response.content && Array.isArray(response.content)) {
           for (const block of response.content) {
-            if (block.type === 'tool_use' && block.input) {
-              const input = block.input;
-              console.log(`Turn ${i + 1} tool use: ${input.command} for path: ${input.path}`);
-              
-              // Log what fields are available in this tool use
-              console.log(`Turn ${i + 1} available fields:`, Object.keys(input || {}));
-              
-              // Keep the latest file content - this includes all edits made so far
-              if (input.file_text && (input.path === '/report.json' || input.path === 'report.json')) {
-                const hasActualContent = input.file_text.includes('"header"') && input.file_text.length > 100;
-                const hasStutteringContent = input.file_text.includes('stuttering') || input.file_text.includes('fluency');
-                
-                console.log(`Turn ${i + 1} file_text preview:`, input.file_text.substring(0, 200) + '...');
-                console.log(`Turn ${i + 1} has stuttering content:`, hasStutteringContent);
-                
-                if (hasActualContent) {
-                  latestFileContent = input.file_text;
-                  console.log(`Found updated file_text in turn ${i + 1} (${input.file_text.length} chars)`);
-                }
-              } else {
-                console.log(`Turn ${i + 1} has no file_text or wrong path`);
-              }
+            if (block.type === 'tool_use' && block.input?.command === 'view' && typeof block.input.file_text === 'string') {
+              finalContent = block.input.file_text;
+              console.log(`Found content in 'view' command in response ${i + 1}`);
+              break; // Found the latest view
+            }
+            // Less ideal, but might catch the last state if 'view' wasn't the last tool use
+            if (!finalContent && block.type === 'tool_use' && block.input?.file_text && typeof block.input.file_text === 'string') {
+               finalContent = block.input.file_text;
+               console.log(`Found content in tool_use block (command: ${block.input.command}) in response ${i + 1}`);
             }
           }
         }
+        if (finalContent) break;
       }
-      
-      // If we only got the initial skeleton, there might be an issue with the text editor responses
-      if (latestFileContent && latestFileContent.includes('"firstName": ""') && !latestFileContent.includes('stuttering')) {
-        console.warn('Warning: Only found initial skeleton content, checking for view command results...');
-        
-        // Look for view commands that might have the updated content
-        for (let i = claudeResponse.allResponses.length - 1; i >= 0; i--) {
-          const response = claudeResponse.allResponses[i];
-          if (response.content && Array.isArray(response.content)) {
-            for (const block of response.content) {
-              if (block.type === 'tool_use' && block.input && block.input.command === 'view') {
-                if (block.input.file_text && block.input.file_text.includes('stuttering')) {
-                  latestFileContent = block.input.file_text;
-                  console.log(`Found view command with stuttering content in turn ${i + 1}`);
-                  break;
+    } else if (claudeResponse.finalResponse?.content) {
+        // Fallback for single response structure (less likely for multi-turn)
+        const contentArray = claudeResponse.finalResponse.content;
+        if (Array.isArray(contentArray)) {
+            for (const block of contentArray) {
+                if (block.type === 'text') {
+                    finalContent = block.text;
+                    break;
                 }
-              }
             }
-          }
         }
-      }
-    } else {
-      // Fallback to single response analysis
-      console.log('Analyzing single response...');
-      let contentArray = claudeResponse.content || claudeResponse.finalResponse?.content;
-      
-      if (!Array.isArray(contentArray)) {
-        throw new Error('Invalid response structure from Claude');
-      }
-      
-      for (const block of contentArray) {
-        console.log('Processing block:', block.type);
-        
-        if (block.type === 'tool_use' && block.input) {
-          const input = block.input;
-          console.log('Tool use command:', input.command, 'for path:', input.path);
-          
-          if (input.file_text && (input.path === '/report.json' || input.path === 'report.json')) {
-            latestFileContent = input.file_text;
-            console.log('Found file_text in tool_use block');
-          }
-        }
-      }
     }
-    
-    finalContent = latestFileContent;
     
     if (!finalContent) {
-      console.error('No file content found. Full response:', JSON.stringify(claudeResponse, null, 2));
-      
-      // If we have the tracked final file content as a fallback, use it
-      if (claudeResponse.finalFileContent) {
-        console.log('Using tracked file content as fallback');
-        finalContent = claudeResponse.finalFileContent;
-      } else {
-        throw new Error('No edited content found in Claude response. The text editor tool may not have completed successfully.');
-      }
+      console.error('No file content could be reliably extracted. Full response:', JSON.stringify(claudeResponse, null, 2));
+      throw new Error('No edited content found in Claude response. The text editor tool may not have completed successfully or returned content as expected.');
     }
     
-    // Validate that we have actual JSON content, not just a message
     if (typeof finalContent === 'string' && !finalContent.trim().startsWith('{')) {
-      console.warn('Final content appears to be a message, not JSON:', finalContent.substring(0, 200));
-      
-      // If we have tracked file content as fallback, use it
-      if (claudeResponse.finalFileContent && claudeResponse.finalFileContent.trim().startsWith('{')) {
-        console.log('Using tracked file content instead of message response');
-        finalContent = claudeResponse.finalFileContent;
-      } else {
-        throw new Error('Claude returned a message instead of JSON content. Please try again.');
-      }
+      console.warn('Final extracted content appears to be a message, not JSON:', finalContent.substring(0, 200));
+      // This could be an error message from Claude or an unexpected text block.
+      // Depending on strictness, one might throw an error here.
+      // For now, we'll attempt to parse, but it will likely fail.
     }
     
-    // Parse and validate the JSON
     let parsedContent;
     try {
       parsedContent = JSON.parse(finalContent);
       console.log('Successfully extracted and parsed JSON content');
-      console.log('Updated sections detected:', Object.keys(parsedContent).join(', '));
-      
-      // Validate it's actually a report structure
       if (!parsedContent.header && !parsedContent.background && !parsedContent.presentLevels) {
-        throw new Error('Parsed content does not appear to be a valid report structure');
+        // Basic sanity check for report structure
+        console.warn('Parsed content does not appear to be a valid report structure, but parsing succeeded.');
       }
-      
       return parsedContent;
     } catch (parseError) {
-      console.error('JSON parsing failed:', parseError);
+      console.error('JSON parsing failed for extracted content:', parseError);
       console.error('Content that failed to parse:', finalContent.substring(0, 500));
-      throw new Error(`Failed to parse Claude's response as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`);
+      throw new Error(`Failed to parse Claude's response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
     }
   } catch (error) {
     console.error('Error extracting edited content:', error);
-    console.error('Raw response:', JSON.stringify(claudeResponse, null, 2));
-    throw new Error(`Failed to extract edited content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Rethrow original error or a new one if preferred
+    throw error instanceof Error ? error : new Error(`Failed to extract edited content: ${String(error)}`);
   }
 }
 
@@ -386,25 +284,19 @@ export function extractEditedContent(claudeResponse: any): any {
 export async function processReportWithTextEditor(
   input: string,
   currentReport: any,
-  model: string = 'claude-3-7-sonnet-20250219'
+  model: string = DEFAULT_ANTHROPIC_MODEL
 ): Promise<any> {
   try {
-    // Prepare the prompt and initial file
     const prompt = await createTextEditorPrompt(input, currentReport);
     const initialFileContent = prepareReportFile(currentReport);
     
-    console.log('Calling Claude with text editor tool...');
-    
-    // Call Claude with text editor
+    console.log('Calling Claude with text editor tool (using anthropicApiCall)...');
     const claudeResponse = await callClaudeWithTextEditor(prompt, initialFileContent, model);
     
     console.log('Claude response received, extracting content...');
-    
-    // Extract the edited content
     const updatedReport = extractEditedContent(claudeResponse);
     
     console.log('Successfully processed report with text editor');
-    
     return updatedReport;
   } catch (error) {
     console.error('Error processing report with text editor:', error);

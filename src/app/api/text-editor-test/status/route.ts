@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SpeechLanguageReport } from '@/types/reportTypes';
-import { deepMerge, updateDomainSection } from '@/lib/report-utilities';
+import { updateDomainSection } from '@/lib/report-utilities'; // deepMerge removed
+import { deepMerge } from '@/lib/utils'; // deepMerge imported from utils
 
 /**
  * API endpoint to check status of Claude's batch processing API

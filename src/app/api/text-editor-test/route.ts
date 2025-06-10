@@ -15,6 +15,72 @@ export async function POST(request: NextRequest) {
     const { input, report: existingReport, updateSection, pdfData } = await request.json();
     const isPdfUpload = !!pdfData;
     const inputData = isPdfUpload ? { pdfData } : input;
+
+    console.log(`[${requestId}] 📥 Received request payload:`, {
+      inputType: isPdfUpload ? 'PDF' : 'text',
+      inputSize: isPdfUpload ? `${pdfData.length} chars (base64)` :
+                (typeof input === 'string' ? `${input.substring(0, 50)}${input.length > 50 ? '...' : ''}` : input),
+      reportProvided: !!existingReport,
+      updateSection: updateSection || 'auto-detect'
+    });
+
+    // Validate request parameters
+    if (!inputData && !isPdfUpload) {
+      console.log(`[${requestId}] ❌ Validation failed: Missing input data`);
+      return NextResponse.json(
+        { error: 'Input data is required' },
+        { status: 400 }
+      );
+    }
+
+    // Use provided report or create default skeleton
+    const report: SpeechLanguageReport = existingReport || createReportSkeleton();
+    console.log(`[${requestId}] 📋 Using ${existingReport ? 'provided' : 'default'} report structure with ${Object.keys(report.assessmentResults.domains).length} domains`);
+
+    // Get API key from environment variables
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+
+    // Check if API key is available
+    if (!apiKey) {
+      console.log(`[${requestId}] ❌ Missing API key: ANTHROPIC_API_KEY not set`);
+      return NextResponse.json(
+        { error: 'ANTHROPIC_API_KEY is not set in environment variables' },
+        { status: 500 }
+      );
+    }
+
+    try {
+      // Normalize input data (handles text, PDF, etc.)
+      console.log(`[${requestId}] 🔄 Normalizing input data...`);
+      const normalizedInput = await normalizeInput(inputData);
+      console.log(`[${requestId}] ✅ Input normalized, length: ${normalizedInput.length} chars`);
+
+      // Log if this is a PDF upload
+      if (isPdfUpload) {
+        console.log(`[${requestId}] 📄 Processing PDF data...`);
+      }
+
+      // === Token Counting ===
+      let tokenCount = 0;
+import { NextRequest, NextResponse } from 'next/server';
+import { AssessmentTool, getAssessmentToolById } from '@/lib/assessment-tools';
+import { SpeechLanguageReport, DomainSection } from '@/types/reportTypes';
+import { normalizeInput, createReportSkeleton, updateDomainSection } from '@/lib/report-utilities'; // deepMerge removed
+import { deepMerge } from '@/lib/utils'; // deepMerge imported from utils
+import { ANTHROPIC_API_VERSION, DEFAULT_ANTHROPIC_MODEL, DEFAULT_SLP_PERSONA } from '@/lib/config';
+
+/**
+ * API endpoint that implements batch processing with Claude's Message Batches API
+ */
+export async function POST(request: NextRequest) {
+  const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+  console.log(`[${requestId}] 🚀 Batch API request started`);
+
+  try {
+    // Extract and validate input
+    const { input, report: existingReport, updateSection, pdfData } = await request.json();
+    const isPdfUpload = !!pdfData;
+    const inputData = isPdfUpload ? { pdfData } : input;
     
     console.log(`[${requestId}] 📥 Received request payload:`, { 
       inputType: isPdfUpload ? 'PDF' : 'text',
@@ -65,8 +131,8 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`[${requestId}] 🧮 Counting tokens...`);
         const tokenCountPayload = {
-          model: "claude-3-7-sonnet-20250219",
-          system: "You are an expert educational speech-language pathologist.",
+          model: DEFAULT_ANTHROPIC_MODEL,
+          system: DEFAULT_SLP_PERSONA,
           messages: [{ role: "user", content: normalizedInput }]
         };
         
@@ -75,7 +141,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "Content-Type": "application/json",
             "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01"
+            "anthropic-version": ANTHROPIC_API_VERSION
           },
           body: JSON.stringify(tokenCountPayload)
         });
@@ -186,8 +252,8 @@ Be specific, objective, and clinically accurate based only on the information pr
         return {
           custom_id: customId,
           params: {
-            model: "claude-3-7-sonnet-20250219",
-            max_tokens: 1024,
+            model: DEFAULT_ANTHROPIC_MODEL,
+            max_tokens: 1024, // This could be a specific config if needed, e.g., MAX_TOKENS_TEXT_EDITOR_BATCH_SECTION
             system: `${sectionPrompt}
 
 INSTRUCTIONS:
@@ -251,7 +317,7 @@ Respond ONLY with an update_key JSON command.`
           headers: {
             "Content-Type": "application/json",
             "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01"
+            "anthropic-version": ANTHROPIC_API_VERSION
           },
           body: JSON.stringify(batchPayload)
         });
