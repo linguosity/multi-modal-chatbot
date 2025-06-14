@@ -73,7 +73,9 @@ export const DomainCard: React.FC<DomainCardProps> = ({
       synthesisContent={domainData.synthesis || ""}
       initialContent={formatContentForEdit()}
       onSave={(content) => {
+          // content is now HTML from TipTapEditor
           if (onSaveContent) {
+              console.warn(`DomainCard (${domain}): Saving HTML content directly. The parent component (ReportEditor or equivalent) is responsible for storing this HTML appropriately (e.g., in topicSentence and clearing other fields, or a new dedicated HTML field) and ensuring 'parseSavedContent' is no longer used for this domain's content if it was previously.`);
               onSaveContent(`domain-${domain}`, content);
           }
       }}

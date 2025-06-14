@@ -215,13 +215,37 @@ export const useBatchReportUpdater = (initialReport: SpeechLanguageReport) => {
       
       // Set the value at the final path segment
       const lastKey = sectionPath[sectionPath.length - 1];
-      
-      if (content === null || content === undefined) {
-        // Remove the property if content is null/undefined
-        delete current[lastKey];
+      const secondLastKey = sectionPath.length > 1 ? sectionPath[sectionPath.length - 2] : null;
+
+      // Check if this update is for a DomainCard's content
+      // (e.g., path looks like ['presentLevels', 'functioning', 'receptive'] and content is a string)
+      if (
+        sectionPath.length >= 2 && // e.g. ['presentLevels', 'functioning', 'domainName']
+        current[lastKey] && // Ensure the domain object itself exists to check its nature
+        typeof current[lastKey] === 'object' && // It should be an object (FunctioningSection)
+        typeof content === 'string' && // The new content from DomainCard is a raw HTML string
+        Object.keys(current[lastKey]).includes('topicSentence') // Check if it's likely a FunctioningSection like object
+      ) {
+        console.log(`useBatchReportUpdater: Handling HTML content for domain '${lastKey}'. Storing in 'topicSentence', clearing others.`);
+
+        // Ensure the domain object exists or re-initialize if it was wrongly replaced by a string previously
+        if (typeof current[lastKey] !== 'object' || current[lastKey] === null) {
+            current[lastKey] = {};
+        }
+
+        current[lastKey].topicSentence = content; // Store HTML here
+        current[lastKey].strengths = [];
+        current[lastKey].needs = [];
+        current[lastKey].impactStatement = "";
+        current[lastKey].isConcern = false; // As needs are cleared
+        // Note: Any existing 'synthesis' or 'isLocked' on current[lastKey] will be preserved.
       } else {
-        // Update the property
-        current[lastKey] = content;
+        // Original logic for other updates
+        if (content === null || content === undefined) {
+          delete current[lastKey];
+        } else {
+          current[lastKey] = content;
+        }
       }
       
       // Update metadata
