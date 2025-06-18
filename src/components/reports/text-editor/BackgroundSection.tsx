@@ -42,7 +42,7 @@ interface BackgroundSectionProps {
     onLockSection?: (id: string, locked: boolean) => void;
     onToggleSynthesis?: (id: string) => void;
     onGenerateSynthesis?: (id: string, content: string) => Promise<string>;
-    onSaveContent?: (id: string, content: string | object) => void; // Allow object for student info save
+    onSaveContent?: (path: string[] | string, content: string | object) => void; // Allow object for student info save & path array
     onToggleMarkedDone?: (id: string, isDone: boolean) => void;
      // Assuming markedDoneStatus might exist similarly to lockStatus later
      headerMarkedDoneStatus?: Header['markedDoneStatus'];
@@ -438,7 +438,27 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                             color={cardData.color || "neutral"} // Default to neutral
                                             // Callbacks
                                             onToggleMarkedDone={() => handleMarkCardFinished(cardData.id)}
-                                            onSave={(content) => onSaveContent && onSaveContent(cardData.id, content)}
+                                            onSave={(content) => {
+                                                let sectionPath: string[] = [];
+                                                if (cardData.id === 'educational-history') {
+                                                    sectionPath = ['background', 'studentDemographicsAndBackground', 'educationalHistory'];
+                                                } else if (cardData.id === 'parent-concerns') {
+                                                    sectionPath = ['background', 'parentGuardianConcerns'];
+                                                } else if (cardData.id === 'health-info') {
+                                                    sectionPath = ['background', 'healthReport', '_combinedHealthInfo'];
+                                                } else if (cardData.id === 'family-info') {
+                                                    sectionPath = ['background', 'familyHistory', '_combinedFamilyInfo'];
+                                                }
+
+                                                if (onSaveContent) {
+                                                    if (sectionPath.length > 0) {
+                                                        onSaveContent(sectionPath, content);
+                                                    } else {
+                                                        // Fallback for other cards that might use onSave
+                                                        onSaveContent(cardData.id, content);
+                                                    }
+                                                }
+                                            }}
                                             onToggleSynthesis={() => onToggleSynthesis?.(cardData.id)}
                                             onGenerateSynthesis={onGenerateSynthesis}
                                             onLock={(id, lockState) => onLockSection?.(id, lockState)} // Pass individual lock through

@@ -217,9 +217,39 @@ export const useBatchReportUpdater = (initialReport: SpeechLanguageReport) => {
       const lastKey = sectionPath[sectionPath.length - 1];
       const secondLastKey = sectionPath.length > 1 ? sectionPath[sectionPath.length - 2] : null;
 
+      // Handle combined health information
+      if (lastKey === '_combinedHealthInfo') {
+        const healthContent = String(content); // Ensure content is a string
+        const medicalHistoryMatch = healthContent.match(/^Medical History: (.*?)(?=(\nVision\/Hearing:|\nMedications\/Allergies:|$))/s);
+        const visionHearingMatch = healthContent.match(/\nVision\/Hearing: (.*?)(?=(\nMedications\/Allergies:|$))/s);
+        const medicationsAllergiesMatch = healthContent.match(/\nMedications\/Allergies: (.*)$/s);
+
+        current.medicalHistory = medicalHistoryMatch ? medicalHistoryMatch[1].trim() : '';
+        current.visionAndHearingScreening = visionHearingMatch ? visionHearingMatch[1].trim() : '';
+        current.medicationsAndAllergies = (medicationsAllergiesMatch && healthContent.includes("\nMedications/Allergies: ")) ? medicationsAllergiesMatch[1].trim() : '';
+
+        // Ensure synthesis (if exists) is not overwritten by delete current[lastKey] below
+        // The _combinedHealthInfo key itself should be removed if it was temporarily added
+        delete current[lastKey];
+      }
+      // Handle combined family information
+      else if (lastKey === '_combinedFamilyInfo') {
+        const familyContent = String(content); // Ensure content is a string
+        const familyStructureMatch = familyContent.match(/^Structure: (.*?)(?=(\nLanguage Background:|\nSocioeconomic Factors:|$))/s);
+        const languageBackgroundMatch = familyContent.match(/\nLanguage Background: (.*?)(?=(\nSocioeconomic Factors:|$))/s);
+        const socioeconomicFactorsMatch = familyContent.match(/\nSocioeconomic Factors: (.*)$/s);
+
+        current.familyStructure = familyStructureMatch ? familyStructureMatch[1].trim() : '';
+        current.languageAndCulturalBackground = languageBackgroundMatch ? languageBackgroundMatch[1].trim() : '';
+        current.socioeconomicFactors = (socioeconomicFactorsMatch && familyContent.includes("\nSocioeconomic Factors: ")) ? socioeconomicFactorsMatch[1].trim() : '';
+
+        // Ensure synthesis (if exists) is not overwritten by delete current[lastKey] below
+        // The _combinedFamilyInfo key itself should be removed if it was temporarily added
+        delete current[lastKey];
+      }
       // Check if this update is for a DomainCard's content
       // (e.g., path looks like ['presentLevels', 'functioning', 'receptive'] and content is a string)
-      if (
+      else if (
         sectionPath.length >= 2 && // e.g. ['presentLevels', 'functioning', 'domainName']
         current[lastKey] && // Ensure the domain object itself exists to check its nature
         typeof current[lastKey] === 'object' && // It should be an object (FunctioningSection)
@@ -241,10 +271,13 @@ export const useBatchReportUpdater = (initialReport: SpeechLanguageReport) => {
         // Note: Any existing 'synthesis' or 'isLocked' on current[lastKey] will be preserved.
       } else {
         // Original logic for other updates
-        if (content === null || content === undefined) {
-          delete current[lastKey];
-        } else {
-          current[lastKey] = content;
+        // Do not delete the lastKey if it was one of the combined keys, as we already handled it.
+        if (lastKey !== '_combinedHealthInfo' && lastKey !== '_combinedFamilyInfo') {
+          if (content === null || content === undefined) {
+            delete current[lastKey];
+          } else {
+            current[lastKey] = content;
+          }
         }
       }
       
