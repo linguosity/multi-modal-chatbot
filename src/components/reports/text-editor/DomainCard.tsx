@@ -1,137 +1,150 @@
 // FILE: src/components/reports/text-editor/DomainCard.tsx
 // (Added onMarkFinished prop and passed it down)
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { EditableCard } from '@/components/reports/EditableCard';
-import { FunctioningSchema, FunctioningSection } from '@/types/reportSchemas';
+import { FunctioningSection } from '@/types/reportSchemas';
+import { CardHeader } from '@/components/ui/Card'; // Assuming CardHeader can be used
+import { Button } from '@/components/ui/button'; // Assuming a Button component is available
+import { Textarea } from '@/components/ui/textarea'; // Assuming a Textarea component is available
 
-// --- Interface Updated ---
 interface DomainCardProps {
   domain: string;
   domainData: FunctioningSection;
   onLockSection?: (id: string, locked: boolean) => void;
   onToggleSynthesis?: (id: string) => void;
-  onSaveContent?: (id: string, content: string) => void;
-  onMarkFinished?: () => void; // <<< ADD THIS PROP
-  isMarkedDone?: boolean; // <<< ADD THIS PROP to receive status
+  onSaveContent?: (id: string, content: string | string[]) => void; // Content can be string or string array
+  onMarkFinished?: () -> void;
+  isMarkedDone?: boolean;
 }
 
-/**
- * Component for displaying a language domain card with its strengths, needs, and impact.
- * Uses neutral styling consistent with other sections.
- */
 export const DomainCard: React.FC<DomainCardProps> = ({
   domain,
   domainData,
   onLockSection,
   onToggleSynthesis,
   onSaveContent,
-  onMarkFinished // <<< Destructure the new prop
+  onMarkFinished,
+  isMarkedDone
 }) => {
+  const cardId = `domain-${domain}`;
 
-  // Helper function to format content for editing (remains same)
-  const formatContentForEdit = (): string => {
-     // ... same function ...
-     let content = `Topic: ${domainData.topicSentence || ''}\n\n`;
-     if (domainData.strengths && domainData.strengths.length > 0) { content += `Strengths:\n${domainData.strengths.map(s => `- ${s}`).join('\n')}\n\n`; }
-     if (domainData.needs && domainData.needs.length > 0) { content += `Needs:\n${domainData.needs.map(n => `- ${n}`).join('\n')}\n\n`; }
-     if (domainData.impactStatement) { content += `Impact: ${domainData.impactStatement}`; }
-     return content.trim();
-  };
+  // States for textareas
+  const [strengthsText, setStrengthsText] = useState(domainData.strengths?.join('\n') || '');
+  const [needsText, setNeedsText] = useState(domainData.needs?.join('\n') || '');
 
-  // Helper function to parse saved content (remains same)
-  const parseSavedContent = (content: string): Partial<FunctioningSection> => {
-    // ... same function ...
-    const lines = content.split('\n').map(l => l.trim()).filter(l => l);
-    const updatedData: Partial<FunctioningSection> = { strengths: [], needs: [] };
-    let currentSection: 'topic' | 'strengths' | 'needs' | 'impact' | null = 'topic';
-    lines.forEach(line => {
-        const lowerLine = line.toLowerCase();
-        if (lowerLine.startsWith('topic:')) { updatedData.topicSentence = line.substring(6).trim(); currentSection = null; }
-        else if (lowerLine === 'strengths:') { currentSection = 'strengths'; }
-        else if (lowerLine === 'needs:') { currentSection = 'needs'; }
-        else if (lowerLine.startsWith('impact:')) { updatedData.impactStatement = line.substring(7).trim(); currentSection = null; }
-        else if (line.startsWith('-') && currentSection) { const item = line.substring(1).trim(); if (currentSection === 'strengths') updatedData.strengths?.push(item); if (currentSection === 'needs') updatedData.needs?.push(item); }
-        else if (currentSection === 'topic' && !updatedData.topicSentence) { updatedData.topicSentence = line; currentSection = null; }
-        else if (currentSection === null && !lowerLine.endsWith(':')) { if (updatedData.impactStatement) updatedData.impactStatement += ` ${line}`; } });
-    updatedData.isConcern = (updatedData.needs?.length ?? 0) > 0; return updatedData;
-  };
+  const handleSaveStrengths = useCallback(() => {
+    if (onSaveContent) {
+      const strengthsArray = strengthsText.split('\n').map(s => s.trim()).filter(s => s);
+      onSaveContent(`${cardId}-strengths`, strengthsArray);
+    }
+  }, [strengthsText, onSaveContent, cardId]);
 
+  const handleSaveNeeds = useCallback(() => {
+    if (onSaveContent) {
+      const needsArray = needsText.split('\n').map(n => n.trim()).filter(n => n);
+      onSaveContent(`${cardId}-needs`, needsArray);
+    }
+  }, [needsText, onSaveContent, cardId]);
+
+
+  // TODO: Implement lock, synthesis, and mark finished controls at the DomainCard level
+  // These would typically be in a header section of this composite card.
 
   return (
-    <EditableCard
-      id={`domain-${domain}`}
-      title={`${domain.charAt(0).toUpperCase() + domain.slice(1)} Language`}
-      className="border border-neutral-200 bg-white shadow-sm h-full flex flex-col"
-      headerClassName="py-2 px-3 bg-neutral-100"
-      contentClassName="p-3 text-xs"
-      color="neutral"
-      isLocked={domainData.isLocked}
-      onLock={onLockSection}
-      onToggleSynthesis={onToggleSynthesis}
-      hasSynthesis={!!domainData.synthesis}
-      synthesisContent={domainData.synthesis || ""}
-      initialContent={formatContentForEdit()}
-      onSave={(content) => {
-          // content is now HTML from TipTapEditor
-          if (onSaveContent) {
-              console.warn(`DomainCard (${domain}): Saving HTML content directly. The parent component (ReportEditor or equivalent) is responsible for storing this HTML appropriately (e.g., in topicSentence and clearing other fields, or a new dedicated HTML field) and ensuring 'parseSavedContent' is no longer used for this domain's content if it was previously.`);
-              onSaveContent(`domain-${domain}`, content);
-          }
-      }}
-      // --- Pass the callback down to EditableCard ---
-      onToggleMarkedDone={onMarkFinished} // <<< ADD THIS LINE
-      // --- ---
-      viewComponent={
-        <>
-          {/* Concern Status Badge - Style updated for 'No Concern' */}
-          {domainData.isConcern !== undefined && (
-            <div className="absolute top-2 right-12">
-              <div className={`px-1.5 py-0.5 rounded-full text-xxs font-medium ${
-                domainData.isConcern
-                  ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
-                  : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
-              }`}>
-                {domainData.isConcern ? 'Concern' : 'No Concern'}
-              </div>
+    <div className="border border-neutral-200 bg-white shadow-sm h-full flex flex-col">
+      {/* Card Header - Title, Lock, Synthesis, Mark Finished */}
+      <CardHeader className="py-2 px-3 bg-neutral-100 flex flex-row justify-between items-center">
+        <h4 className="font-semibold text-sm">{`${domain.charAt(0).toUpperCase() + domain.slice(1)} Language`}</h4>
+        {/* TODO: Add Lock, Synthesis, Mark Finished buttons here, calling respective props */}
+        {/* Example: <Button onClick={() => onLockSection?.(cardId, !domainData.isLocked)}>{domainData.isLocked ? 'Unlock' : 'Lock'}</Button> */}
+      </CardHeader>
+
+      <div className="p-3 text-xs space-y-4">
+        {/* Concern Status Badge */}
+        {domainData.isConcern !== undefined && (
+          <div className="absolute top-2 right-12"> {/* Adjust positioning as needed */}
+            <div className={`px-1.5 py-0.5 rounded-full text-xxs font-medium ${
+              domainData.isConcern
+                ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
+                : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
+            }`}>
+              {domainData.isConcern ? 'Concern' : 'No Concern'}
             </div>
+          </div>
+        )}
+
+        {/* Topic Sentence */}
+        <EditableCard
+          id={`${cardId}-topicSentence`}
+          title="Topic Sentence"
+          color="neutral"
+          isLocked={domainData.isLocked}
+          // onLock and onToggleSynthesis might not be needed if handled at parent DomainCard level
+          initialContent={domainData.topicSentence || ''}
+          onSave={(content) => onSaveContent?.(`${cardId}-topicSentence`, content)}
+          viewComponent={<p className="font-medium">{domainData.topicSentence || <span className="text-gray-400">Enter topic sentence...</span>}</p>}
+          // Do not pass onToggleMarkedDone here, it's for the whole DomainCard
+        />
+
+        {/* Strengths */}
+        <div>
+          <label htmlFor={`${cardId}-strengths-area`} className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider block">Strengths</label>
+          {domainData.isLocked ? (
+            <ul className="list-disc list-outside pl-4 space-y-0.5 marker:text-gray-400">
+              {domainData.strengths?.map((item, index) => ( <li key={`strength-${index}`} className="text-gray-800">{item}</li> ))}
+            </ul>
+          ) : (
+            <>
+              <Textarea
+                id={`${cardId}-strengths-area`}
+                value={strengthsText}
+                onChange={(e) => setStrengthsText(e.target.value)}
+                onBlur={handleSaveStrengths}
+                className="w-full text-xs p-1 border border-gray-300 rounded"
+                rows={3}
+                disabled={domainData.isLocked}
+              />
+              <Button onClick={handleSaveStrengths} size="xs" variant="outline" className="mt-1">Save Strengths</Button>
+            </>
           )}
+        </div>
 
-          {/* Topic Sentence */}
-          {domainData.topicSentence && (
-            <p className="font-medium mb-2">{domainData.topicSentence}</p>
+        {/* Needs */}
+        <div>
+          <label htmlFor={`${cardId}-needs-area`} className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider block">Needs</label>
+          {domainData.isLocked ? (
+            <ul className="list-disc list-outside pl-4 space-y-0.5 marker:text-gray-400">
+              {domainData.needs?.map((item, index) => ( <li key={`need-${index}`} className="text-gray-800">{item}</li> ))}
+            </ul>
+          ) : (
+            <>
+              <Textarea
+                id={`${cardId}-needs-area`}
+                value={needsText}
+                onChange={(e) => setNeedsText(e.target.value)}
+                onBlur={handleSaveNeeds}
+                className="w-full text-xs p-1 border border-gray-300 rounded"
+                rows={3}
+                disabled={domainData.isLocked}
+              />
+              <Button onClick={handleSaveNeeds} size="xs" variant="outline" className="mt-1">Save Needs</Button>
+            </>
           )}
+        </div>
 
-           {/* Strengths */}
-           {domainData.strengths && domainData.strengths.length > 0 && (
-             <div className="mb-1.5">
-               <h5 className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider">Strengths</h5>
-               <ul className="list-disc list-outside pl-4 space-y-0.5 marker:text-gray-400">
-                 {domainData.strengths.map((item, index) => ( <li key={`strength-${index}`} className="text-gray-800">{item}</li> ))}
-               </ul>
-             </div>
-           )}
-
-           {/* Needs */}
-           {domainData.needs && domainData.needs.length > 0 && (
-             <div className="mb-1.5">
-               <h5 className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider">Needs</h5>
-               <ul className="list-disc list-outside pl-4 space-y-0.5 marker:text-gray-400">
-                 {domainData.needs.map((item, index) => ( <li key={`need-${index}`} className="text-gray-800">{item}</li> ))}
-               </ul>
-             </div>
-           )}
-
-           {/* Impact Statement */}
-           {domainData.impactStatement && (
-             <div>
-               <h5 className="text-xxs font-semibold mb-0.5 text-gray-600 uppercase tracking-wider">Educational Impact</h5>
-               <p className="text-gray-800">{domainData.impactStatement}</p>
-             </div>
-           )}
-        </>
-      }
-    />
+        {/* Impact Statement */}
+        <EditableCard
+          id={`${cardId}-impactStatement`}
+          title="Educational Impact"
+          color="neutral"
+          isLocked={domainData.isLocked}
+          initialContent={domainData.impactStatement || ''}
+          onSave={(content) => onSaveContent?.(`${cardId}-impactStatement`, content)}
+          viewComponent={<p>{domainData.impactStatement || <span className="text-gray-400">Enter impact statement...</span>}</p>}
+        />
+      </div>
+    </div>
   );
 };
 

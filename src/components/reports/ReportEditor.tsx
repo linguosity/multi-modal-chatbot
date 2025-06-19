@@ -83,8 +83,47 @@ export default function ReportEditor({ reportId }: ReportEditorProps) {
     processPdf,
     handleBatchComplete,
     handleBatchError,
-    updateSection
+    updateSection,
+    // Add other destructured properties if they are also needed directly in ReportEditor
   } = batchUpdaterHook;
+
+  // Wrapper function for updateSection
+  const handleUpdateSection = (id: string, content: any) => {
+    let path: string[];
+    // Example: "domain-receptive-topicSentence"
+    if (id.startsWith('domain-')) {
+      const parts = id.split('-');
+      // parts[0] is "domain"
+      // parts[1] is domainName e.g. "receptive"
+      // parts[2] is fieldName e.g. "topicSentence"
+      if (parts.length === 3) {
+        path = ['presentLevels', 'functioning', parts[1], parts[2]];
+      } else {
+        console.error(`Invalid domain ID format: ${id}`);
+        return;
+      }
+    } else {
+      switch (id) {
+        case 'educational-history':
+          path = ['background', 'studentDemographicsAndBackground', 'educationalHistory'];
+          break;
+        case 'health-info':
+          // Assuming health-info from BackgroundSection is a combined string for medicalHistory
+          // This might need adjustment based on actual schema and BackgroundSection's saving behavior.
+          path = ['background', 'healthReport', 'medicalHistory'];
+          break;
+        case 'student-info':
+          path = ['header', 'studentInformation'];
+          break;
+        // Add other cases for different sections as needed
+        default:
+          console.error(`Unknown section ID: ${id}`);
+          return;
+      }
+    }
+    console.log(`Updating section with ID: ${id}, path: ${JSON.stringify(path)}, content:`, content);
+    updateSection(path, content);
+  };
   
   // Update batch hook when initial report changes (only on first load)
   useEffect(() => {
