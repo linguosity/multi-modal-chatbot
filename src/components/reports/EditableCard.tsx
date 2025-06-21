@@ -137,7 +137,7 @@ export function EditableCard({
                     ) : (
                         <div>
                             {viewComponent ? viewComponent :
-                             content ? (<div className="whitespace-pre-wrap text-xs" dangerouslySetInnerHTML={{ __html: content }}></div>) : // Use dangerouslySetInnerHTML for HTML content
+                             content ? (<div className="whitespace-pre-wrap text-xs card-content" dangerouslySetInnerHTML={{ __html: content }}></div>) : // Use dangerouslySetInnerHTML for HTML content
                              (<div className="text-gray-400 italic text-xs">No content yet.{isAnyEditEnabled && !isLocked ? ' Click edit pencil in header to add.' : ''}</div>)
                             }
                         </div>
@@ -152,6 +152,7 @@ export function EditableCard({
                 initialContent={content}
                 onSave={handleDialogSave}
                 title={`Edit ${title}`}
+                isStudentInfo={id === 'student-info'}
             />
         </motion.div>
     );

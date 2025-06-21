@@ -14,7 +14,7 @@ interface DomainCardProps {
   onLockSection?: (id: string, locked: boolean) => void;
   onToggleSynthesis?: (id: string) => void;
   onSaveContent?: (id: string, content: string | string[]) => void; // Content can be string or string array
-  onMarkFinished?: () -> void;
+  onMarkFinished?: () => void;
   isMarkedDone?: boolean;
 }
 

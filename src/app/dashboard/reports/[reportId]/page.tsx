@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/supabaseTypes';
 import React from 'react';
 import ReportEditor from '@/components/reports/ReportEditor';
+import { EditModeProvider } from '@/components/contexts/edit-mode-context';
 
 export default async function ReportDetailPage({
   params,
@@ -28,9 +29,11 @@ export default async function ReportDetailPage({
   if (reportId === 'new') {
     // For client component rendering with isNewReport prop
     return (
-      <div className="report-editor-container">
-        <ReportEditor reportId="new" />
-      </div>
+      <EditModeProvider>
+        <div className="report-editor-container">
+          <ReportEditor reportId="new" />
+        </div>
+      </EditModeProvider>
     );
   }
   
@@ -58,8 +61,10 @@ export default async function ReportDetailPage({
   
   // 5. Render the client component with the report data
   return (
-    <div className="report-editor-container">
-      <ReportEditor reportId={reportId} />
-    </div>
+    <EditModeProvider>
+      <div className="report-editor-container">
+        <ReportEditor reportId={reportId} />
+      </div>
+    </EditModeProvider>
   );
 }

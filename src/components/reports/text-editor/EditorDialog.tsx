@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'; // Assuming path to dialog components
 import TipTapEditor from './TipTapEditor';
 import { Button } from '@/components/ui/button'; // Assuming path to button component
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
 interface EditorDialogProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface EditorDialogProps {
   initialContent: string;
   onSave: (content: string) => void;
   title?: string;
+  isStudentInfo?: boolean;
 }
 
 const EditorDialog: React.FC<EditorDialogProps> = ({
@@ -25,6 +27,7 @@ const EditorDialog: React.FC<EditorDialogProps> = ({
   initialContent,
   onSave,
   title = 'Edit Content',
+  isStudentInfo = false,
 }) => {
   const [editorContent, setEditorContent] = useState<string>(initialContent);
 
@@ -50,25 +53,24 @@ const EditorDialog: React.FC<EditorDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            Modify the content below. Click save when you're done.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4">
+      <DialogContent className={`${isStudentInfo ? "sm:max-w-[900px]" : "sm:max-w-[600px]"} p-0 gap-0`}>
+        <VisuallyHidden>
+          <DialogTitle>{title || 'Edit Content'}</DialogTitle>
+        </VisuallyHidden>
+        <div className="flex flex-col h-[80vh]">
           <TipTapEditor
             initialContent={editorContent}
             onUpdate={setEditorContent}
+            isStudentInfo={isStudentInfo}
+            title={title}
           />
+          <DialogFooter className="px-6 py-4 border-t">
+            <DialogClose asChild>
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleSave}>Save</Button>
+          </DialogFooter>
         </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" onClick={handleClose}>Cancel</Button>
-          </DialogClose>
-          <Button onClick={handleSave}>Save</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { motion, useInView } from "framer-motion";
 import { SpeechLanguageReport, AssessmentTool } from '@/types/reportSchemas';
+import { EditableCard } from './EditableCard';
 
 // Section component imports
 import EditorPanel from "@/components/reports/text-editor/EditorPanel";
@@ -20,6 +21,7 @@ interface ReportSectionsProps {
   updateSection: (section: string, updates: any) => void;
   processText?: (text: string, section: string) => Promise<void>;
   processPdf?: (pdfData: string) => Promise<void>;
+  viewMode?: 'swipe' | 'grid';
 }
 
 // Animation component for row transitions
@@ -87,6 +89,107 @@ const AnimatedSectionRow = ({
   );
 };
 
+// Function to extract all report sections as individual cards
+const getAllReportCards = (report: SpeechLanguageReport, updateSection: any) => {
+  const cards: Array<{id: string, title: string, content: any, path: string[]}> = [];
+  
+  // Student Information
+  if (report.header?.studentInformation) {
+    cards.push({
+      id: 'student-info',
+      title: 'Student Information',
+      content: report.header.studentInformation,
+      path: ['header', 'studentInformation']
+    });
+  }
+  
+  // Background - Educational History
+  if (report.background?.studentDemographicsAndBackground?.educationalHistory) {
+    cards.push({
+      id: 'educational-history',
+      title: 'Educational History',
+      content: report.background.studentDemographicsAndBackground.educationalHistory,
+      path: ['background', 'studentDemographicsAndBackground', 'educationalHistory']
+    });
+  }
+  
+  // Background - Health Info
+  if (report.background?.healthReport?.medicalHistory) {
+    cards.push({
+      id: 'health-info',
+      title: 'Health Information',
+      content: report.background.healthReport.medicalHistory,
+      path: ['background', 'healthReport', 'medicalHistory']
+    });
+  }
+  
+  // Present Levels - Functioning domains
+  if (report.presentLevels?.functioning) {
+    Object.entries(report.presentLevels.functioning).forEach(([domain, data]: [string, any]) => {
+      if (data?.topicSentence) {
+        cards.push({
+          id: `domain-${domain}-topicSentence`,
+          title: `${domain.charAt(0).toUpperCase() + domain.slice(1)} - Topic`,
+          content: data.topicSentence,
+          path: ['presentLevels', 'functioning', domain, 'topicSentence']
+        });
+      }
+      if (data?.currentPerformance) {
+        cards.push({
+          id: `domain-${domain}-currentPerformance`,
+          title: `${domain.charAt(0).toUpperCase() + domain.slice(1)} - Performance`,
+          content: data.currentPerformance,
+          path: ['presentLevels', 'functioning', domain, 'currentPerformance']
+        });
+      }
+      if (data?.strengths) {
+        cards.push({
+          id: `domain-${domain}-strengths`,
+          title: `${domain.charAt(0).toUpperCase() + domain.slice(1)} - Strengths`,
+          content: data.strengths,
+          path: ['presentLevels', 'functioning', domain, 'strengths']
+        });
+      }
+      if (data?.needs) {
+        cards.push({
+          id: `domain-${domain}-needs`,
+          title: `${domain.charAt(0).toUpperCase() + domain.slice(1)} - Needs`,
+          content: data.needs,
+          path: ['presentLevels', 'functioning', domain, 'needs']
+        });
+      }
+    });
+  }
+  
+  // Assessment Results
+  if (report.assessmentResults?.observations) {
+    Object.entries(report.assessmentResults.observations).forEach(([key, value]: [string, any]) => {
+      if (value) {
+        cards.push({
+          id: `assessment-${key}`,
+          title: `Assessment - ${key.charAt(0).toUpperCase() + key.slice(1)}`,
+          content: value,
+          path: ['assessmentResults', 'observations', key]
+        });
+      }
+    });
+  }
+  
+  // Conclusion sections
+  if (report.conclusion?.conclusion?.summary) {
+    cards.push({
+      id: 'conclusion-summary',
+      title: 'Conclusion Summary',
+      content: report.conclusion.conclusion.summary,
+      path: ['conclusion', 'conclusion', 'summary']
+    });
+  }
+  
+  // Add more sections as needed...
+  
+  return cards;
+};
+
 export function ReportSections({
   report,
   setReport,
@@ -95,8 +198,42 @@ export function ReportSections({
   isUpdating,
   updateSection,
   processText,
-  processPdf
+  processPdf,
+  viewMode = 'swipe'
 }: ReportSectionsProps) {
+  
+  // Grid view implementation
+  if (viewMode === 'grid') {
+    const allCards = getAllReportCards(report, updateSection);
+    
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {allCards.map((card, index) => (
+          <motion.div
+            key={card.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+          >
+            <EditableCard
+              id={card.id}
+              title={card.title}
+              initialContent={typeof card.content === 'string' ? card.content : JSON.stringify(card.content, null, 2)}
+              onSave={(content) => {
+                // Convert path array to dot notation for updateSection
+                const pathStr = card.path.join('.');
+                updateSection(pathStr, content);
+              }}
+              className="h-[300px]"
+              contentClassName="max-h-[200px]"
+            />
+          </motion.div>
+        ))}
+      </div>
+    );
+  }
+  
+  // Default swipe view
   return (
     <div className="space-y-8">
       {/* Row 1: Editor Panel + Background */}

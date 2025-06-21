@@ -29,7 +29,11 @@
       "Bash(unset TURBOPACK)",
       "Bash(DEBUG=next:*)",
       "Bash(pnpm run dev:*)",
-      "Bash(/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -A 20 \"EditorPanel\" src/components/reports/ReportSections.tsx)"
+      "Bash(/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -A 20 \"EditorPanel\" src/components/reports/ReportSections.tsx)",
+      "Bash(DEBUG=*)",
+      "Bash(pnpm exec:*)",
+      "Bash(npx next dev:*)",
+      "Bash(pnpm add:*)"
     ],
     "deny": []
   }

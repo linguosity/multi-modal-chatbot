@@ -17,6 +17,7 @@ import { ReportSections } from './ReportSections';
 import JsonViewerDialog from "@/components/reports/text-editor/JsonViewerDialog";
 import CommandDetailsCard from "@/components/reports/text-editor/CommandDetailsCard";
 import BatchJobStatus from "@/components/reports/BatchJobStatus";
+import { GlobalEditModeToggle } from './GlobalEditModeToggle';
 
 // Utilities
 import { createReportSkeleton } from '@/lib/report-utilities';
@@ -61,6 +62,9 @@ export default function ReportEditor({ reportId }: ReportEditorProps) {
   // Use our new state management hooks
   const { state, actions } = useReportEditorState();
   
+  // View mode state (swipe vs grid) - default to grid
+  const [viewMode, setViewMode] = React.useState<'swipe' | 'grid'>('grid');
+  
   // Create empty report skeleton for hook initialization
   const emptyReportSkeleton = useMemo(() => createReportSkeletonHelper(), []);
   
@@ -86,6 +90,23 @@ export default function ReportEditor({ reportId }: ReportEditorProps) {
     updateSection,
     // Add other destructured properties if they are also needed directly in ReportEditor
   } = batchUpdaterHook;
+
+  // Handle save all changes for global edit mode
+  const handleSaveAllChanges = async () => {
+    try {
+      // Save the current report state
+      console.log('Saving all changes...', report);
+      
+      // If you have an API endpoint to save the report:
+      // await saveReport(report);
+      
+      // Return success
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error saving all changes:', error);
+      throw error;
+    }
+  };
 
   // Wrapper function for updateSection
   const handleUpdateSection = (id: string, content: any) => {
@@ -212,20 +233,25 @@ export default function ReportEditor({ reportId }: ReportEditorProps) {
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Report Editor
-          </h1>
-          <p className="text-gray-600">
-            {report?.header?.studentInformation?.firstName && report?.header?.studentInformation?.lastName
-              ? `${report.header.studentInformation.firstName} ${report.header.studentInformation.lastName}`
-              : 'Speech-Language Evaluation Report'
-            }
-          </p>
-          {activeDomains && activeDomains.length > 0 && (
-            <p className="text-sm text-blue-600 mt-1">
-              Active domains: {activeDomains.join(', ')}
-            </p>
-          )}
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Report Editor
+              </h1>
+              <p className="text-gray-600">
+                {report?.header?.studentInformation?.firstName && report?.header?.studentInformation?.lastName
+                  ? `${report.header.studentInformation.firstName} ${report.header.studentInformation.lastName}`
+                  : 'Speech-Language Evaluation Report'
+                }
+              </p>
+              {activeDomains && activeDomains.length > 0 && (
+                <p className="text-sm text-blue-600 mt-1">
+                  Active domains: {activeDomains.join(', ')}
+                </p>
+              )}
+            </div>
+            <GlobalEditModeToggle onSaveAll={handleSaveAllChanges} />
+          </div>
         </div>
 
         {/* Report Sections */}
@@ -239,6 +265,7 @@ export default function ReportEditor({ reportId }: ReportEditorProps) {
             updateSection={updateSection}
             processText={processText}
             processPdf={processPdf}
+            viewMode={viewMode}
           />
         )}
 
