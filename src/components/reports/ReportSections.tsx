@@ -18,7 +18,7 @@ interface ReportSectionsProps {
   assessmentTools: Record<string, AssessmentTool>;
   batchStatus: any;
   isUpdating: boolean;
-  updateSection: (section: string, updates: any) => void;
+  updateSection: (path: string[], updates: any) => void;
   processText?: (text: string, section: string) => Promise<void>;
   processPdf?: (pdfData: string) => Promise<void>;
   viewMode?: 'swipe' | 'grid';
@@ -90,7 +90,7 @@ const AnimatedSectionRow = ({
 };
 
 // Function to extract all report sections as individual cards
-const getAllReportCards = (report: SpeechLanguageReport, updateSection: any) => {
+const getAllReportCards = (report: SpeechLanguageReport) => {
   const cards: Array<{id: string, title: string, content: any, path: string[]}> = [];
   
   // Student Information
@@ -204,7 +204,7 @@ export function ReportSections({
   
   // Grid view implementation
   if (viewMode === 'grid') {
-    const allCards = getAllReportCards(report, updateSection);
+    const allCards = getAllReportCards(report);
     
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -220,9 +220,7 @@ export function ReportSections({
               title={card.title}
               initialContent={typeof card.content === 'string' ? card.content : JSON.stringify(card.content, null, 2)}
               onSave={(content) => {
-                // Convert path array to dot notation for updateSection
-                const pathStr = card.path.join('.');
-                updateSection(pathStr, content);
+                updateSection(card.path, content);
               }}
               className="h-[300px]"
               contentClassName="max-h-[200px]"

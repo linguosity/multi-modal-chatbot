@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { SpeechLanguageReport } from '@/types/reportSchemas';
+import { saveReport } from '@/lib/supabase/reportPersistence';
 
 /**
  * Custom hook for managing report updates using the Claude Batch API
@@ -195,69 +196,73 @@ export const useBatchReportUpdater = (initialReport: SpeechLanguageReport) => {
   /**
    * Update a specific section manually (for user edits)
    */
-  const updateSection = useCallback((sectionPath: string[], content: any) => {
-    setReport(prev => {
-      // Create a deep copy of the report
-      const updated = JSON.parse(JSON.stringify(prev));
-      
-      // Navigate to the target object
-      let current = updated;
-      for (let i = 0; i < sectionPath.length - 1; i++) {
-        const key = sectionPath[i];
-        
-        // Create path if it doesn't exist
-        if (current[key] === undefined) {
-          current[key] = {};
-        }
-        
-        current = current[key];
+  const updateSection = useCallback(async (sectionPath: string[], content: any) => {
+    // Create a deep copy of the current report
+    const updated = JSON.parse(JSON.stringify(report));
+
+    // Navigate to the target object
+    let current = updated;
+    for (let i = 0; i < sectionPath.length - 1; i++) {
+      const key = sectionPath[i];
+
+      // Create path if it doesn't exist
+      if (current[key] === undefined) {
+        current[key] = {};
       }
-      
-      // Set the value at the final path segment
-      const lastKey = sectionPath[sectionPath.length - 1];
-      const secondLastKey = sectionPath.length > 1 ? sectionPath[sectionPath.length - 2] : null;
 
-      // Check if this update is for a DomainCard's content
-      // (e.g., path looks like ['presentLevels', 'functioning', 'receptive'] and content is a string)
-      if (
-        sectionPath.length >= 2 && // e.g. ['presentLevels', 'functioning', 'domainName']
-        current[lastKey] && // Ensure the domain object itself exists to check its nature
-        typeof current[lastKey] === 'object' && // It should be an object (FunctioningSection)
-        typeof content === 'string' && // The new content from DomainCard is a raw HTML string
-        Object.keys(current[lastKey]).includes('topicSentence') // Check if it's likely a FunctioningSection like object
-      ) {
-        console.log(`useBatchReportUpdater: Handling HTML content for domain '${lastKey}'. Storing in 'topicSentence', clearing others.`);
+      current = current[key];
+    }
 
-        // Ensure the domain object exists or re-initialize if it was wrongly replaced by a string previously
-        if (typeof current[lastKey] !== 'object' || current[lastKey] === null) {
-            current[lastKey] = {};
-        }
+    // Set the value at the final path segment
+    const lastKey = sectionPath[sectionPath.length - 1];
+    const secondLastKey = sectionPath.length > 1 ? sectionPath[sectionPath.length - 2] : null;
 
-        current[lastKey].topicSentence = content; // Store HTML here
-        current[lastKey].strengths = [];
-        current[lastKey].needs = [];
-        current[lastKey].impactStatement = "";
-        current[lastKey].isConcern = false; // As needs are cleared
-        // Note: Any existing 'synthesis' or 'isLocked' on current[lastKey] will be preserved.
+    // Check if this update is for a DomainCard's content
+    // (e.g., path looks like ['presentLevels', 'functioning', 'receptive'] and content is a string)
+    if (
+      sectionPath.length >= 2 && // e.g. ['presentLevels', 'functioning', 'domainName']
+      current[lastKey] && // Ensure the domain object itself exists to check its nature
+      typeof current[lastKey] === 'object' && // It should be an object (FunctioningSection)
+      typeof content === 'string' && // The new content from DomainCard is a raw HTML string
+      Object.keys(current[lastKey]).includes('topicSentence') // Check if it's likely a FunctioningSection like object
+    ) {
+      console.log(`useBatchReportUpdater: Handling HTML content for domain '${lastKey}'. Storing in 'topicSentence', clearing others.`);
+
+      // Ensure the domain object exists or re-initialize if it was wrongly replaced by a string previously
+      if (typeof current[lastKey] !== 'object' || current[lastKey] === null) {
+          current[lastKey] = {};
+      }
+
+      current[lastKey].topicSentence = content; // Store HTML here
+      current[lastKey].strengths = [];
+      current[lastKey].needs = [];
+      current[lastKey].impactStatement = "";
+      current[lastKey].isConcern = false; // As needs are cleared
+      // Note: Any existing 'synthesis' or 'isLocked' on current[lastKey] will be preserved.
+    } else {
+      // Original logic for other updates
+      if (content === null || content === undefined) {
+        delete current[lastKey];
       } else {
-        // Original logic for other updates
-        if (content === null || content === undefined) {
-          delete current[lastKey];
-        } else {
-          current[lastKey] = content;
-        }
+        current[lastKey] = content;
       }
-      
-      // Update metadata
-      updated.metadata = {
-        ...updated.metadata,
-        lastUpdated: new Date().toISOString(),
-        version: (updated.metadata?.version || 0) + 1
-      };
-      
-      return updated;
-    });
-  }, []);
+    }
+
+    // Update metadata
+    updated.metadata = {
+      ...updated.metadata,
+      lastUpdated: new Date().toISOString(),
+      version: (updated.metadata?.version || 0) + 1
+    };
+
+    // Update local state and persist asynchronously
+    setReport(updated);
+    try {
+      await saveReport(updated, report.id);
+    } catch (err) {
+      console.error('Error saving report:', err);
+    }
+  }, [report, saveReport]);
 
   return {
     report,

@@ -262,7 +262,7 @@ export default function ReportEditor({ reportId }: ReportEditorProps) {
             assessmentTools={state.assessmentTools}
             batchStatus={batchStatus}
             isUpdating={isUpdating}
-            updateSection={updateSection}
+            updateSection={handleUpdateSection}
             processText={processText}
             processPdf={processPdf}
             viewMode={viewMode}

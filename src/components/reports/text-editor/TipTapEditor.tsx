@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { Button } from '@/components/ui/button';
 import { 
   Bold, 
@@ -31,7 +32,7 @@ interface TipTapEditorProps {
 const TipTapEditor: React.FC<TipTapEditorProps> = ({ initialContent, onUpdate, isStudentInfo = false, title }) => {
   const [isInitialized, setIsInitialized] = React.useState(false);
   
-  const editor = useEditor({
+  const editorOptions = useMemo(() => ({
     extensions: [
       StarterKit,
       Table.configure({
@@ -41,72 +42,49 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({ initialContent, onUpdate, i
       TableHeader,
       TableCell,
     ],
-    content: '', // Start with empty content
+    content: '',
     onUpdate: ({ editor }) => {
       onUpdate(editor.getHTML());
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none min-h-[200px] max-w-none',
+        class:
+          'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none min-h-[200px] max-w-none',
       },
     },
-  });
+  }), [onUpdate]);
+
+  const editor = useEditor(editorOptions);
 
   // Convert student info JSON to table if needed - only run once
   React.useEffect(() => {
     if (editor && !isInitialized) {
       let content = '';
-      
+
       // Add title as H1 if provided
       if (title) {
         content = `<h1>${title}</h1>`;
       }
-      
+
       if (isStudentInfo && initialContent) {
         try {
           const data = JSON.parse(initialContent);
           if (typeof data === 'object' && !Array.isArray(data)) {
-            // Create table HTML from key-value pairs in 6-column layout
-            const entries = Object.entries(data);
-            const pairsPerRow = 3; // 3 key-value pairs per row (6 columns total)
-            let tableHTML = '<table class="student-info-table"><tbody>';
-            
-            for (let i = 0; i < entries.length; i += pairsPerRow) {
-              tableHTML += '<tr>';
-              
-              // Add up to 3 key-value pairs per row
-              for (let j = 0; j < pairsPerRow; j++) {
-                const index = i + j;
-                if (index < entries.length) {
-                  const [key, value] = entries[index];
-                  tableHTML += `<td class="key-cell">${formatKey(key)}</td><td class="value-cell">${value || ''}</td>`;
-                } else {
-                  tableHTML += '<td class="key-cell"></td><td class="value-cell"></td>';
-                }
-              }
-              
-              tableHTML += '</tr>';
-            }
-            
-            tableHTML += '</tbody></table>';
-            content += tableHTML;
+            content += jsonToTableMarkup(data);
           } else {
-            // Not an object, add as is
             content += initialContent;
           }
         } catch (e) {
-          // Not JSON, add content as is
           content += initialContent;
         }
       } else {
-        // Regular content
         content += initialContent;
       }
-      
+
       editor.commands.setContent(content);
       setIsInitialized(true);
     }
-  }, [editor, isInitialized]); // Remove dependencies that cause re-runs
+  }, [editor, isInitialized, initialContent, isStudentInfo, title]);
 
   // Helper function to format keys (e.g., firstName -> First Name)
   const formatKey = (key: string): string => {
@@ -114,6 +92,34 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({ initialContent, onUpdate, i
       .replace(/([A-Z])/g, ' $1')
       .replace(/^./, str => str.toUpperCase())
       .trim();
+  };
+
+  const jsonToTableMarkup = (data: Record<string, any>): string => {
+    const entries = Object.entries(data);
+    const pairsPerRow = 3;
+    const rows = [] as React.ReactNode[];
+    for (let i = 0; i < entries.length; i += pairsPerRow) {
+      const cells: React.ReactNode[] = [];
+      for (let j = 0; j < pairsPerRow; j++) {
+        const idx = i + j;
+        if (idx < entries.length) {
+          const [k, v] = entries[idx];
+          cells.push(
+            <td className="key-cell" key={`k-${idx}`}>{formatKey(k)}</td>,
+            <td className="value-cell" key={`v-${idx}`}>{String(v ?? '')}</td>
+          );
+        } else {
+          cells.push(
+            <td className="key-cell" key={`k-${idx}`}></td>,
+            <td className="value-cell" key={`v-${idx}`}></td>
+          );
+        }
+      }
+      rows.push(<tr key={`r-${i}`}>{cells}</tr>);
+    }
+    return renderToStaticMarkup(
+      <table className="student-info-table"><tbody>{rows}</tbody></table>
+    );
   };
 
   if (!editor) {
