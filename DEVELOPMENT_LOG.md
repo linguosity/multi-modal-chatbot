@@ -37,10 +37,14 @@ The core report writing application is functional, including:
     *   **Resolution:** Rewrote `DEFAULT_SECTIONS` content to ensure all multi-line strings use backticks.
 *   **AI Over-Cautiousness / No Tool Calls:** Initial prompt refinements made Claude too hesitant, resulting in empty `updatedSections`.
     *   **Resolution:** Re-introduced `sectionId` as a primary hint to Claude in the API call and prompt, simplifying the prompt to give Claude a clearer focus while retaining multi-section autonomy.
+*   **Report Update Validation:** `createdAt`, `updatedAt`, and `studentId` fields were causing validation errors on report updates.
+    *   **Resolution:** Marked `createdAt`, `updatedAt`, and `studentId` as optional in `ReportSchema` for update operations.
 
 ## Current Focus
 
 *   **Ensuring AI Robustness:** Systematically testing Claude's ability to accurately identify and update relevant sections based on diverse text inputs.
+    *   **Prompt Refinement (Family Background):** Updated generation prompt to be more direct about extracting family members and home language environment.
+    *   **Prompt Refinement (Assessment Tools):** Updated generation prompt to explicitly encourage inference and inclusion of informal assessment procedures (e.g., language sample analysis, oral mechanism exam, clinical observation) from unstructured notes.
 
 ## Next Steps & Plan
 

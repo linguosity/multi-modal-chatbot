@@ -135,29 +135,20 @@ Remember to call the 'update_report_section' tool with the generated content for
       for (const toolCall of toolCalls) {
         if (toolCall.type === 'tool_use' && toolCall.name === 'update_report_section') {
           const { section_id, content } = toolCall.input;
-          updatedSections = updatedSections.map((sec: any) =>
-            sec.id === section_id ? { ...sec, content: content, isGenerated: true, lastUpdated: new Date().toISOString() } : sec
-          );
-          updatedSectionIds.push(section_id);
+          const existingSection = updatedSections.find(sec => sec.id === section_id);
+          if (existingSection) {
+            // Only update content and mark as generated, don't set lastUpdated here
+            existingSection.content = content;
+            existingSection.isGenerated = true;
+            updatedSectionIds.push(section_id);
+          }
         }
       }
 
-      // Update the report in Supabase with all changes
-      const { data: updatedReport, error: updateError } = await supabase
-        .from('reports')
-        .update({ sections: updatedSections, updated_at: new Date().toISOString() })
-        .eq('id', reportId)
-        .eq('user_id', user.id) // Ensure user can only update their own reports
-        .select()
-        .single();
+      // Filter to only return the sections that were actually updated by the AI
+      const aiGeneratedSections = updatedSections.filter(sec => updatedSectionIds.includes(sec.id));
 
-      if (updateError) {
-        console.error('Error updating report sections:', updateError);
-        return new NextResponse(JSON.stringify({ error: 'Failed to update report sections' }), { status: 500 });
-      }
-
-      // Return all updated sections to the frontend
-      return NextResponse.json({ updatedSections: updatedSections.filter(sec => updatedSectionIds.includes(sec.id)) });
+      return NextResponse.json({ updatedSections: aiGeneratedSections });
     } else {
       console.error('Claude did not call the expected tool(s):', response.content);
       return new NextResponse(JSON.stringify({ error: 'AI did not generate content as expected.' }), { status: 500 });

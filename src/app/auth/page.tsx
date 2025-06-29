@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClient } from '@/lib/supabase/client'
+import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton'
+import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -70,6 +71,10 @@ export default function LoginPage() {
               Login
             </Button>
           </form>
+          <div className="mt-4 text-center text-sm">
+            <p className="mb-2">or</p>
+            <GoogleSignInButton />
+          </div>
         </CardContent>
       </Card>
     </div>
