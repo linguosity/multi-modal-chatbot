@@ -16,8 +16,9 @@ export default function TiptapEditor({ content, onChange, editable = true }: Tip
       StarterKit,
     ],
     content: content,
+    immediatelyRender: false, // Prevent hydration mismatches with SSR
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML())
+      onChange(editor.getHTML());
     },
     editable: editable,
   })
