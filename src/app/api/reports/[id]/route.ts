@@ -63,3 +63,27 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
   return NextResponse.json(data)
 }
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const { id } = params
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  }
+
+  const { error } = await supabase
+    .from('reports')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id) // Ensure user can only delete their own reports
+
+  if (error) {
+    console.error('Error deleting report:', error)
+    return new NextResponse(JSON.stringify({ error: 'Failed to delete report' }), { status: 500 })
+  }
+
+  return new NextResponse(null, { status: 204 }) // 204 No Content for successful deletion
+}

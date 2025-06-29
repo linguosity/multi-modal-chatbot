@@ -20,6 +20,7 @@ export default function CreateReportPage() {
   const [type, setType] = useState<ReportSchema['type'] | ''>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showJson, setShowJson] = useState(false)
   const router = useRouter()
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -95,7 +96,18 @@ export default function CreateReportPage() {
         <Button type="submit" disabled={loading}>
           {loading ? 'Creating...' : 'Create Report'}
         </Button>
+        <Button type="button" onClick={() => setShowJson(!showJson)} className="ml-4">
+          {showJson ? 'Hide JSON' : 'Show JSON'}
+        </Button>
       </form>
+      {showJson && (
+        <div className="mt-6 p-4 bg-gray-100 rounded-md">
+          <h2 className="text-lg font-semibold mb-2">Report JSON</h2>
+          <pre className="text-sm overflow-x-auto">
+            {JSON.stringify({ title, studentId, type }, null, 2)}
+          </pre>
+        </div>
+      )}
     </div>
   )
 }

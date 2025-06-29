@@ -86,8 +86,8 @@ export const ReportSchema = z.object({
   ]),
 
   // Dates and status
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
   status: z.enum([
     "draft",
     "in_progress",
@@ -97,7 +97,7 @@ export const ReportSchema = z.object({
   ]).default("draft"),
 
   // People involved
-  studentId: z.string(),
+  studentId: z.string().optional(),
   evaluatorId: z.string().optional(),
 
   // Content
@@ -160,7 +160,7 @@ export const DEFAULT_SECTIONS = {
     order: 4,
     isRequired: true,
     isGenerated: true,
-    generationPrompt: "Generate a family background section describing the student's living situation, home language environment, and any relevant family history of speech, language, or learning difficulties."
+    generationPrompt: "Generate a family background section. Extract details about the student's living situation (e.g., who they live with, family members present) and home language environment from the unstructured notes. Include any relevant family history of speech, language, or learning difficulties if mentioned."
   },
 
   // Parent Concern section template
@@ -196,7 +196,7 @@ export const DEFAULT_SECTIONS = {
     order: 7,
     isRequired: true,
     isGenerated: true,
-    generationPrompt: "Generate an assessment tools section that lists and briefly describes each formal and informal assessment measure used in the evaluation."
+    generationPrompt: "Generate an assessment tools section. List and briefly describe each formal and informal assessment measure used in the evaluation. Crucially, if the unstructured notes describe any assessment procedures (e.g., 'language sample analysis', 'oral mechanism exam', 'clinical observation', 'parent/caregiver interview', 'questionnaire', 'survey', 'classroom observation'), infer and list them here, even if no formal test names are explicitly given."
   },
 
   // Assessment Results section template
