@@ -11,6 +11,11 @@ const anthropic = new Anthropic({
 export async function POST(request: Request) {
   const supabase = createClient()
 
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error("ANTHROPIC_API_KEY is not set.");
+    return new NextResponse(JSON.stringify({ error: 'Server configuration error: Anthropic API key missing.' }), { status: 500 });
+  }
+
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -116,6 +121,7 @@ Scores on CASL: Pragmatic Language SS 89. PLS-5: Total Language 7th percentile.
 Remember to call the 'update_report_section' tool with the generated content for ALL relevant sections.`
 
   try {
+    console.log("Calling Anthropic API...");
     const response = await anthropic.messages.create({
       model: "claude-3-5-sonnet-20240620", // Or another suitable Claude model
       max_tokens: 2000,
@@ -125,6 +131,7 @@ Remember to call the 'update_report_section' tool with the generated content for
         { role: "user", content: `Generate content for section ID "${sectionId}" and any other relevant sections using the provided unstructured notes and report context.` },
       ],
     });
+    console.log("Anthropic API call completed.");
 
     const toolCalls = response.content.filter(block => block.type === 'tool_use' && block.name === 'update_report_section');
 

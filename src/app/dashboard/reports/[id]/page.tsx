@@ -121,16 +121,21 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
       }
 
       const { updatedSections } = await response.json()
+      console.log("Received updatedSections from API:", updatedSections); // Debugging
       
       setProposedSections(updatedSections); // Store proposed changes
+      console.log("Proposed sections set."); // Debugging
       setShowReviewModal(true); // Open the review modal
+      console.log("setShowReviewModal called with true."); // Debugging
       setSelectedSectionsToAccept(updatedSections.map((sec: any) => sec.id)); // Select all by default
 
       setUnstructuredInput('') // Clear input after generation
     } catch (err: any) {
       setError(err.message)
+      console.error("Error in handleGenerateAI:", err); // Debugging
     } finally {
       setAiGenerating(false)
+      console.log("setAiGenerating called with false."); // Debugging
     }
   }
 
@@ -299,6 +304,7 @@ export default function ReportDetailPage({ params }: { params: { id: string } })
 
       {/* AI Review Modal */}
       <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
+        {console.log("Dialog open prop value:", showReviewModal)} {/* Debugging line */}
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Review AI Generated Content</DialogTitle>

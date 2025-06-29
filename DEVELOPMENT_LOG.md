@@ -2,7 +2,7 @@
 
 This document tracks the progress, key decisions, roadblocks, and future plans for the Linguosity project. It serves as a continuous record to ensure seamless continuation of work.
 
-## Current Status: Saturday, June 28, 2025, 10:30 PM PST
+## Current Status: Sunday, June 29, 2025, 10:30 PM PST
 
 The core report writing application is functional, including:
 *   User authentication (Login/Signup) via Supabase.
@@ -16,12 +16,13 @@ The core report writing application is functional, including:
 *   **Project Scaffolding:** New Next.js project initialized with TypeScript, Tailwind CSS, and ESLint.
 *   **Supabase Integration:** Client, server, and middleware for Supabase authentication and database interaction are set up.
 *   **Database Schema:** `reports` table created in Supabase via migration (manual `supabase db push` required by user).
-*   **Core Report CRUD:** API endpoints for creating, fetching all, fetching single, and updating reports are implemented.
+*   **Core Report CRUD:** API endpoints for creating, fetching all, fetching single, updating, and deleting reports are implemented.
 *   **AI Integration (Initial):**
     *   Backend API (`/api/ai/generate-section`) to interact with Claude.
     *   Claude configured to use `update_report_section` tool.
     *   Frontend UI for unstructured notes input and AI generation button.
     *   Successful multi-section updates by AI (e.g., Reason for Referral, Parent Concern, Health History, Assessment Results/Tools).
+*   **AI Content Review Modal:** Implemented a preliminary review modal for AI-generated content, allowing users to accept/reject changes before saving.
 
 ## Roadblocks & Resolutions
 
@@ -39,12 +40,17 @@ The core report writing application is functional, including:
     *   **Resolution:** Re-introduced `sectionId` as a primary hint to Claude in the API call and prompt, simplifying the prompt to give Claude a clearer focus while retaining multi-section autonomy.
 *   **Report Update Validation:** `createdAt`, `updatedAt`, and `studentId` fields were causing validation errors on report updates.
     *   **Resolution:** Marked `createdAt`, `updatedAt`, and `studentId` as optional in `ReportSchema` for update operations.
+*   **Dialog Component Module Not Found:** `src/components/ui/dialog.tsx` was imported but the file did not exist.
+    *   **Resolution:** Created `src/components/ui/dialog.tsx` with Shadcn UI Dialog component code.
+*   **Dialog Component Syntax Error:** Extraneous 'n' character in `React.forwardRef<n` declarations in `dialog.tsx`.
+    *   **Resolution:** Removed the 'n' character from all `React.forwardRef` declarations in `src/components/ui/dialog.tsx`.
+*   **AI Review Modal Not Appearing:** Despite frontend code being in place, the modal was not triggered after AI generation.
+    *   **Diagnosis:** Suspected client-side caching or development server not serving latest code. `handleGenerateAI` in `src/app/dashboard/reports/[id]/page.tsx` correctly sets `proposedSections` and `showReviewModal(true)`. Backend API (`/api/ai/generate-section`) correctly returns `updatedSections` without direct DB update.
+    *   **Current Status:** Code pushed to GitHub for external review/debugging.
 
 ## Current Focus
 
-*   **Ensuring AI Robustness:** Systematically testing Claude's ability to accurately identify and update relevant sections based on diverse text inputs.
-    *   **Prompt Refinement (Family Background):** Updated generation prompt to be more direct about extracting family members and home language environment.
-    *   **Prompt Refinement (Assessment Tools):** Updated generation prompt to explicitly encourage inference and inclusion of informal assessment procedures (e.g., language sample analysis, oral mechanism exam, clinical observation) from unstructured notes.
+*   **Debugging AI Review Modal:** Investigating why the modal is not appearing despite correct frontend logic and backend response.
 
 ## Next Steps & Plan
 
