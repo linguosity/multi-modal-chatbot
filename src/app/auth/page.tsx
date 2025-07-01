@@ -22,8 +22,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-
-  
+  const router = useRouter();
+  const supabase = createClient();
 
   useEffect(() => {
     const checkUser = async () => {
