@@ -55,7 +55,7 @@ export default function ReportsPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Your Reports</h1>
+        <h1 className="text-2xl font-medium">Your Reports</h1>
         <Button onClick={handleCreateReport}>Create New Report</Button>
       </div>
 

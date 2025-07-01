@@ -10,6 +10,7 @@ interface ReportContextType {
   showJson: boolean;
   setShowJson: React.Dispatch<React.SetStateAction<boolean>>;
   loading: boolean;
+  setReport: React.Dispatch<React.SetStateAction<Report | null>>; // Add setReport to context
 }
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
@@ -94,7 +95,7 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
   };
 
   return (
-    <ReportContext.Provider value={{ report, handleSave, handleDelete, showJson, setShowJson, loading }}>
+    <ReportContext.Provider value={{ report, handleSave, handleDelete, showJson, setShowJson, loading, setReport }}>
       {children}
     </ReportContext.Provider>
   );

@@ -23,8 +23,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
 
-  const supabase = createClient();
-  const router = useRouter();
+  
 
   useEffect(() => {
     const checkUser = async () => {
