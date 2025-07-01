@@ -1,92 +1,62 @@
-# Linguosity Development Log
+## June 30, 2025 - Authentication Flow & UI/UX Refinements
 
-This document tracks the progress, key decisions, roadblocks, and future plans for the Linguosity project. It serves as a continuous record to ensure seamless continuation of work.
+**Summary of Work:**
+Today's session focused on resolving persistent `npm install` issues, refining the authentication flow, and addressing UI/UX inconsistencies in the dashboard layout. We encountered several challenging errors, particularly with JSX parsing and TypeScript type conflicts, which required meticulous debugging and a comprehensive rewrite of a key component.
 
-## Current Status: Sunday, June 29, 2025, 10:30 PM PST
+**Key Issues Encountered & Resolutions:**
 
-The core report writing application is functional, including:
-*   User authentication (Login/Signup) via Supabase.
-*   Protected dashboard with basic navigation.
-*   Report creation, listing, and individual report viewing/editing.
-*   AI integration for multi-section content generation using Claude's tool-use capabilities.
-*   Temporary visual highlighting of AI-updated sections.
+1.  **`npm install` hanging/`ENOTEMPTY` errors:**
+    *   **Problem:** Repeated `npm install` failures, often with `ENOTEMPTY` errors, indicating locked files or corrupted cache. Even after `rm -rf node_modules package-lock.json` and `npm cache clean --force`, the issue persisted.
+    *   **Resolution:** Forcefully cleared npm cache (`npm cache clean --force`) and performed a `sudo rm -rf node_modules package-lock.json` followed by `sudo find . -name ".eslint-scope*" -exec rm -rf {} +` to ensure a completely clean environment. This resolved the installation issues.
 
-## Key Milestones Achieved
+2.  **`useReport must be used within a ReportProvider` error:**
+    *   **Problem:** The `useReport` hook was being called in `DashboardLayout` before `ReportProvider` was properly wrapping the component tree, leading to runtime errors.
+    *   **Resolution:** Refactored `src/lib/context/ReportContext.tsx` to move the state management and logic for `report`, `handleSave`, `handleDelete`, etc., directly into the `ReportProvider` component (Option A from the provided guidance). This made `ReportProvider` self-contained and eliminated the need to pass props from `DashboardLayout`.
 
-*   **Project Scaffolding:** New Next.js project initialized with TypeScript, Tailwind CSS, and ESLint.
-*   **Supabase Integration:** Client, server, and middleware for Supabase authentication and database interaction are set up.
-*   **Database Schema:** `reports` table created in Supabase via migration (manual `supabase db push` required by user).
-*   **Core Report CRUD:** API endpoints for creating, fetching all, fetching single, updating, and deleting reports are implemented.
-*   **AI Integration (Initial):**
-    *   Backend API (`/api/ai/generate-section`) to interact with Claude.
-    *   Claude configured to use `update_report_section` tool.
-    *   Frontend UI for unstructured notes input and AI generation button.
-    *   Successful multi-section updates by AI (e.g., Reason for Referral, Parent Concern, Health History, Assessment Results/Tools).
-*   **AI Content Review Modal:** Implemented a preliminary review modal for AI-generated content, allowing users to accept/reject changes before saving.
+3.  **`Unexpected token ReportProvider. Expected jsx identifier` (JSX parsing error) in `src/app/dashboard/layout.tsx`:**
+    *   **Problem:** Persistent JSX syntax errors in `DashboardLayout.tsx` due to incorrect `div` nesting, causing the React parser to fail. This also led to the main content rendering within the sidebar.
+    *   **Resolution:** Meticulously corrected the JSX structure in `src/app/dashboard/layout.tsx` to ensure a single root element within `ReportProvider` and proper separation of sidebar and main content. This involved removing an extra, misplaced `</div>` tag.
 
-## Roadblocks & Resolutions
+4.  **`Cannot find name 'handleSave'`, `'loading'`, `'showJson'`, `'setShowJson'`, `'handleDelete'` errors in `src/app/dashboard/layout.tsx`:**
+    *   **Problem:** After refactoring `ReportContext`, `DashboardLayout` was still trying to access these variables directly, but they are now managed internally by `ReportProvider`.
+    *   **Resolution:** Created a new component `src/components/ReportActions.tsx` to encapsulate the "Save Report", "Show JSON", and "Delete Report" buttons. This component now uses `useReport()` internally. The `DashboardLayout.tsx` was updated to render `<ReportActions />` instead of the individual buttons, resolving these TypeScript errors.
 
-*   **Missing Project Files:** Initial `rm -rf *` command was too aggressive, deleting `package.json` and other config files.
-    *   **Resolution:** Manually recreated `package.json`, `tailwind.config.ts`, `tsconfig.json`, `globals.css`, and `components.json` to restore project integrity.
-*   **Supabase CLI Login:** Non-interactive environment prevented direct `supabase login`.
-    *   **Resolution:** User performed `supabase login` manually in their terminal.
-*   **Supabase DB Push Password:** `supabase db push` failed due to requiring database password in non-interactive environment.
-    *   **Resolution:** User performed `supabase db push` manually in their terminal after resetting password.
-*   **Zod Validation Errors (Report Creation):** Mismatch between `ReportSchema` (camelCase) and database fields (snake_case), and float `order` value.
-    *   **Resolution:** Adjusted API logic to map camelCase to snake_case for DB insertion, and corrected `order` values in `DEFAULT_SECTIONS` to integers.
-*   **Unterminated String Constants (Build Error):** Multi-line strings in `DEFAULT_SECTIONS` were not using template literals.
-    *   **Resolution:** Rewrote `DEFAULT_SECTIONS` content to ensure all multi-line strings use backticks.
-*   **AI Over-Cautiousness / No Tool Calls:** Initial prompt refinements made Claude too hesitant, resulting in empty `updatedSections`.
-    *   **Resolution:** Re-introduced `sectionId` as a primary hint to Claude in the API call and prompt, simplifying the prompt to give Claude a clearer focus while retaining multi-section autonomy.
-*   **Report Update Validation:** `createdAt`, `updatedAt`, and `studentId` fields were causing validation errors on report updates.
-    *   **Resolution:** Marked `createdAt`, `updatedAt`, and `studentId` as optional in `ReportSchema` for update operations.
-*   **Dialog Component Module Not Found:** `src/components/ui/dialog.tsx` was imported but the file did not exist.
-    *   **Resolution:** Created `src/components/ui/dialog.tsx` with Shadcn UI Dialog component code.
-*   **Dialog Component Syntax Error:** Extraneous 'n' character in `React.forwardRef<n` declarations in `dialog.tsx`.
-    *   **Resolution:** Removed the 'n' character from all `React.forwardRef` declarations in `src/components/ui/dialog.tsx`.
-*   **AI Review Modal Not Appearing:** Despite frontend code being in place, the modal was not triggered after AI generation.
-    *   **Diagnosis:** Suspected client-side caching or development server not serving latest code. `handleGenerateAI` in `src/app/dashboard/reports/[id]/page.tsx` correctly sets `proposedSections` and `showReviewModal(true)`. Backend API (`/api/ai/generate-section`) correctly returns `updatedSections` without direct DB update.
-    *   **Current Status:** Code pushed to GitHub for external review/debugging.
+5.  **`createServerClient is not defined` error in `src/app/layout.tsx`:**
+    *   **Problem:** Incorrect import and usage of `createServerClient` from `src/lib/supabase/server.ts`. The utility exports `createClient`, not `createServerClient` directly.
+    *   **Resolution:** Corrected the import in `src/app/layout.tsx` to `import { createClient } from '@/lib/supabase/server';` and updated the call to `const supabase = createClient();`.
 
-## Current Focus
+6.  **`SignOutButton' does not contain a default export` error:**
+    *   **Problem:** `SignOutButton` was imported as a default export in `src/app/layout.tsx` but was exported as a named export in `src/components/ui/SignOutButton.tsx`.
+    *   **Resolution:** Changed the import in `src/app/layout.tsx` to a named import: `import { SignOutButton } from '@/components/ui/SignOutButton';`.
 
-*   **Debugging AI Review Modal:** Investigating why the modal is not appearing despite correct frontend logic and backend response.
+7.  **Redundant `router` and `supabase` declarations in `src/app/auth/page.tsx`:**
+    *   **Problem:** `router` and `supabase` were declared twice in `src/app/auth/page.tsx`, leading to compilation errors.
+    *   **Resolution:** Removed the duplicate declarations of `router` and `supabase` from `src/app/auth/page.tsx`.
 
-## Next Steps & Plan
+8.  **UI/UX: Redundant header in dashboard and layout issues:**
+    *   **Problem:** The main content was rendering in the sidebar, and a redundant header was present in the dashboard layout.
+    *   **Resolution:** Removed the extra `</div>` tag in `src/app/dashboard/layout.tsx` to fix the main content rendering. Removed the `<header>` element from `src/app/dashboard/layout.tsx` to streamline the UI.
 
-**Phase 1: Comprehensive Text Input Testing (Automated via Gemini)**
+**Files Modified:**
+*   `DEVELOPMENT_LOG.md`
+*   `package.json`
+*   `pnpm-lock.yaml`
+*   `src/app/api/ai/generate-section/route.ts`
+*   `src/app/auth/page.tsx`
+*   `src/app/dashboard/layout.tsx`
+*   `src/app/dashboard/reports/[id]/page.tsx`
+*   `src/app/layout.tsx`
+*   `src/components/ReportActions.tsx` (new file)
+*   `src/components/TiptapEditor.tsx`
+*   `src/components/ui/button.tsx`
+*   `src/components/ui/card.tsx`
+*   `src/components/ui/dialog.tsx`
+*   `src/components/ui/label.tsx`
+*   `src/components/ui/textarea.tsx`
+*   `src/lib/context/ReportContext.tsx`
+*   `src/lib/supabase/server.ts`
+*   `tailwind.config.ts`
 
-*   **Goal:** Ensure Claude accurately identifies and updates relevant sections for various text-based inputs.
-*   **Method:** I will define a series of test cases, each with:
-    *   An `unstructuredInput` string.
-    *   An `expectedUpdatedSections` array (the IDs of sections I expect Claude to update).
-    *   An `expectedContentKeywords` object (keywords I expect to see in the generated content for specific sections).
-*   **Execution:** For each test case, I will:
-    1.  Make a `POST` request to `/api/ai/generate-section` with a consistent `reportId` and the `unstructuredInput`.
-    2.  Analyze the `updatedSections` returned in the response.
-    3.  Compare `updatedSections` with `expectedUpdatedSections`.
-    4.  If there's a mismatch, I will report it and suggest prompt adjustments.
-    5.  If they match, I will then fetch the updated report from Supabase (using `GET /api/reports/[id]`) and verify the `expectedContentKeywords` in the generated content.
-*   **Action:** I will start by creating a new report to get a `reportId` for testing.
-
-**Phase 2: PDF and Image Integration (Initial Steps)**
-
-*   **Goal:** Enable the system to accept PDF and image inputs and pass them to Claude for analysis.
-*   **Method:**
-    1.  **Frontend:** Modify the report detail page to allow users to upload PDF and image files. This will involve using a file input and converting the file to base64 for sending to the backend.
-    2.  **Backend (`/api/ai/generate-section`):**
-        *   Modify the API to accept file data (base64 encoded PDF/image) in addition to unstructured text.
-        *   Update the Claude prompt to include the file data using the `document` or `image` content blocks, as per the Anthropic docs.
-        *   Instruct Claude to analyze the file content and update relevant report sections.
-    3.  **Testing:** I will define test cases with sample PDF/image data (or descriptions of what they contain) and expected section updates.
-
-**Phase 3: Refinement and Iteration**
-
-*   Based on the results of Phase 1 and 2, we will iteratively refine the Claude prompt and potentially the tool definitions to improve accuracy and reduce unwanted updates.
-
-## Future Features (from `FUTURE_FEATURES.md`)
-
-*   **AI-Driven Dynamic Checklists:** AI extracts entities from text to generate interactive checklists.
-*   **PII Handling Strategy (Placeholders):** Use placeholders for PII during AI interaction, replace at export.
-*   **Manual Section Selection for AI Updates:** User can manually select sections for AI to update.
-*   **Point-by-Point Generation:** AI generates lists of points for sections, which can then be compiled into paragraphs.
+**Next Steps:**
+*   Verify all functionalities thoroughly.
+*   Continue with further UI/UX improvements as needed.

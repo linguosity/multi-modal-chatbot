@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   // Construct the Claude prompt
   const systemMessage = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to generate and refine sections of a comprehensive SLP report based on provided unstructured notes and the existing report context.
 
-Your primary focus is the section with ID "${sectionId}". Generate content for this section based on the unstructured notes and the overall report context. Additionally, if the unstructured notes contain information relevant to other sections, generate content for those sections as well.
+Based on the unstructured notes and the current report state, you are expected to generate content for *all* relevant sections. You MUST call the 'update_report_section' tool for *each and every* section that you determine needs an update.
 
 Use the 'update_report_section' tool to provide the generated content for each relevant section. You MUST call this tool for every section that needs to be updated.
 
@@ -123,7 +123,7 @@ Remember to call the 'update_report_section' tool with the generated content for
   try {
     console.log("Calling Anthropic API...");
     const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20240620", // Or another suitable Claude model
+      model: "claude-sonnet-4-20250514", // Upgraded to Claude Sonnet 4
       max_tokens: 2000,
       system: systemMessage,
       tools: tools,

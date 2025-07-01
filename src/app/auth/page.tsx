@@ -13,13 +13,35 @@ import { Label } from "@/components/ui/label"
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton'
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+import { User } from '@supabase/supabase-js';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const router = useRouter()
-  const supabase = createClient()
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+
+  const supabase = createClient();
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (user) {
+        router.replace('/dashboard');
+      } else {
+        setLoading(false);
+      }
+    };
+    checkUser();
+  }, [router, supabase]);
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+  
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()

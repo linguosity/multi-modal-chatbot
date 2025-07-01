@@ -6,11 +6,13 @@ import { useEffect } from 'react'
 
 interface TiptapEditorProps {
   content: string;
-  onChange: (newContent: string) => void;
+  onChange?: (newContent: string) => void; // Make onChange optional
   editable?: boolean;
+  withBorder?: boolean; // New prop for border
+  scrollable?: boolean; // New prop for scrollable content
 }
 
-export default function TiptapEditor({ content, onChange, editable = true }: TiptapEditorProps) {
+export default function TiptapEditor({ content, onChange, editable = true, withBorder = true, scrollable = false }: TiptapEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -18,7 +20,9 @@ export default function TiptapEditor({ content, onChange, editable = true }: Tip
     content: content,
     immediatelyRender: false, // Prevent hydration mismatches with SSR
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      if (onChange) {
+        onChange(editor.getHTML());
+      }
     },
     editable: editable,
   })
@@ -29,8 +33,14 @@ export default function TiptapEditor({ content, onChange, editable = true }: Tip
     }
   }, [content, editor])
 
+  const editorClassNames = [
+    withBorder ? "border rounded-md" : "",
+    scrollable ? "overflow-y-auto max-h-[300px]" : "", // Added max-h for scrollable
+    "p-2",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div className="border rounded-md min-h-[150px] p-2">
+    <div className={editorClassNames}>
       <EditorContent editor={editor} />
     </div>
   )
