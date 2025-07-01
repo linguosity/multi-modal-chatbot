@@ -75,6 +75,8 @@ export const ReportSchema = z.object({
 
   // Basic information
   title: z.string(),
+  studentName: z.string().optional(),
+  studentId: z.string().optional(),
   type: z.enum([
     "initial",
     "annual",

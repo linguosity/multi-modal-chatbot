@@ -1,19 +1,23 @@
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      "group relative block h-full bg-white border-2 border-black transform transition-transform group-hover:-translate-x-2 group-hover:-translate-y-2",
+      "group relative block bg-white border border-charcoal shadow-sm",
       className
     )}
     {...props}
-  />
+  >
+    <span className="absolute inset-0 border border-dashed border-charcoal"></span>
+    <div className="relative flex h-full transform items-start border-2 border-black bg-white transition-transform group-hover:-translate-x-2 group-hover:-translate-y-2">
+      {children}
+    </div>
+  </div>
 ))
 Card.displayName = "Card"
 
@@ -23,7 +27,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("p-4 !pt-0 transition-opacity group-hover:absolute group-hover:opacity-0 sm:p-6 lg:p-8", className)}
+    className={cn("p-4 sm:p-6 lg:p-8", className)}
     {...props}
   />
 ))
@@ -36,7 +40,7 @@ const CardTitle = React.forwardRef<
   <h2
     ref={ref}
     className={cn(
-      "mt-2 text-lg font-medium sm:text-xl",
+      "mt-2 text-base font-medium sm:text-lg",
       className
     )}
     {...props}
@@ -60,7 +64,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("absolute p-4 opacity-0 transition-opacity group-hover:relative group-hover:opacity-100 sm:p-6 lg:p-8", className)} {...props} />
+  <div ref={ref} className={cn("p-4 sm:p-6 lg:p-8 max-h-32 overflow-y-auto break-words", className)} {...props} />
 ))
 CardContent.displayName = "CardContent"
 

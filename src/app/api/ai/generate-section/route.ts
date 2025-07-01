@@ -22,10 +22,10 @@ export async function POST(request: Request) {
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { reportId, sectionId, unstructuredInput } = await request.json()
+  const { reportId, sectionId, unstructuredInput, files } = await request.json()
 
-  if (!reportId || !sectionId || !unstructuredInput) {
-    return new NextResponse(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
+  if (!reportId || !sectionId || (!unstructuredInput && (!files || files.length === 0))) {
+    return new NextResponse(JSON.stringify({ error: 'Missing required fields: reportId, sectionId, and either unstructuredInput or files' }), { status: 400 })
   }
 
   // Fetch the full report from Supabase
@@ -128,7 +128,23 @@ Remember to call the 'update_report_section' tool with the generated content for
       system: systemMessage,
       tools: tools,
       messages: [
-        { role: "user", content: `Generate content for section ID "${sectionId}" and any other relevant sections using the provided unstructured notes and report context.` },
+        {
+          role: "user",
+          content: [
+            ...(unstructuredInput ? [{ type: "text", text: unstructuredInput }] : []),
+            ...(files ? files.map((file: any) => {
+              const [mimeTypeFull, base64Data] = file.data.split(';base64,');
+              const mediaType = mimeTypeFull.replace("data:", "");
+              if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mediaType)) {
+                return { type: "image", source: { type: "base64", media_type: mediaType, data: base64Data } };
+              } else {
+                // For now, skip non-image files. Future: handle PDFs by extracting text.
+                return null;
+              }
+            }).filter(Boolean) : []),
+            { type: "text", text: `Generate content for section ID "${sectionId}" and any other relevant sections using the provided unstructured notes and report context.` },
+          ],
+        },
       ],
     });
     console.log("Anthropic API call completed.");

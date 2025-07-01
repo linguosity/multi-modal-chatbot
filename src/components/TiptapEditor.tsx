@@ -36,7 +36,7 @@ export default function TiptapEditor({ content, onChange, editable = true, withB
   const editorClassNames = [
     withBorder ? "border rounded-md" : "",
     scrollable ? "overflow-y-auto max-h-[300px]" : "", // Added max-h for scrollable
-    "p-2",
+    "p-2 text-sm",
   ].filter(Boolean).join(" ");
 
   return (
