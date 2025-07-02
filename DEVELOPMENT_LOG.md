@@ -1,62 +1,67 @@
-## June 30, 2025 - Authentication Flow & UI/UX Refinements
+## July 1, 2025 - UI/UX Refinements & Dynamic Template Initiative
 
 **Summary of Work:**
-Today's session focused on resolving persistent `npm install` issues, refining the authentication flow, and addressing UI/UX inconsistencies in the dashboard layout. We encountered several challenging errors, particularly with JSX parsing and TypeScript type conflicts, which required meticulous debugging and a comprehensive rewrite of a key component.
+Today's session focused on further refining the UI/UX of the report detail page, addressing several runtime errors, and initiating the development of dynamic report templates.
 
 **Key Issues Encountered & Resolutions:**
 
-1.  **`npm install` hanging/`ENOTEMPTY` errors:**
-    *   **Problem:** Repeated `npm install` failures, often with `ENOTEMPTY` errors, indicating locked files or corrupted cache. Even after `rm -rf node_modules package-lock.json` and `npm cache clean --force`, the issue persisted.
-    *   **Resolution:** Forcefully cleared npm cache (`npm cache clean --force`) and performed a `sudo rm -rf node_modules package-lock.json` followed by `sudo find . -name ".eslint-scope*" -exec rm -rf {} +` to ensure a completely clean environment. This resolved the installation issues.
+1.  **`autoprefixer` module not found:**
+    *   **Problem:** Next.js build failed to find `autoprefixer`, a PostCSS plugin, despite `pnpm install` indicating dependencies were up to date.
+    *   **Resolution:** Explicitly added `autoprefixer` as a `devDependency` in `package.json` and re-ran `pnpm install`.
 
-2.  **`useReport must be used within a ReportProvider` error:**
-    *   **Problem:** The `useReport` hook was being called in `DashboardLayout` before `ReportProvider` was properly wrapping the component tree, leading to runtime errors.
-    *   **Resolution:** Refactored `src/lib/context/ReportContext.tsx` to move the state management and logic for `report`, `handleSave`, `handleDelete`, etc., directly into the `ReportProvider` component (Option A from the provided guidance). This made `ReportProvider` self-contained and eliminated the need to pass props from `DashboardLayout`.
+2.  **`ReferenceError: router is not defined` in `src/app/auth/page.tsx`:**
+    *   **Problem:** The `router` object was used in a `useEffect` hook without being initialized.
+    *   **Resolution:** Added `const router = useRouter();` inside the `LoginPage` component.
 
-3.  **`Unexpected token ReportProvider. Expected jsx identifier` (JSX parsing error) in `src/app/dashboard/layout.tsx`:**
-    *   **Problem:** Persistent JSX syntax errors in `DashboardLayout.tsx` due to incorrect `div` nesting, causing the React parser to fail. This also led to the main content rendering within the sidebar.
-    *   **Resolution:** Meticulously corrected the JSX structure in `src/app/dashboard/layout.tsx` to ensure a single root element within `ReportProvider` and proper separation of sidebar and main content. This involved removing an extra, misplaced `</div>` tag.
+3.  **`ReferenceError: supabase is not defined` in `src/app/auth/page.tsx`:**
+    *   **Problem:** The `supabase` client instance was used without being initialized.
+    *   **Resolution:** Ensured `const supabase = createClient();` was present and correctly scoped within the `LoginPage` component.
 
-4.  **`Cannot find name 'handleSave'`, `'loading'`, `'showJson'`, `'setShowJson'`, `'handleDelete'` errors in `src/app/dashboard/layout.tsx`:**
-    *   **Problem:** After refactoring `ReportContext`, `DashboardLayout` was still trying to access these variables directly, but they are now managed internally by `ReportProvider`.
-    *   **Resolution:** Created a new component `src/components/ReportActions.tsx` to encapsulate the "Save Report", "Show JSON", and "Delete Report" buttons. This component now uses `useReport()` internally. The `DashboardLayout.tsx` was updated to render `<ReportActions />` instead of the individual buttons, resolving these TypeScript errors.
+4.  **Replacing Radix Dialogs with Custom Modal:**
+    *   **Problem:** User requested to replace existing Radix/shadcn Dialog components with a custom modal component based on HyperUI styling.
+    *   **Resolution:**
+        *   Created `src/components/ui/custom-modal.tsx` with the specified HyperUI modal structure and styling (solid black border, white background, shadow).
+        *   Replaced `Dialog` imports and usage in `src/app/dashboard/reports/[id]/page.tsx` with `CustomModal`, mapping props accordingly.
 
-5.  **`createServerClient is not defined` error in `src/app/layout.tsx`:**
-    *   **Problem:** Incorrect import and usage of `createServerClient` from `src/lib/supabase/server.ts`. The utility exports `createClient`, not `createServerClient` directly.
-    *   **Resolution:** Corrected the import in `src/app/layout.tsx` to `import { createClient } from '@/lib/supabase/server';` and updated the call to `const supabase = createClient();`.
+5.  **Report Detail Page Layout Refinements:**
+    *   **Problem:** User requested layout changes for "Background Information" and "Unstructured Notes" sections.
+    *   **Resolution:**
+        *   Removed the "Background Information" header from its card and adjusted its column span.
+        *   Wrapped the "Unstructured Notes" section in a `Card` component and moved it to be alongside the "Background Information" card in a two-column layout.
+        *   Applied a thinner, solid border to the "Unstructured Notes" card.
+        *   Removed the `showJson` debug section.
 
-6.  **`SignOutButton' does not contain a default export` error:**
-    *   **Problem:** `SignOutButton` was imported as a default export in `src/app/layout.tsx` but was exported as a named export in `src/components/ui/SignOutButton.tsx`.
-    *   **Resolution:** Changed the import in `src/app/layout.tsx` to a named import: `import { SignOutButton } from '@/components/ui/SignOutButton';`.
+6.  **"Unstructured Notes" UI/UX Improvements:**
+    *   **Problem:** User requested a tooltip for the notes area and an AI icon for the generate button to save space. Also, updated styling for the textarea and file upload.
+    *   **Resolution:**
+        *   Integrated `@radix-ui/react-tooltip` for the notes area, making the tooltip auto-appear and dismiss on click outside.
+        *   Replaced "Generate with AI" button text with a `Sparkles` icon from `lucide-react`.
+        *   Applied HyperUI-inspired styling to the `textarea` and updated the file upload component's structure and styling.
+        *   Removed the "Unstructured Notes" heading.
 
-7.  **Redundant `router` and `supabase` declarations in `src/app/auth/page.tsx`:**
-    *   **Problem:** `router` and `supabase` were declared twice in `src/app/auth/page.tsx`, leading to compilation errors.
-    *   **Resolution:** Removed the duplicate declarations of `router` and `supabase` from `src/app/auth/page.tsx`.
+7.  **`Module not found: Can't resolve 'zod'`:**
+    *   **Problem:** The `zod` package was a dependency but not installed.
+    *   **Resolution:** Installed `zod` using `pnpm add zod`.
 
-8.  **UI/UX: Redundant header in dashboard and layout issues:**
-    *   **Problem:** The main content was rendering in the sidebar, and a redundant header was present in the dashboard layout.
-    *   **Resolution:** Removed the extra `</div>` tag in `src/app/dashboard/layout.tsx` to fix the main content rendering. Removed the `<header>` element from `src/app/dashboard/layout.tsx` to streamline the UI.
+8.  **Initiating Dynamic Report Templates Feature:**
+    *   **Goal:** Enable users to dynamically define and modify report template structures via the UI.
+    *   **Resolution:**
+        *   Created a new Git branch `feature/dynamic-report-templates`.
+        *   Defined Zod schemas for `ReportSectionTypeSchema`, `ReportSectionGroupSchema`, and `ReportTemplateSchema` in `src/lib/schemas/report-template.ts`.
 
 **Files Modified:**
 *   `DEVELOPMENT_LOG.md`
 *   `package.json`
 *   `pnpm-lock.yaml`
-*   `src/app/api/ai/generate-section/route.ts`
+*   `src/app/api/ai/generate-section/route.ts` (examined, no changes made)
 *   `src/app/auth/page.tsx`
-*   `src/app/dashboard/layout.tsx`
 *   `src/app/dashboard/reports/[id]/page.tsx`
-*   `src/app/layout.tsx`
-*   `src/components/ReportActions.tsx` (new file)
-*   `src/components/TiptapEditor.tsx`
-*   `src/components/ui/button.tsx`
-*   `src/components/ui/card.tsx`
-*   `src/components/ui/dialog.tsx`
-*   `src/components/ui/label.tsx`
-*   `src/components/ui/textarea.tsx`
-*   `src/lib/context/ReportContext.tsx`
-*   `src/lib/supabase/server.ts`
-*   `tailwind.config.ts`
+*   `src/components/ui/custom-modal.tsx` (new file)
+*   `src/lib/schemas/report-template.ts` (new file)
 
 **Next Steps:**
-*   Verify all functionalities thoroughly.
-*   Continue with further UI/UX improvements as needed.
+*   Continue with Phase 1 of the dynamic template plan: Define Supabase tables for `report_templates` and `report_section_types`, and add `template_id` to the `reports` table.
+*   Implement API endpoints for template management.
+*   Develop the frontend UI for template creation and editing.
+*   Integrate dynamic templates into the report viewing page.
+*   Address data migration and edge cases for existing reports.

@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const ReportSectionTypeSchema = z.object({
   id: z.string().uuid(), // Unique ID for the section type (e.g., "reason_for_referral")
   name: z.string(), // Display name (e.g., "Reason for Referral")
+  default_title: z.string(), // Add this field
   // Add any other properties relevant to a section type (e.g., default content, validation rules)
 });
 
@@ -18,9 +19,9 @@ export const ReportTemplateSchema = z.object({
   description: z.string().optional(),
   groups: z.array(ReportSectionGroupSchema),
   // Add metadata like user_id, created_at, updated_at
-  user_id: z.string().uuid(),
-  created_at: z.string().datetime().optional(),
-  updated_at: z.string().datetime().optional(),
+  user_id: z.string().uuid().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
 });
 
 // Define a comprehensive list of all available section types

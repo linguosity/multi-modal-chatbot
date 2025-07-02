@@ -7,6 +7,7 @@ import ReportActions from '@/components/ReportActions';
 import { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import Image from 'next/image';
+import { LayoutList } from 'lucide-react';
 
 
 export default function DashboardLayout({
@@ -109,6 +110,19 @@ export default function DashboardLayout({
                         className="invisible absolute start-full top-1/2 ms-4 -translate-y-1/2 rounded-sm bg-gray-900 px-2 py-1.5 text-xs font-medium text-white group-hover:visible"
                       >
                         Reports
+                      </span>
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="/dashboard/templates"
+                      className="group relative flex justify-center rounded-sm px-2 py-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                    >
+                      <LayoutList className="size-5 opacity-75" />
+                      <span
+                        className="invisible absolute start-full top-1/2 ms-4 -translate-y-1/2 rounded-sm bg-gray-900 px-2 py-1.5 text-xs font-medium text-white group-hover:visible"
+                      >
+                        Templates
                       </span>
                     </a>
                   </li>
