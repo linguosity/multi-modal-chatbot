@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,20 +13,51 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ReportSchema } from '@/lib/schemas/report'
+import { ReportTemplateSchema } from '@/lib/schemas/report-template'
 
 export default function CreateReportPage() {
   const [title, setTitle] = useState('')
   const [studentId, setStudentId] = useState('')
   const [type, setType] = useState<ReportSchema['type'] | ''>('')
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
+  const [templates, setTemplates] = useState<ReportTemplateSchema[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showJson, setShowJson] = useState(false)
   const router = useRouter()
 
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const response = await fetch('/api/report-templates');
+        if (!response.ok) {
+          throw new Error(`Error fetching templates: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setTemplates(data);
+        if (data.length > 0) {
+          setSelectedTemplateId(data[0].id); // Select the first template as default
+        }
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoadingTemplates(false);
+      }
+    };
+    fetchTemplates();
+  }, []);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
+
+    if (!selectedTemplateId) {
+      setError('Please select a report template.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch('/api/reports', {
@@ -34,7 +65,7 @@ export default function CreateReportPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title, studentId, type }),
+        body: JSON.stringify({ title, studentId, type, template_id: selectedTemplateId }),
       })
 
       if (!response.ok) {
@@ -46,9 +77,17 @@ export default function CreateReportPage() {
       router.push(`/dashboard/reports/${newReport.id}`)
     } catch (err: any) {
       setError(err.message)
-    } finally {
+    finally {
       setLoading(false)
     }
+  }
+
+  if (loadingTemplates) {
+    return <div className="p-6">Loading templates...</div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-red-500">Error: {error}</div>;
   }
 
   return (
@@ -92,6 +131,21 @@ export default function CreateReportPage() {
             </SelectContent>
           </Select>
         </div>
+        <div>
+          <Label htmlFor="template">Report Template</Label>
+          <Select onValueChange={(value: string) => setSelectedTemplateId(value)} value={selectedTemplateId}>
+            <SelectTrigger className="w-[240px]">
+              <SelectValue placeholder="Select a template" />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map(template => (
+                <SelectItem key={template.id} value={template.id || ''}>
+                  {template.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {error && <p className="text-red-500">{error}</p>}
         <Button type="submit" disabled={loading}>
           {loading ? 'Creating...' : 'Create Report'}
@@ -104,7 +158,7 @@ export default function CreateReportPage() {
         <div className="mt-6 p-4 bg-gray-100 rounded-md">
           <h2 className="text-lg font-semibold mb-2">Report JSON</h2>
           <pre className="text-sm overflow-x-auto">
-            {JSON.stringify({ title, studentId, type }, null, 2)}
+            {JSON.stringify({ title, studentId, type, template_id: selectedTemplateId }, null, 2)}
           </pre>
         </div>
       )}
