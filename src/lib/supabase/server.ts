@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import logger from '@/lib/logger'
 
 export function createClient() {
   const cookieStore = cookies()
@@ -16,6 +17,7 @@ export function createClient() {
           try {
             cookieStore.set({ name, value, ...options })
           } catch (error) {
+            logger.warn({ error }, 'Error setting cookie in Server Component.');
             // The `set` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
             // user sessions.
@@ -25,6 +27,7 @@ export function createClient() {
           try {
             cookieStore.set({ name, value: '', ...options })
           } catch (error) {
+            logger.warn({ error }, 'Error removing cookie in Server Component.');
             // The `delete` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
             // user sessions.
