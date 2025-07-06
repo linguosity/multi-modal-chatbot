@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
 import { ReportTemplateSchema } from '@/lib/schemas/report-template';
-import logger from '@/lib/logger';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const supabase = createClient();
+  const supabase = await createRouteSupabase();
   const { id } = params;
 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    logger.warn('Unauthorized attempt to fetch report template by ID.');
+    console.warn('Unauthorized attempt to fetch report template by ID.');
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
@@ -22,7 +21,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     .single();
 
   if (error || !template) {
-    logger.error({ error, templateId: id }, 'Error fetching report template by ID.');
+    console.error({ error, templateId: id }, 'Error fetching report template by ID.');
     return new NextResponse(JSON.stringify({ error: 'Report template not found or unauthorized' }), { status: 404 });
   }
 
@@ -33,7 +32,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   });
 
   if (!parsedTemplate.success) {
-    logger.error({ validationError: parsedTemplate.error, templateId: id }, 'Validation error for fetched template by ID.');
+    console.error({ validationError: parsedTemplate.error, templateId: id }, 'Validation error for fetched template by ID.');
     return new NextResponse(JSON.stringify({ error: 'Failed to validate fetched template' }), { status: 500 });
   }
 
@@ -41,23 +40,23 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const supabase = createClient();
+  const supabase = await createRouteSupabase();
   const { id } = params;
 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    logger.warn('Unauthorized attempt to update report template.');
+    console.warn('Unauthorized attempt to update report template.');
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
   const body = await request.json();
-  logger.info({ body, templateId: id }, 'PUT /api/report-templates/[id] received body.');
+  console.log({ body, templateId: id }, 'PUT /api/report-templates/[id] received body.');
 
   const result = ReportTemplateSchema.safeParse({ ...body, id, user_id: user.id });
 
   if (!result.success) {
-    logger.error({ validationError: result.error, templateId: id }, 'Validation error for updating template.');
+    console.error({ validationError: result.error, templateId: id }, 'Validation error for updating template.');
     return new NextResponse(JSON.stringify({ error: 'Invalid template data', details: result.error.flatten() }), { status: 400 });
   }
 
@@ -75,10 +74,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     .single();
 
   logger.info({ templateId: id, userId: user.id }, "Attempting to update template.");
-  logger.info({ updatePayload: { name: result.data.name, description: result.data.description, template_structure: result.data.groups } }, "Update payload:");
+  console.log({ updatePayload: { name: result.data.name, description: result.data.description, template_structure: result.data.groups } }, "Update payload:");
 
   if (error || !data) {
-    logger.error({ error, templateId: id }, 'Error updating report template.');
+    console.error({ error, templateId: id }, 'Error updating report template.');
     return new NextResponse(JSON.stringify({ error: 'Failed to update report template or not found' }), { status: 500 });
   }
 
@@ -89,7 +88,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   });
 
   if (!updatedTemplate.success) {
-    logger.error({ validationError: updatedTemplate.error, templateData: data }, 'Validation error for updated template from DB.');
+    console.error({ validationError: updatedTemplate.error, templateData: data }, 'Validation error for updated template from DB.');
     return new NextResponse(JSON.stringify({ error: 'Failed to validate updated template' }), { status: 500 });
   }
 
@@ -97,13 +96,13 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const supabase = createClient();
+  const supabase = await createRouteSupabase();
   const { id } = params;
 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    logger.warn('Unauthorized attempt to delete report template.');
+    console.warn('Unauthorized attempt to delete report template.');
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
@@ -114,10 +113,10 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     .eq('user_id', user.id); // Ensure user can only delete their own templates
 
   if (error) {
-    logger.error({ error, templateId: id }, 'Error deleting report template.');
+    console.error({ error, templateId: id }, 'Error deleting report template.');
     return new NextResponse(JSON.stringify({ error: 'Failed to delete report template' }), { status: 500 });
   }
 
-  logger.info({ templateId: id }, 'Successfully deleted report template.');
+  console.log({ templateId: id }, 'Successfully deleted report template.');
   return new NextResponse(null, { status: 204 });
 }

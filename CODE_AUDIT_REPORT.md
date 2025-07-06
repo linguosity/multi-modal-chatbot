@@ -46,7 +46,7 @@
 **A. Code Style & Consistency:**
 *   **Overall:** The codebase generally follows a consistent style, utilizing Tailwind CSS for styling and `shadcn/ui` components.
 *   **ESLint:** The absence of a custom `.eslintrc` file means the project relies on `eslint-config-next` defaults. While functional, a custom configuration could enforce stricter rules, specific formatting, and project-specific best practices.
-*   **`console` statements:** Replaced with structured logging using `pino` in API routes. This is a significant improvement for production environments.
+*   **`console` statements:** Reverted to `console.log`/`warn`/`error` from structured logging. (Previous implementation of structured logging was removed).
 
 **B. Error Handling Patterns:**
 *   **API Routes:** Error handling in API routes primarily relies on checking the `error` object returned by Supabase calls and returning `NextResponse` with appropriate status codes and JSON error messages. This is a good pattern.
@@ -75,7 +75,7 @@
 ### 3. Recommendations for Refactoring & Improvement:
 
 1.  **Implement PDF Text Extraction:** For the multimodal input, integrate a library or service to extract text from PDFs on the server-side before sending it to Claude.
-2.  **Structured Logging:** Implemented using `pino` in API routes.
+2.  **Structured Logging:** Reverted to `console.log`/`warn`/`error`.
 3.  **API Data Selection:** Review all `supabase.from(...).select('*')` calls in API routes and narrow down the selected columns to only what's necessary.
 4.  **Frontend Loading States:** Implement more granular loading states and skeleton loaders for a better user experience, especially during data fetching and AI generation.
 5.  **Comprehensive ESLint Configuration:** Create a `.eslintrc.js` or `.eslintrc.json` file to enforce project-specific coding standards, potentially including rules for `console` usage in production.

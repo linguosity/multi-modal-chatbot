@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteSupabase} from '@/lib/supabase/route-handler-client';
 import { ALL_REPORT_SECTION_TYPES } from '@/lib/schemas/report-template';
 
 export async function GET(request: Request) {
-  const supabase = createClient();
+  const supabase = await createRouteSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();
 

@@ -78,9 +78,13 @@ export default function ReportsPage() {
                 <TableCell className="font-medium">{report.title}</TableCell>
                 <TableCell>{report.type}</TableCell>
                 <TableCell>{report.status}</TableCell>
-                <TableCell>{new Date(report.updatedAt).toLocaleDateString()}</TableCell>
                 <TableCell>
-                  <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/reports/${report.id}`)}>
+                  {report.updatedAt
+                    ? new Date(report.updatedAt).toLocaleDateString()
+                    : 'N/A'}
+                </TableCell>
+                <TableCell>
+                  <Button variant="secondary" size="sm" onClick={() => router.push(`/dashboard/reports/${report.id}`)}>
                     View/Edit
                   </Button>
                 </TableCell>

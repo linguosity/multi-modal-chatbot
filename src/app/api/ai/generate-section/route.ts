@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
 import { ReportSchema } from '@/lib/schemas/report'
 import Anthropic from '@anthropic-ai/sdk'
-import logger from '@/lib/logger'
-
-// Initialize Anthropic client
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 export async function POST(request: Request) {
-  const supabase = createClient()
+  const supabase = await createRouteSupabase();
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    logger.error("ANTHROPIC_API_KEY is not set.");
+    console.error("ANTHROPIC_API_KEY is not set.");
     return new NextResponse(JSON.stringify({ error: 'Server configuration error: Anthropic API key missing.' }), { status: 500 });
   }
 
@@ -26,7 +23,7 @@ export async function POST(request: Request) {
   const { reportId, sectionId, unstructuredInput, files } = await request.json()
 
   if (!reportId || !sectionId || (!unstructuredInput && (!files || files.length === 0))) {
-    logger.warn('Missing required fields for AI generation.', { reportId, sectionId, hasUnstructuredInput: !!unstructuredInput, hasFiles: !!files && files.length > 0 });
+    console.warn('Missing required fields for AI generation.', { reportId, sectionId, hasUnstructuredInput: !!unstructuredInput, hasFiles: !!files && files.length > 0 });
     return new NextResponse(JSON.stringify({ error: 'Missing required fields: reportId, sectionId, and either unstructuredInput or files' }), { status: 400 })
   }
 
@@ -39,7 +36,7 @@ export async function POST(request: Request) {
     .single()
 
   if (fetchError || !report) {
-    logger.error({ fetchError }, 'Error fetching report for AI generation.');
+    console.error({ fetchError }, 'Error fetching report for AI generation.');
     return new NextResponse(JSON.stringify({ error: 'Report not found or unauthorized' }), { status: 404 })
   }
 
@@ -69,7 +66,7 @@ export async function POST(request: Request) {
   const systemMessage = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to generate and refine sections of a comprehensive SLP report based on provided unstructured notes, images, and the existing report context.\n\nBased on the unstructured notes, images, and the current report state, you are expected to generate content for *all* relevant sections. You MUST call the 'update_report_section' tool for *each and every* section that you determine needs an update.\n\nUse the 'update_report_section' tool to provide the generated content for each relevant section. You MUST call this tool for every section that needs to be updated.\n\nHere is the current state of the entire report in JSON format:\n<current_report_state>\n${JSON.stringify(report, null, 2)}\n</current_report_state>\n\nHere are the unstructured notes provided by the SLP:\n<unstructured_notes>\n${unstructuredInput}\n</unstructured_notes>\n\nEnsure the content is professional, concise, and directly addresses the purpose of each section. If the unstructured notes are brief, expand upon them appropriately while maintaining accuracy.\n\n<examples>\n<example>\n<unstructured_notes>\nParent concerned about child's speech. Mumbling, hard to understand. Teacher also noted difficulty.\n</unstructured_notes>\n<tool_code>\n<tool_use>\n<update_report_section section_id="reason_for_referral" content="[Student Name] was referred for a speech and language evaluation by [Referral Source] due to concerns regarding speech intelligibility. Parents report that [Student] often mumbles and is difficult to understand, particularly by unfamiliar listeners. The classroom teacher has also noted difficulties with [Student]'s verbal communication in academic settings." />\n<update_report_section section_id="parent_concern" content="According to [Parent/Guardian], their primary concerns include [Student]'s speech intelligibility, noting that [Student] is often difficult to understand, especially by unfamiliar listeners. They report that these difficulties impact [Student]'s communication at home and in community settings." />\n</tool_use>\n</tool_code>\n</example>\n<example>\n<unstructured_notes>\nReferral from pediatrician for language delay. Not talking much for age (3 years). Limited vocabulary. Also, child had frequent ear infections as a baby.\n</unstructured_notes>\n<tool_code>\n<tool_use>\n<update_report_section section_id="reason_for_referral" content="[Student Name] was referred for a speech and language evaluation by their pediatrician due to concerns regarding a suspected language delay. Parents report that [Student], who is 3 years old, uses a limited vocabulary and is not combining words into phrases or sentences typical for their age. This evaluation was conducted to determine if [Student] demonstrates a speech or language disorder that adversely affects developmental progress and requires intervention." />\n<update_report_section section_id="health_developmental_history" content="According to information provided by [Source], [Student]'s health and developmental history includes a history of frequent ear infections during infancy, which may have impacted early speech and language development. [Include relevant hearing and vision screening results if available]." />\n</tool_use>\n</tool_code>\n</example>\n<example>\n<unstructured_notes>\nScores on CASL: Pragmatic Language SS 89. PLS-5: Total Language 7th percentile.\n</unstructured_notes>\n<tool_code>\n<tool_use>\n<update_report_section section_id="assessment_tools" content="The following assessment tools were used in this evaluation:\n\n1. Comprehensive Assessment of Spoken Language (CASL)\n2. Preschool Language Scales, Fifth Edition (PLS-5)" />\n<update_report_section section_id="assessment_results" content="### Standardized Test Results\n\n1. Comprehensive Assessment of Spoken Language (CASL):\n   - Pragmatic Language subtest: Standard Score (SS) of 89\n   - Interpretation: This score falls within the low average range, indicating some difficulties with pragmatic language skills.\n\n2. Preschool Language Scales, Fifth Edition (PLS-5):\n   - Total Language Score: 7th percentile\n   - Interpretation: This score falls significantly below average, indicating a notable delay in overall language skills.\n\n### Language\n\nBased on the standardized test results, [Student] demonstrates challenges in both pragmatic language and overall language abilities:\n\n1. Pragmatic Language: The CASL pragmatic language subtest score (SS 89) suggests that [Student] has some difficulties with social language use. This may include challenges with understanding and using language appropriately in social situations, interpreting non-literal language, or adapting communication style to different contexts.\n\n2. Overall Language Skills: The PLS-5 total language score (7th percentile) indicates significant difficulties in overall language development. This suggests that [Student] is struggling with both receptive (understanding) and expressive (production) language skills compared to same-age peers. Areas of difficulty may include vocabulary, sentence structure, following directions, and expressing ideas clearly.\n\nThese results suggest that [Student] may benefit from targeted intervention to address both pragmatic and overall language skills to support their academic and social communication needs.\n\n[Note: Further assessment details in other language domains (e.g., articulation, fluency, voice) should be added if available]." />\n</tool_use>\n</tool_code>\n</example>\n</examples>\n\nRemember to call the 'update_report_section' tool with the generated content for ALL relevant sections.`
 
   try {
-    logger.info("Calling Anthropic API...");
+    console.log("Calling Anthropic API...");
     const messagesContent: any[] = [];
 
     if (unstructuredInput) {
@@ -84,10 +81,10 @@ export async function POST(request: Request) {
         if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mediaType)) {
           messagesContent.push({ type: "image", source: { type: "base64", media_type: mediaType, data: base64Data } });
         } else if (mediaType === 'application/pdf') {
-          logger.warn(`Skipping PDF file (${file.name}). PDF processing is not yet implemented.`);
+          console.warn(`Skipping PDF file (${file.name}). PDF processing is not yet implemented.`);
           // Future: Implement PDF text extraction or send as raw data if Claude supports it
         } else {
-          logger.warn(`Skipping unsupported file type: ${mediaType} (${file.name})`);
+          console.warn(`Skipping unsupported file type: ${mediaType} (${file.name})`);
         }
       });
     }
@@ -106,7 +103,7 @@ export async function POST(request: Request) {
         },
       ],
     });
-    logger.info("Anthropic API call completed.");
+    console.log("Anthropic API call completed.");
 
     const toolCalls = response.content.filter(block => block.type === 'tool_use' && block.name === 'update_report_section');
 
@@ -132,11 +129,11 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ updatedSections: aiGeneratedSections });
     } else {
-      logger.error({ responseContent: response.content }, 'Claude did not call the expected tool(s).');
+      console.error({ responseContent: response.content }, 'Claude did not call the expected tool(s).');
       return new NextResponse(JSON.stringify({ error: 'AI did not generate content as expected.' }), { status: 500 });
     }
   } catch (aiError) {
-    logger.error({ aiError }, 'Error calling Anthropic API.');
+    console.error({ aiError }, 'Error calling Anthropic API.');
     return new NextResponse(JSON.stringify({ error: 'Failed to generate content with AI.' }), { status: 500 });
   }
 }

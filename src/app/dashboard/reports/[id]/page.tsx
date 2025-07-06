@@ -1,5 +1,6 @@
 'use client'
 
+import { useParams } from 'next/navigation'; 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Report, ReportSection } from '@/lib/schemas/report'
@@ -15,7 +16,7 @@ import { SectionHeader, Card, CardContent, CardHeader, CardTitle, CardDescriptio
 import { CustomModal } from '@/components/ui/custom-modal';
 import { GripVertical, Sparkles, Info, Pencil } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@radix-ui/react-tooltip";
-import { createClient } from '@/lib/supabase/client';
+import { createBrowserSupabase } from '@/lib/supabase/browser';
 import { useReport } from '@/lib/context/ReportContext';
 
 interface SlpReportSectionGroup {
@@ -62,10 +63,10 @@ const SortableSection = ({ section, highlightedSections, onEditClick }: { sectio
   );
 };
 
-export default function ReportDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params
-  const supabase = createClient();
+export default function ReportDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const supabase = createBrowserSupabase();
 
   const { report, loading, showJson, setShowJson, handleSave, handleDelete, setReport } = useReport();
 

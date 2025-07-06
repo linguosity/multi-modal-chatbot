@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
 import { ReportTemplateSchema } from '@/lib/schemas/report-template';
-import logger from '@/lib/logger';
 
 export async function GET(request: Request) {
-  const supabase = createClient();
+  const supabase = await createRouteSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    logger.warn('Unauthorized attempt to fetch report templates.');
+    console.warn('Unauthorized attempt to fetch report templates.');
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
@@ -19,7 +18,7 @@ export async function GET(request: Request) {
     .eq('user_id', user.id);
 
   if (error) {
-    logger.error({ error }, 'Error fetching report templates from Supabase.');
+    console.error({ error }, 'Error fetching report templates from Supabase.');
     return new NextResponse(JSON.stringify({ error: 'Failed to fetch report templates' }), { status: 500 });
   }
 
@@ -31,7 +30,7 @@ export async function GET(request: Request) {
       user_id: user.id // Add user_id for validation
     });
     if (!result.success) {
-      logger.error({ validationError: result.error, templateId: template.id }, 'Validation error for fetched template.');
+      console.error({ validationError: result.error, templateId: template.id }, 'Validation error for fetched template.');
       // You might want to filter out invalid templates or handle this differently
       return null; 
     }
@@ -42,22 +41,22 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient();
+  const supabase = await createRouteSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    logger.warn('Unauthorized attempt to create report template.');
+    console.warn('Unauthorized attempt to create report template.');
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
   const body = await request.json();
-  logger.info({ body }, 'POST /api/report-templates received body.');
+  console.log({ body }, 'POST /api/report-templates received body.');
 
   const result = ReportTemplateSchema.safeParse({ ...body, user_id: user.id });
 
   if (!result.success) {
-    logger.error({ validationError: result.error }, 'Validation error for new template.');
+    console.error({ validationError: result.error }, 'Validation error for new template.');
     return new NextResponse(JSON.stringify({ error: 'Invalid template data', details: result.error.flatten() }), { status: 400 });
   }
 
@@ -73,11 +72,11 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError) {
-    logger.error({ insertError }, 'Supabase insert error for report template.');
+    console.error({ insertError }, 'Supabase insert error for report template.');
     return new NextResponse(JSON.stringify({ error: 'Failed to create report template in DB', details: insertError.message }), { status: 500 });
   }
 
-  logger.info({ templateData: data }, 'Successfully inserted template into Supabase.');
+  console.log({ templateData: data }, 'Successfully inserted template into Supabase.');
 
   // Re-parse the data from DB to ensure it matches the schema, especially with DB defaults
   const createdTemplate = ReportTemplateSchema.safeParse({ 
@@ -87,7 +86,7 @@ export async function POST(request: Request) {
   });
 
   if (!createdTemplate.success) {
-    logger.error({ validationError: createdTemplate.error, templateData: data }, 'Validation error for created template from DB.');
+    console.error({ validationError: createdTemplate.error, templateData: data }, 'Validation error for created template from DB.');
     return new NextResponse(JSON.stringify({ error: 'Failed to validate created template' }), { status: 500 });
   }
 

@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-export async function createServerSupabase() {
+export async function createRouteSupabase() {
   const cookieStore = await cookies()
 
   return createServerClient(
@@ -14,14 +14,14 @@ export async function createServerSupabase() {
           try {
             cookieStore.set({ name, value, ...opts })
           } catch (error) {
-            console.warn({ error }, 'Error setting cookie in Server Component')
+            console.warn({ error }, 'Error setting cookie in Route Handler')
           }
         },
         remove: (name, opts) => {
           try {
             cookieStore.delete({ name, ...opts })
           } catch (error) {
-            console.warn({ error }, 'Error removing cookie in Server Component')
+            console.warn({ error }, 'Error removing cookie in Route Handler')
           }
         },
       },

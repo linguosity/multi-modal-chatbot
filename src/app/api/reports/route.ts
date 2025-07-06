@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
 import { ReportSchema, DEFAULT_SECTIONS } from '@/lib/schemas/report'
 import { v4 as uuidv4 } from 'uuid'
-import logger from '@/lib/logger'
 
 export async function GET() {
-  const supabase = createClient()
+  const supabase = await createRouteSupabase();
 
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    logger.warn('Unauthorized attempt to fetch reports.');
+    console.warn('Unauthorized attempt to fetch reports.');
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
@@ -20,7 +19,7 @@ export async function GET() {
     .eq('user_id', user.id)
 
   if (error) {
-    logger.error({ error }, 'Error fetching reports from Supabase.');
+    console.error({ error }, 'Error fetching reports from Supabase.');
     return new NextResponse(JSON.stringify({ error: 'Failed to fetch reports' }), { status: 500 })
   }
 
@@ -28,22 +27,22 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient()
+  const supabase = await createRouteSupabase();
 
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    logger.warn('Unauthorized attempt to create report.');
+    console.warn('Unauthorized attempt to create report.');
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
   const json = await request.json()
   const { title, studentId, type, template_id } = json
-  logger.info({ title, studentId, type, template_id }, 'POST /api/reports received body.');
+  console.log({ title, studentId, type, template_id }, 'POST /api/reports received body.');
 
   // Basic validation
   if (!title || !studentId || !type || !template_id) {
-    logger.warn('Missing required fields for report creation.', { title, studentId, type, template_id });
+    console.warn('Missing required fields for report creation.', { title, studentId, type, template_id });
     return new NextResponse(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
   }
 
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
   // Validate with Zod schema (optional but good practice)
   const validation = ReportSchema.safeParse(newReportData)
   if (!validation.success) {
-    logger.error({ validationError: validation.error }, 'Invalid report data during creation.');
+    console.error({ validationError: validation.error }, 'Invalid report data during creation.');
     return new NextResponse(JSON.stringify({ error: 'Invalid report data', details: validation.error.flatten() }), { status: 400 })
   }
 
@@ -93,10 +92,10 @@ export async function POST(request: Request) {
     .single()
 
   if (error) {
-    logger.error({ error }, 'Error creating report in Supabase.');
+    console.error({ error }, 'Error creating report in Supabase.');
     return new NextResponse(JSON.stringify({ error: 'Failed to create report' }), { status: 500 })
   }
 
-  logger.info({ reportId: data.id }, 'Successfully created report.');
+  console.log({ reportId: data.id }, 'Successfully created report.');
   return NextResponse.json(data)
 }

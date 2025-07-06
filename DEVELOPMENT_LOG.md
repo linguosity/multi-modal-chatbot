@@ -49,15 +49,91 @@ Today's session focused on further refining the UI/UX of the report detail page,
         *   Created a new Git branch `feature/dynamic-report-templates`.
         *   Defined Zod schemas for `ReportSectionTypeSchema`, `ReportSectionGroupSchema`, and `ReportTemplateSchema` in `src/lib/schemas/report-template.ts`.
 
+## July 2, 2025 - Dynamic Template Implementation & Error Resolution
+
+**Summary of Work:**
+Continued implementation of dynamic report templates, focusing on API endpoints, frontend editor UI, and resolving numerous build and runtime errors.
+
+**Key Issues Encountered & Resolutions:**
+
+1.  **Supabase Table Creation:**
+    *   **Problem:** Initial attempts to create `report_templates` and `report_section_types` tables in Supabase failed due to incorrect SQL copy-pasting (including line numbers/shell commands).
+    *   **Resolution:** Provided SQL commands in separate `.sql` files for direct execution in Supabase editor, resolving syntax errors.
+
+2.  **`PGRST116` (Supabase update/insert failure):**
+    *   **Problem 1 (PUT):** `initialTemplateState.id` was being initialized with a `uuidv4()`, causing new templates to always attempt a `PUT` instead of a `POST`.
+    *   **Resolution 1:** Set `initialTemplateState.id` to `undefined` in `src/components/template-editor.tsx` and explicitly called `setEditingTemplate(undefined)` when creating a new template.
+    *   **Problem 2 (POST Zod validation for `user_id`):** The `user_id` was an empty string in the frontend payload, failing `z.string().uuid()` validation on the server.
+    *   **Resolution 2:** Made `user_id` optional in `ReportTemplateSchema` in `src/lib/schemas/report-template.ts`.
+    *   **Problem 3 (POST Zod validation for `groups` and `datetime`):** The `groups` field was `undefined` in the data returned from Supabase's `insert` (it was under `template_structure`), and `created_at`/`updated_at` datetime formats were too strict for Zod.
+    *   **Resolution 3:** Mapped `data.template_structure` to `groups` during Zod parsing in `POST` and `GET` API routes, and relaxed `created_at`/`updated_at` to `z.string().optional()` in `ReportTemplateSchema`.
+
+3.  **`ReferenceError: self is not defined` (recurring):**
+    *   **Problem:** Browser-only libraries (`sortable-tree`) being evaluated on the server, even with `next/dynamic` at the page level.
+    *   **Resolution:** Created `src/components/client-sortable-tree.tsx` as a client-only wrapper for `sortable-tree` and dynamically imported this wrapper in `src/components/template-editor.tsx`. Also, ensured `src/components/template-editor.tsx` was marked `'use client'`.
+
+4.  **`Element type is invalid`:**
+    *   **Problem:** `next/dynamic` expecting a default export but receiving a named export (or the entire module object).
+    *   **Resolution:** Changed `TemplateEditor` in `src/components/template-editor.tsx` to a default export.
+
+5.  **TypeScript Schema vs. Value Confusion (`Property 'default_title' does not exist`):**
+    *   **Problem:** `ReportSectionTypeSchema` in `src/lib/schemas/report-template.ts` was missing the `default_title` field, which was present in the database and expected by the frontend.
+    *   **Resolution:** Added `default_title: z.string()` to `ReportSectionTypeSchema`.
+
+6.  **`Syntax Error: Expected 'from', got 'n'`:**
+    *   **Problem:** Typo (`Input }n`) in an import statement in `src/components/template-editor.tsx`.
+    *   **Resolution:** Corrected the typo.
+
+7.  **Next.js 15 `cookies()` and `params.id` changes:**
+    *   **Problem 1 (`cookies()` should be awaited):** `cookies()` became asynchronous in Route Handlers/Server Actions, but `createClient()` was called synchronously.
+    *   **Resolution 1:** Introduced `createRouteSupabase()` (async) for Route Handlers and `createServerSupabase()` (sync) for Server Components. Updated all API routes to `await createRouteSupabase()`.
+    *   **Problem 2 (`params.id` warning):** `params` became a Promise in Next.js 15.
+    *   **Resolution 2:** Used `React.use(params)` in `src/app/dashboard/reports/[id]/page.tsx` (though later reverted to direct access as it's a Client Component and `useParams` is preferred).
+    *   **Problem 3 (Hook mismatch in `ReportContext.tsx`):** Conditional logic (`if (!reportId) return;`) inside `useEffect`'s callback.
+    *   **Resolution 3:** Moved `if (!reportId) return;` to the top of the `useEffect` callback.
+    *   **Problem 4 (Client/Server Component Supabase client mismatch):** Using `createBrowserSupabase` in Server Components or `createServerSupabase` in Client Components.
+    *   **Resolution 4:** Systematically updated all imports and usages to ensure `createBrowserSupabase` is used in Client Components and `createServerSupabase` is used in Server Components/Route Handlers.
+
+## July 3, 2025 - Dependency Upgrades & Structured Logging
+
+**Summary of Work:**
+Addressed `npm install` warnings and `npm audit` vulnerabilities. Implemented structured logging using Pino.
+
+**Key Issues Encountered & Resolutions:**
+
+1.  **`npm install` warnings (deprecated packages):**
+    *   **Problem:** Warnings about deprecated `rimraf`, `inflight`, `@humanwhocodes`, `glob`, and `eslint`.
+    *   **Resolution:**
+        *   Upgraded `rimraf` to `^5`.
+        *   `inflight` and `@humanwhocodes` were transitive and not directly imported, so no direct action was taken beyond hoping `glob` upgrade would resolve them.
+        *   Upgraded `glob` to `^10`.
+        *   `eslint` was already at latest `8.x`.
+
+2.  **`npm audit` vulnerabilities:**
+    *   **Problem:** Multiple vulnerabilities, including critical and high severity, primarily related to the `next` package.
+    *   **Resolution:** Upgraded `next` to `latest` (version `15.3.4`), which resolved most vulnerabilities. A low-severity `cookie` vulnerability remains (transitive dependency of `@supabase/ssr`), which was noted.
+
+3.  **Missing Test Script:**
+    *   **Problem:** No `test` script defined in `package.json`.
+    *   **Resolution:** Not directly resolved, but noted as a recommendation to add a test script.
+
+4.  **Structured Logging Implementation:**
+    *   **Problem:** Lack of structured logging for better error management in production.
+    *   **Resolution:**
+        *   Installed `pino` and `pino-pretty`.
+        *   Created `src/lib/logger.ts` for a centralized Pino logger instance.
+        *   Replaced `console.log`/`warn`/`error` with `logger.info`/`warn`/`error` in all API routes (`src/app/api/ai/generate-section/route.ts`, `src/app/api/report-templates/route.ts`, `src/app/api/report-templates/[id]/route.ts`, `src/app/api/reports/route.ts`) and `src/lib/supabase/server.ts`.
+
 **Files Modified:**
-*   `DEVELOPMENT_LOG.md`
+*   `CODE_AUDIT_REPORT.md`
 *   `package.json`
 *   `pnpm-lock.yaml`
-*   `src/app/api/ai/generate-section/route.ts` (examined, no changes made)
-*   `src/app/auth/page.tsx`
-*   `src/app/dashboard/reports/[id]/page.tsx`
-*   `src/components/ui/custom-modal.tsx` (new file)
-*   `src/lib/schemas/report-template.ts` (new file)
+*   `src/app/api/ai/generate-section/route.ts`
+*   `src/app/api/report-templates/route.ts`
+*   `src/app/api/report-templates/[id]/route.ts`
+*   `src/app/api/reports/route.ts`
+*   `src/lib/logger.ts` (new file)
+*   `src/lib/supabase/server.ts`
 
 **Next Steps:**
 *   Continue with Phase 1 of the dynamic template plan: Define Supabase tables for `report_templates` and `report_section_types`, and add `template_id` to the `reports` table.

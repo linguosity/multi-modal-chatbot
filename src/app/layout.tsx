@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
 import "./globals.css"
-import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { SignOutButton } from '@/components/ui/SignOutButton';
+import React from 'react';
 
 export const metadata: Metadata = {
   title: "Linguosity",
@@ -12,14 +12,14 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const cookieStore = await cookies();
-  const supabase = createClient();
+  const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
     <html lang="en">
       <body>
-        <header className="bg-white">
+        <React.StrictMode>
+          <header className="bg-white">
           <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-8 px-4 sm:px-6 lg:px-8">
             <a className="block text-teal-600" href="/">
               <span className="sr-only">Home</span>
@@ -85,6 +85,7 @@ export default async function RootLayout({
           </div>
         </header>
         {children}
+        </React.StrictMode>
       </body>
     </html>
   )
