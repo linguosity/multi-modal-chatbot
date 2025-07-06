@@ -1,6 +1,8 @@
 'use client';
 
-import { createClient } from "@/lib/supabase/client";
+// Update the import path below to match the actual location and filename of your Supabase client.
+// For example, if your file is named 'client.ts' in the same folder, use:
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 import { ReportProvider } from '@/lib/context/ReportContext';
 import ReportActions from '@/components/ReportActions';
@@ -15,7 +17,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createClient();
+  const supabase = createBrowserSupabase();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);

@@ -13,19 +13,25 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ReportSchema } from '@/lib/schemas/report'
+// If ReportSchema is a Zod schema, import its inferred type:
+import type { z } from 'zod';
+type ReportType = z.infer<typeof ReportSchema>['type'];
 import { ReportTemplateSchema } from '@/lib/schemas/report-template'
+type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
+import { createBrowserSupabase } from '@/lib/supabase/browser'
 
-export default function CreateReportPage() {
+export default function NewReportPage() {
+  const [type, setType] = useState<ReportType | ''>('')
   const [title, setTitle] = useState('')
   const [studentId, setStudentId] = useState('')
-  const [type, setType] = useState<ReportSchema['type'] | ''>('')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
-  const [templates, setTemplates] = useState<ReportTemplateSchema[]>([]);
+  const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showJson, setShowJson] = useState(false)
   const router = useRouter()
+  const supabase = createBrowserSupabase();
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -77,7 +83,7 @@ export default function CreateReportPage() {
       router.push(`/dashboard/reports/${newReport.id}`)
     } catch (err: any) {
       setError(err.message)
-    finally {
+    } finally {
       setLoading(false)
     }
   }
@@ -116,7 +122,7 @@ export default function CreateReportPage() {
         </div>
         <div>
           <Label htmlFor="type">Report Type</Label>
-          <Select onValueChange={(value: ReportSchema['type']) => setType(value)}>
+          <Select onValueChange={(value: ReportType) => setType(value)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select a type" />
             </SelectTrigger>

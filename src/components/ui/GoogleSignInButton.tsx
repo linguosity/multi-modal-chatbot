@@ -1,10 +1,10 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
+import { createBrowserSupabase } from '@/lib/supabase/browser'; // Adjust the import path as necessary
 import { Button } from './button'; // Assuming you have a button component
 
 export function GoogleSignInButton() {
-  const supabase = createClient();
+  const supabase = createBrowserSupabase();
 
   const handleSignIn = async () => {
     await supabase.auth.signInWithOAuth({

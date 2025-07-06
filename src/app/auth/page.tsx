@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton'
-import { createClient } from '@/lib/supabase/client';
+import { createBrowserSupabase } from '@/lib/supabase/browser'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = createBrowserSupabase();
 
   useEffect(() => {
     const checkUser = async () => {

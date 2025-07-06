@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createBrowserSupabase } from '@/lib/supabase/browser';
 import { useRouter, useParams } from 'next/navigation';
 import { Report } from '@/lib/schemas/report';
 
@@ -28,9 +28,9 @@ interface ReportProviderProps {
 }
 
 export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
-  const supabase = createClient();
+  const supabase = createBrowserSupabase();
   const router = useRouter();
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const reportId = params.id;
 
   const [report, setReport] = useState<Report | null>(null);
@@ -38,9 +38,15 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
   const [showJson, setShowJson] = useState(false);
 
   useEffect(() => {
+    setLoading(true); // Always set loading to true when effect runs
+
+    if (!reportId) {
+      setReport(null); // Set report to null if no reportId
+      setLoading(false); // Set loading to false
+      return;
+    }
+
     const fetchReport = async () => {
-      if (!reportId) return;
-      setLoading(true);
       const { data, error } = await supabase
         .from('reports')
         .select('*')
