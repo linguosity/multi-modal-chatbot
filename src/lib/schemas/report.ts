@@ -45,6 +45,8 @@ export const ReportSectionSchema = z.object({
   generationPrompt: z.string().optional(),
   lastUpdated: z.string().optional(),
   dataSource: z.string().optional(), // Reference to data that can populate this section
+  icon: z.string().optional(),
+  borderColor: z.string().optional(),
 });
 
 // Schema for report templates

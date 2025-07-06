@@ -9,7 +9,10 @@ import ReportActions from '@/components/ReportActions';
 import { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import Image from 'next/image';
-import { LayoutList } from 'lucide-react';
+import Link from 'next/link';
+import { LayoutList, Settings } from 'lucide-react';
+import { Drawer } from '@/components/ui/Drawer';
+import { ColorSettings } from '@/components/ColorSettings';
 
 
 export default function DashboardLayout({
@@ -21,6 +24,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
 
   useEffect(() => {
     const getUser = async () => {
@@ -61,7 +65,7 @@ export default function DashboardLayout({
             </div>
             <div className="border-t border-gray-100 px-2">
               <div className="py-4">
-                <a href="/dashboard" className="group flex justify-center rounded-sm bg-blue-50 px-2 py-1.5 text-blue-700">
+                <Link href="/dashboard" className="group flex justify-center rounded-sm bg-blue-50 px-2 py-1.5 text-blue-700">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="size-5 opacity-75"
@@ -86,11 +90,11 @@ export default function DashboardLayout({
                   >
                     Dashboard
                   </span>
-                </a>
+                </Link>
               </div>
               <ul className="space-y-1 border-t border-gray-100 pt-4">
                 <li>
-                  <a
+                  <Link
                     href="/dashboard/reports"
                     className="group relative flex justify-center rounded-sm px-2 py-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                   >
@@ -113,10 +117,10 @@ export default function DashboardLayout({
                       >
                         Reports
                       </span>
-                    </a>
+                    </Link>
                   </li>
                   <li>
-                    <a
+                    <Link
                       href="/dashboard/templates"
                       className="group relative flex justify-center rounded-sm px-2 py-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                     >
@@ -126,7 +130,7 @@ export default function DashboardLayout({
                       >
                         Templates
                       </span>
-                    </a>
+                    </Link>
                   </li>
                   <ReportActions />
                 </ul>
@@ -134,6 +138,17 @@ export default function DashboardLayout({
             </div>
 
           <div className="sticky inset-x-0 bottom-0 border-t border-gray-100 bg-white p-2">
+            <button
+              onClick={() => setShowSettingsDrawer(true)}
+              className="group relative flex w-full justify-center rounded-lg px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            >
+              <Settings className="size-5 opacity-75" />
+              <span
+                className="invisible absolute start-full top-1/2 ms-4 -translate-y-1/2 rounded-sm bg-gray-900 px-2 py-1.5 text-xs font-medium text-white group-hover:visible"
+              >
+                Settings
+              </span>
+            </button>
             <a
               href="#"
               className="group relative flex w-full justify-center rounded-lg px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700"
@@ -168,6 +183,10 @@ export default function DashboardLayout({
             {children}
           </div>
         </main>
+
+        <Drawer isOpen={showSettingsDrawer} onClose={() => setShowSettingsDrawer(false)}>
+          <ColorSettings />
+        </Drawer>
       </div>
     </ReportProvider>
   ); 

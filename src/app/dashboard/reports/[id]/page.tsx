@@ -14,15 +14,32 @@ import { arrayMove, SortableContext, useSortable, rectSortingStrategy } from '@d
 import { CSS } from '@dnd-kit/utilities';
 import { SectionHeader, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { CustomModal } from '@/components/ui/custom-modal';
-import { GripVertical, Sparkles, Info, Pencil } from 'lucide-react';
+import { GripVertical, Sparkles, Info, Pencil, FileText, User, Heart, Users, Clipboard, TestTube, BarChart, FileCheck, Book, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@radix-ui/react-tooltip";
 import { createBrowserSupabase } from '@/lib/supabase/browser';
 import { useReport } from '@/lib/context/ReportContext';
+import { motion } from 'framer-motion';
+// page.tsx  (very top)
+import { SlpReportSectionGroup, slpReportSectionGroups } from '@/lib/report-groups';                  // ✅ matches your file
 
-interface SlpReportSectionGroup {
-  title: string;
-  sectionTypes: string[];
-}
+const colors = ['#E57373', '#81C784', '#64B5F6', '#FFD54F', '#9575CD'];
+
+const iconMap: { [key: string]: React.ElementType } = {
+  reason_for_referral: FileText,
+  parent_concern: User,
+  health_developmental_history: Heart,
+  family_background: Users,
+  assessment_tools: Clipboard,
+  assessment_results: TestTube,
+  language_sample: BarChart,
+  validity_statement: FileCheck,
+  eligibility_checklist: Book,
+  conclusion: ThumbsUp,
+  recommendations: ThumbsDown,
+  accommodations: ThumbsDown,
+};
+
+
 
 const SortableSection = ({ section, highlightedSections, onEditClick }: { section: ReportSection, highlightedSections: string[], onEditClick: (section: ReportSection) => void }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: section.id });
@@ -30,18 +47,38 @@ const SortableSection = ({ section, highlightedSections, onEditClick }: { sectio
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    borderColor: section.borderColor || 'transparent',
   };
 
+  const Icon = iconMap[section.sectionType] || Info;
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} className="w-full group">
+    <motion.div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="w-full group"
+      initial={{ opacity: 0, y: 50 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       <Card
-        className={`h-full cursor-pointer ${highlightedSections.includes(section.id) ? 'ai-highlight' : ''}`}
+        className={`h-full cursor-pointer border-2 ${highlightedSections.includes(section.id) ? 'ai-highlight' : ''}`}
         onClick={() => onEditClick(section)}
+        style={{ borderColor: section.borderColor || 'transparent' }}
       >
-        <CardHeader>
-          <CardTitle>{section.title}</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center">
+            <Icon className="mr-2 h-5 w-5" />
+            <CardTitle className="text-lg">{section.title}</CardTitle>
+          </div>
+          <div className="flex items-center">
+            <div {...listeners} className="ml-2 cursor-grab">
+              <GripVertical />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="relative h-32">
+        <CardContent className="relative min-h-[21.33rem]">
           <div className="break-words">
             <TiptapEditor
               content={section.content}
@@ -52,14 +89,11 @@ const SortableSection = ({ section, highlightedSections, onEditClick }: { sectio
           </div>
           <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent"></div>
         </CardContent>
-        <div {...listeners} className="absolute top-2 right-2 cursor-grab">
-            <GripVertical />
-        </div>
         <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <Pencil className="size-4 text-gray-500" onClick={() => onEditClick(section)} />
         </div>
       </Card>
-    </div>
+    </motion.div>
   );
 };
 
@@ -85,38 +119,6 @@ export default function ReportDetailPage() {
   const sensors = useSensors(
     useSensor(PointerSensor)
   );
-
-  const slpReportSectionGroups: SlpReportSectionGroup[] = [
-    {
-      title: "Initial Information & Background",
-      sectionTypes: [
-        "reason_for_referral",
-        "parent_concern",
-        "health_developmental_history",
-        "family_background",
-      ],
-    },
-    {
-      title: "Assessment Findings",
-      sectionTypes: [
-        "assessment_tools",
-        "assessment_results",
-        "language_sample",
-        "validity_statement",
-      ],
-    },
-    {
-      title: "Summary, Eligibility & Recommendations",
-      sectionTypes: [
-        "eligibility_checklist",
-        "conclusion",
-        "recommendations",
-        "accommodations",
-      ],
-    },
-  ];
-
-  
 
   const handleSectionChange = (sectionId: string, newContent: string) => {
     setReport(prevReport => {

@@ -16,10 +16,10 @@ export default async function RootLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className="h-full">
+      <body className="h-full m-0 flex flex-col">
         <React.StrictMode>
-          <header className="bg-white">
+          {!user && <header className="bg-white">
           <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-8 px-4 sm:px-6 lg:px-8">
             <a className="block text-teal-600" href="/">
               <span className="sr-only">Home</span>
@@ -44,9 +44,7 @@ export default async function RootLayout({
 
               <div className="flex items-center gap-4">
                 <div className="sm:flex sm:gap-4">
-                  {user ? (
-                    <SignOutButton />
-                  ) : (
+                  {user ? null : (
                     <>
                       <a
                         className="block rounded-md bg-teal-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-teal-700"
@@ -83,7 +81,7 @@ export default async function RootLayout({
               </div>
             </div>
           </div>
-        </header>
+        </header>}
         {children}
         </React.StrictMode>
       </body>

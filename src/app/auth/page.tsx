@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image';
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -38,7 +39,7 @@ export default function LoginPage() {
   }, [router, supabase]);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return <div className="flex items-center justify-center grow">Loading...</div>;
   }
   
 
@@ -59,13 +60,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <Card className="w-full max-w-md mx-auto">
+    <div className="grow flex items-center justify-center p-0 sm:p-4 bg-background">
+      <Card className="w-full max-w-lg mx-auto">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold">Welcome to Linguosity</CardTitle>
+          <CardTitle className="text-2xl font-bold flex items-center justify-center">
+            <Image src="/images/linguosity_logo_1.svg" alt="Linguosity Logo" width={32} height={32} className="mr-2" />
+            Linguosity
+          </CardTitle>
           <CardDescription>Enter your credentials to access your dashboard</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="max-h-none overflow-visible">
           <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
