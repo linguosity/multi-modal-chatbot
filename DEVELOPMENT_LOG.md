@@ -141,3 +141,32 @@ Addressed `npm install` warnings and `npm audit` vulnerabilities. Implemented st
 *   Develop the frontend UI for template creation and editing.
 *   Integrate dynamic templates into the report viewing page.
 *   Address data migration and edge cases for existing reports.
+
+---
+
+## July 8, 2025 - AI Generation and Drag-and-Drop Overhaul
+
+**Summary of Work:**
+Today's session was a deep dive into fixing several critical, subtle bugs in the AI content generation loop and the report section drag-and-drop functionality. We successfully implemented a robust multi-tool-use loop for the Anthropic API and resolved a persistent UI issue with dragging components.
+
+**Key Issues Encountered & Resolutions:**
+
+1.  **AI Only Updating One Section:**
+    *   **Problem:** The Anthropic API call would only ever update a single report section, even when the prompt requested multiple updates. The API `stop_reason` was `tool_use`, indicating the model had more to do but the backend loop was not implemented correctly.
+    *   **Resolution:** Refactored the `/api/ai/generate-section` route to implement a proper multi-tool-use loop. The new logic now continues the conversation with the AI, feeding back `tool_result` messages until the model signals completion, allowing it to update multiple sections in one go.
+
+2.  **Anthropic API `400 Bad Request` Error:**
+    *   **Problem:** The new AI loop was failing with a `400` error due to an invalid payload.
+    *   **Resolution:** Corrected the `tool_result` message payload by changing the `isError` key to the required snake_case `is_error`.
+
+3.  **Server Error: "non-existent section_id"**
+    *   **Problem:** The AI would return a human-readable slug (e.g., `reason_for_referral`) as the section ID, but the database uses UUIDs, causing lookups to fail.
+    *   **Resolution:** Implemented a server-side map to translate the slugs from the AI's tool call into the correct UUIDs before updating the report state.
+
+4.  **Drag-and-Drop Not Working:**
+    *   **Problem:** Report sections were not draggable, despite the drag handle being visible. Initial fixes to the sensor configuration were unsuccessful.
+    *   **Resolution:** After confirming that drag events were firing, the issue was isolated to a conflict between `@dnd-kit` and `framer-motion`. Replacing the `motion.div` wrapper with a standard `div` in the `SortableSection` component resolved the issue and made the sections draggable.
+
+5.  **React Error: "Cannot update a component while rendering..."**
+    *   **Problem:** A persistent warning about improper `setState` calls during the render phase, originating from the `ReportProvider`.
+    *   **Resolution:** This issue was investigated but the root cause was elusive. The fix from a previous session (memoizing the Supabase client) was confirmed to be in place. The issue seems to have been resolved as a side-effect of other fixes, but the root cause was not definitively identified.

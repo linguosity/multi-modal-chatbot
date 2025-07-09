@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import TiptapEditor from '@/components/TiptapEditor'
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SectionHeader, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -55,14 +55,11 @@ const SortableSection = ({ section, highlightedSections, onEditClick }: { sectio
   const Icon = iconMap[section.sectionType] || Info;
 
   return (
-    <motion.div
+    <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       className="w-full group"
-      initial={{ opacity: 0, y: 50 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
     >
       <Card
         className={`h-full cursor-pointer border-2 ${highlightedSections.includes(section.id) ? 'ai-highlight' : ''}`}
@@ -95,7 +92,7 @@ const SortableSection = ({ section, highlightedSections, onEditClick }: { sectio
           <Pencil className="size-4 text-gray-500" onClick={() => onEditClick(section)} />
         </div>
       </Card>
-    </motion.div>
+    </div>
   );
 };
 
@@ -119,7 +116,19 @@ export default function ReportDetailPage() {
   const [tooltipOpen, setTooltipOpen] = useState(true);
 
   const sensors = useSensors(
-    useSensor(PointerSensor)
+    useSensor(MouseSensor, {
+      // Require the mouse to move by 10 pixels before activating
+      activationConstraint: {
+        distance: 10,
+      },
+    }),
+    useSensor(TouchSensor, {
+      // Press delay of 250ms, with a tolerance of 5px of movement
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    })
   );
 
   const handleSectionChange = (sectionId: string, newContent: string) => {
@@ -251,11 +260,22 @@ export default function ReportDetailPage() {
 
   const onDragEnd = (event: any) => {
     const { active, over } = event;
+
+    if (!over) {
+      return;
+    }
+
     if (active.id !== over.id) {
       setReport((prevReport) => {
         if (!prevReport) return null;
+        
         const oldIndex = prevReport.sections.findIndex((section) => section.id === active.id);
         const newIndex = prevReport.sections.findIndex((section) => section.id === over.id);
+
+        if (oldIndex === -1 || newIndex === -1) {
+          return prevReport; // One of the items wasn't found, do nothing.
+        }
+
         return { ...prevReport, sections: arrayMove(prevReport.sections, oldIndex, newIndex) };
       });
     }
@@ -316,7 +336,13 @@ export default function ReportDetailPage() {
           aiGenerating={aiGenerating}
         />
       </div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DndContext 
+        sensors={sensors} 
+        collisionDetection={closestCenter} 
+        onDragStart={(event) => console.log('Drag Start:', event)} 
+        onDragMove={(event) => console.log('Drag Move:', event)} 
+        onDragEnd={onDragEnd}
+      >
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
 
           
