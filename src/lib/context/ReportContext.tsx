@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { createBrowserSupabase } from '@/lib/supabase/browser';
 import { useRouter, useParams } from 'next/navigation';
 import { Report } from '@/lib/schemas/report';
@@ -28,7 +28,7 @@ interface ReportProviderProps {
 }
 
 export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
-  const supabase = createBrowserSupabase();
+  const supabase = useMemo(() => createBrowserSupabase(), []);
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const reportId = params.id;

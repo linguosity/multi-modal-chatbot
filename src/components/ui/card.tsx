@@ -14,7 +14,8 @@ const Card = React.forwardRef<
     {...props}
   >
     <span className="absolute inset-0 border border-dashed border-charcoal"></span>
-    <div className="relative flex h-full transform items-start border-2 border-black bg-white transition-transform group-hover:-translate-x-2 group-hover:-translate-y-2">
+    <div className="relative flex flex-col w-full h-full transform items-start border-2 border-black bg-white
++            transition-transform group-hover:-translate-x-2 group-hover:-translate-y-2" >
       {children}
     </div>
   </div>
@@ -64,7 +65,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-4 sm:p-6 lg:p-8 max-h-32 overflow-y-auto break-words", className)} {...props} />
+  <div ref={ref} className={cn("p-4 sm:p-6 lg:p-8 break-words", className)} {...props} />
 ))
 CardContent.displayName = "CardContent"
 

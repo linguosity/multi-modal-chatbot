@@ -73,7 +73,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     .select()
     .single();
 
-  logger.info({ templateId: id, userId: user.id }, "Attempting to update template.");
+  
   console.log({ updatePayload: { name: result.data.name, description: result.data.description, template_structure: result.data.groups } }, "Update payload:");
 
   if (error || !data) {

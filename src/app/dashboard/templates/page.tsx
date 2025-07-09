@@ -1,22 +1,23 @@
-'use client'
-
 'use client';
 
 import { useState, useEffect } from 'react';
+import { z } from 'zod';
 import { ReportTemplateSchema } from '@/lib/schemas/report-template';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CustomModal } from '@/components/ui/custom-modal';
-import { TemplateEditor } from '@/components/template-editor';
+import TemplateEditor from '@/components/template-editor';
+
+type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
 
 export default function TemplatesPage() {
-  const [templates, setTemplates] = useState<ReportTemplateSchema[]>([]);
+  const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list');
-  const [editingTemplate, setEditingTemplate] = useState<ReportTemplateSchema | undefined>(undefined);
+  const [editingTemplate, setEditingTemplate] = useState<ReportTemplate | undefined>(undefined);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -39,7 +40,7 @@ export default function TemplatesPage() {
     fetchTemplates();
   }, []);
 
-  const handleSaveTemplate = async (templateData: ReportTemplateSchema) => {
+  const handleSaveTemplate = async (templateData: ReportTemplate) => {
     setError(null);
     try {
       const method = templateData.id ? 'PUT' : 'POST';
@@ -140,7 +141,7 @@ export default function TemplatesPage() {
               <CardContent>
                 <p className="text-xs text-gray-400">Created: {new Date(template.created_at || '').toLocaleDateString()}</p>
                 <div className="mt-4 flex justify-end space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => {
+                  <Button variant="secondary" size="sm" onClick={() => {
                     setEditingTemplate(template);
                     setMode('edit');
                   }}>

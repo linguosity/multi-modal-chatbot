@@ -21,6 +21,8 @@ import { useReport } from '@/lib/context/ReportContext';
 import { motion } from 'framer-motion';
 // page.tsx  (very top)
 import { SlpReportSectionGroup, slpReportSectionGroups } from '@/lib/report-groups';                  // ✅ matches your file
+import { useAudioRecorder } from 'use-audio-recorder';
+import { ReportInputSection } from '@/components/ReportInputSection';
 
 const colors = ['#E57373', '#81C784', '#64B5F6', '#FFD54F', '#9575CD'];
 
@@ -136,18 +138,30 @@ export default function ReportDetailPage() {
     }
   };
 
-  const handleGenerateAI = async (primarySectionId: string) => {
-    if (!report || (!unstructuredInput && selectedFiles.length === 0)) return;
+  const handleGenerateAI = async (unstructuredInput: string, files: File[], audioBlob: Blob | null) => {
+    if (!report || (!unstructuredInput && files.length === 0 && !audioBlob)) return;
     setAiGenerating(true);
     setError(null); // Clear previous errors
 
-    const fileContents: { type: string; data: string }[] = [];
-    for (const file of selectedFiles) {
+    const fileContents: { name: string, type: string; data: string }[] = [];
+    for (const file of files) {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       await new Promise<void>((resolve) => {
         reader.onload = () => {
-          fileContents.push({ type: file.type, data: reader.result as string });
+          fileContents.push({ name: file.name, type: file.type, data: reader.result as string });
+          resolve();
+        };
+      });
+    }
+
+    let audioContent: { type: string; data: string } | undefined;
+    if (audioBlob) {
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      await new Promise<void>((resolve) => {
+        reader.onload = () => {
+          audioContent = { type: audioBlob.type, data: reader.result as string };
           resolve();
         };
       });
@@ -161,9 +175,9 @@ export default function ReportDetailPage() {
         },
         body: JSON.stringify({
           reportId: report.id,
-          sectionId: primarySectionId,
           unstructuredInput: unstructuredInput,
           files: fileContents,
+          audio: audioContent,
         }),
       });
 
@@ -175,10 +189,12 @@ export default function ReportDetailPage() {
       const { updatedSections } = await response.json();
       setProposedSections(updatedSections);
       setShowReviewModal(true);
-      setSelectedSectionsToAccept(updatedSections.map((sec: any) => sec.id));
+      setSelectedSectionsToAccept(updatedSections.map((sec: ReportSection) => sec.id));
 
+      // Clear inputs after successful generation
       setUnstructuredInput('');
       setSelectedFiles([]);
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -278,112 +294,27 @@ export default function ReportDetailPage() {
       <div className="w-full p-6 grid grid-cols-1 md:grid-cols-2 gap-4 self-start">
         <Card className="mb-4 h-auto min-h-0">
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* left column */}
-              <div>
-                <dl className="-my-3 divide-y divide-gray-200 text-sm">
-                  <div className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-3 sm:gap-4">
-                    <dt className="font-medium text-gray-900">Report Title</dt>
-                    <dd className="text-gray-700 sm:col-span-2">{report.title}</dd>
-                  </div>
-                  <div className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-3 sm:gap-4">
-                    <dt className="font-medium text-gray-900">Report Type</dt>
-                    <dd className="text-gray-700 sm:col-span-2">{report.type}</dd>
-                  </div>
-                  <div className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-3 sm:gap-4">
-                    <dt className="font-medium text-gray-900">Report Date</dt>
-                    <dd className="text-gray-700 sm:col-span-2">
-                      {report.finalizedDate
-                        ? new Date(report.finalizedDate).toLocaleDateString()
-                        : report.createdAt
-                        ? new Date(report.createdAt).toLocaleDateString()
-                        : 'N/A'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-              {/* right column */}
-              <div>
-                <dl className="-my-3 divide-y divide-gray-200 text-sm">
-                  <div className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-3 sm:gap-4">
-                    <dt className="font-medium text-gray-900">Student Name</dt>
-                    <dd className="text-gray-700 sm:col-span-2">
-                      {report.studentName || 'N/A'}
-                    </dd>
-                  </div>
-                  <div className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-3 sm:gap-4">
-                    <dt className="font-medium text-gray-900">Student ID</dt>
-                    <dd className="text-gray-700 sm:col-span-2">
-                      {report.studentId || 'N/A'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
+            <CardTitle>{report.studentName || 'N/A'}</CardTitle>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <p className="text-gray-700">{report.title}</p>
+              <p className="text-gray-700">{report.type}</p>
+              <p className="text-gray-700">{report.studentId || 'N/A'}</p>
+              <p className="text-gray-700">
+                {report.finalizedDate
+                  ? new Date(report.finalizedDate).toLocaleDateString()
+                  : report.createdAt
+                  ? new Date(report.createdAt).toLocaleDateString()
+                  : 'N/A'}
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        <div>
-          <div className="flex items-center mb-2">
-            <TooltipProvider>
-              <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen} defaultOpen={true}>
-                <TooltipTrigger asChild>
-                  <Info className="size-4 text-gray-500 cursor-pointer" />
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs text-sm">
-                  <p>Enter notes, observations, or key points for AI generation. The AI will update relevant sections based on this input.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="flex space-x-4">
-            <div className="flex-1">
-              <textarea
-                id="unstructured-input"
-                value={unstructuredInput}
-                onChange={(e) => setUnstructuredInput(e.target.value)}
-                rows={4}
-                placeholder="Enter notes, observations, or key points for AI generation."
-                className="mt-0.5 w-full resize-none rounded border-gray-300 shadow-sm sm:text-sm"
-              ></textarea>
-              <Button
-                onClick={() => handleGenerateAI(reasonForReferralSection?.id || '')}
-                disabled={aiGenerating || !unstructuredInput}
-              >
-                {aiGenerating ? 'Generating...' : <Sparkles className="size-5" />}
-              </Button>
-            </div>
-            <label
-              htmlFor="File"
-              className="flex flex-col items-center rounded border border-gray-300 p-4 text-gray-900 shadow-sm sm:p-6"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth="1.5"
-                stroke="currentColor"
-                className="size-6"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M7.5 7.5h-.75A2.25 2.25 0 0 0 4.5 9.75v7.5a2.25 2.25 0 0 0 2.25 2.25h7.5a2.25 2.25 0 0 0 2.25-2.25v-7.5a2.25 2.25 0 0 0-2.25-2.25h-.75m0-3-3-3m0 0-3 3m3-3v11.25m6-2.25h.75a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25h-7.5a2.25 2.25 0 0 1-2.25-2.25v-.75"
-                />
-              </svg>
-
-              <span className="mt-4 font-medium"> Upload your file(s) </span>
-
-              <span
-                className="mt-2 inline-block rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-center text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-100"
-              >
-                Browse files
-              </span>
-
-              <input multiple type="file" id="File" className="sr-only" onChange={handleFileChange} />
-            </label>
-          </div>
-        </div>
+        <ReportInputSection
+          reportId={report.id}
+          onGenerateAIAction={handleGenerateAI}
+          aiGenerating={aiGenerating}
+        />
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -101,7 +101,6 @@ export const ReportSchema = z.object({
   ]).default("draft"),
 
   // People involved
-  studentId: z.string().optional(),
   evaluatorId: z.string().optional(),
 
   // Content
