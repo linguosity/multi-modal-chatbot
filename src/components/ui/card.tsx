@@ -14,8 +14,7 @@ const Card = React.forwardRef<
     {...props}
   >
     <span className="absolute inset-0 border border-dashed border-charcoal"></span>
-    <div className="relative flex flex-col w-full h-full transform items-start border-2 border-black bg-white
-+            transition-transform group-hover:-translate-x-2 group-hover:-translate-y-2" >
+    <div className="relative flex flex-col w-full h-full transform items-start border-2 border-black bg-white transition-transform group-hover:-translate-x-2 group-hover:-translate-y-2" >
       {children}
     </div>
   </div>

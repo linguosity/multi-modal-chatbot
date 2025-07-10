@@ -166,15 +166,12 @@ Remember to call the 'update_report_section' tool with the generated content for
       },
     ];
 
-    let updatedSections = [...report.sections];
+    let updatedSections = [...report.sections]; // Keep track of updated sections in memory
     const updatedSectionIds = new Set<string>();
-    let maxIterations = 5;
 
     console.log("Starting multi-tool use loop with Claude.");
 
-    while (maxIterations > 0) {
-      maxIterations--;
-
+    while (true) { // Loop until Claude is done
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 4096,
@@ -183,7 +180,7 @@ Remember to call the 'update_report_section' tool with the generated content for
         messages: messages,
       });
 
-      console.log(`Loop iteration ${5 - maxIterations}: Anthropic response received with stop_reason: ${response.stop_reason}`);
+      console.log(`Anthropic response received with stop_reason: ${response.stop_reason}`);
       
       messages.push({
         role: response.role,
@@ -203,9 +200,17 @@ Remember to call the 'update_report_section' tool with the generated content for
       }
 
       const toolResults = toolCalls.map((toolCall: any) => {
-        console.log(`Processing tool call: ${toolCall.name}, ID: ${toolCall.id}`);
-        const { section_id: sectionSlug, content } = toolCall.input;
-        const sectionId = sectionIdMap.get(sectionSlug);
+        const { section_id: idFromClaude, content } = toolCall.input;
+        
+        // The AI might return a slug or a UUID. We need to handle both.
+        let sectionId = sectionIdMap.get(idFromClaude);
+        if (!sectionId) {
+            // If it's not in the slug map, check if it's a valid UUID itself
+            const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idFromClaude);
+            if (isUuid && report.sections.some((s: any) => s.id === idFromClaude)) {
+                sectionId = idFromClaude;
+            }
+        }
 
         if (sectionId) {
           const existingSection = updatedSections.find(sec => sec.id === sectionId);
@@ -213,20 +218,20 @@ Remember to call the 'update_report_section' tool with the generated content for
             existingSection.content = content;
             existingSection.isGenerated = true;
             updatedSectionIds.add(sectionId);
-            console.log(`Updated section in memory: ${sectionSlug} (${sectionId})`);
+            console.log(`Updated section in memory: ${existingSection.sectionType} (${sectionId})`);
             return {
               type: "tool_result" as const,
               tool_use_id: toolCall.id,
-              content: `Successfully updated section ${sectionSlug}.`,
+              content: `Successfully updated section ${existingSection.sectionType}.`,
             };
           }
         }
         
-        console.warn(`Tool call for non-existent section_id: ${sectionSlug}`);
+        console.warn(`Tool call for non-existent section_id: ${idFromClaude}`);
         return {
           type: "tool_result" as const,
           tool_use_id: toolCall.id,
-          content: `Error: Section with id ${sectionSlug} not found.`,
+          content: `Error: Section with id ${idFromClaude} not found.`, 
           is_error: true,
         };
       });
@@ -236,12 +241,10 @@ Remember to call the 'update_report_section' tool with the generated content for
         content: toolResults,
       });
     }
-    
-    if (maxIterations === 0) {
-      console.error("Max iterations reached in tool use loop. Returning partial results.");
-    }
 
-    const aiGeneratedSections = updatedSections.filter(sec => updatedSectionIds.has(sec.id));
+    // Filter to only return the sections that were actually updated by the AI
+    // This now uses the finalReport from the DB to ensure consistency
+    const aiGeneratedSections = updatedSections.filter((sec: any) => updatedSectionIds.has(sec.id));
 
     if (aiGeneratedSections.length > 0) {
       return NextResponse.json({ updatedSections: aiGeneratedSections });

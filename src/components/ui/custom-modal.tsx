@@ -17,7 +17,7 @@ export const CustomModal: React.FC<CustomModalProps> = ({ isOpen, onClose, title
       aria-modal="true"
       aria-labelledby="modalTitle"
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg border-2 border-black">
+      <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-lg border-2 border-black">
         <div className="flex items-start justify-between">
           <h2 id="modalTitle" className="text-xl font-bold text-gray-900 sm:text-2xl">
             {title}
@@ -46,7 +46,7 @@ export const CustomModal: React.FC<CustomModalProps> = ({ isOpen, onClose, title
           </button>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 max-h-[80vh] overflow-y-auto">
           {children}
         </div>
 

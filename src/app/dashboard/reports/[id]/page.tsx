@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import { useParams } from 'next/navigation'; 
 import { useEffect, useState } from 'react'
@@ -23,6 +23,8 @@ import { motion } from 'framer-motion';
 import { SlpReportSectionGroup, slpReportSectionGroups } from '@/lib/report-groups';                  // ✅ matches your file
 import { useAudioRecorder } from 'use-audio-recorder';
 import { ReportInputSection } from '@/components/ReportInputSection';
+import { Toaster } from '@/components/ui/toaster';
+import { createToast } from '@/lib/hooks/use-toast';
 
 const colors = ['#E57373', '#81C784', '#64B5F6', '#FFD54F', '#9575CD'];
 
@@ -214,30 +216,31 @@ export default function ReportDetailPage() {
   const handleConfirmAIChanges = async () => {
     if (!report || !proposedSections) return;
 
-    setReport(prevReport => {
-      if (!prevReport) return null;
-      let newSections = [...prevReport.sections];
-      const newlyUpdatedIds: string[] = [];
+    let newSections = [...report.sections];
+    const newlyUpdatedIds: string[] = [];
 
-      proposedSections.forEach(proposedSec => {
-        if (selectedSectionsToAccept.includes(proposedSec.id)) {
-          const index = newSections.findIndex(sec => sec.id === proposedSec.id);
-          if (index !== -1) {
-            newSections[index] = { ...proposedSec, lastUpdated: new Date().toISOString() };
-            newlyUpdatedIds.push(proposedSec.id);
-          }
+    proposedSections.forEach(proposedSec => {
+      if (selectedSectionsToAccept.includes(proposedSec.id)) {
+        const index = newSections.findIndex(sec => sec.id === proposedSec.id);
+        if (index !== -1) {
+          newSections[index] = { ...proposedSec, lastUpdated: new Date().toISOString() };
+          newlyUpdatedIds.push(proposedSec.id);
         }
-      });
-      setHighlightedSections(newlyUpdatedIds);
-      setTimeout(() => setHighlightedSections([]), 3000);
-      return { ...prevReport, sections: newSections };
+      }
     });
+
+    const updatedReport = { ...report, sections: newSections };
+
+    setReport(updatedReport);
+
+    setHighlightedSections(newlyUpdatedIds);
+    setTimeout(() => setHighlightedSections([]), 3000);
 
     setShowReviewModal(false);
     setProposedSections(null);
     setSelectedSectionsToAccept([]);
 
-    await handleSave();
+    await handleSave(updatedReport);
   };
 
   const handleToggleSectionAccept = (sectionId: string) => {
@@ -258,7 +261,7 @@ export default function ReportDetailPage() {
     setSelectedSectionsToAccept([]);
   };
 
-  const onDragEnd = (event: any) => {
+  const onDragEnd = async (event: any) => {
     const { active, over } = event;
 
     if (!over) {
@@ -266,25 +269,29 @@ export default function ReportDetailPage() {
     }
 
     if (active.id !== over.id) {
-      setReport((prevReport) => {
-        if (!prevReport) return null;
-        
-        const oldIndex = prevReport.sections.findIndex((section) => section.id === active.id);
-        const newIndex = prevReport.sections.findIndex((section) => section.id === over.id);
+      if (report) {
+        const oldIndex = report.sections.findIndex((section) => section.id === active.id);
+        const newIndex = report.sections.findIndex((section) => section.id === over.id);
 
         if (oldIndex === -1 || newIndex === -1) {
-          return prevReport; // One of the items wasn't found, do nothing.
+          return;
         }
 
-        return { ...prevReport, sections: arrayMove(prevReport.sections, oldIndex, newIndex) };
-      });
+        const updatedReport = { ...report, sections: arrayMove(report.sections, oldIndex, newIndex) };
+        setReport(updatedReport);
+        await handleSave(updatedReport);
+      }
     }
   };
 
   const handleEditModalSave = async () => {
-    if (editingSection) {
-      handleSectionChange(editingSection.id, editingSection.content);
-      await handleSave(); // Persist changes to the database
+    if (editingSection && report) {
+      const updatedSections = report.sections.map(section =>
+        section.id === editingSection.id ? { ...section, content: editingSection.content } : section
+      );
+      const updatedReport = { ...report, sections: updatedSections };
+      setReport(updatedReport);
+      await handleSave(updatedReport);
     }
     setShowEditModal(false);
     setEditingSection(null);
@@ -311,6 +318,7 @@ export default function ReportDetailPage() {
 
   return (
     <>
+      <Toaster />
       <div className="w-full p-6 grid grid-cols-1 md:grid-cols-2 gap-4 self-start">
         <Card className="mb-4 h-auto min-h-0">
           <CardContent>

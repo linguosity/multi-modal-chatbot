@@ -2,10 +2,11 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { createBrowserSupabase } from '@/lib/supabase/browser';
 import { useRouter, useParams } from 'next/navigation';
 import { Report } from '@/lib/schemas/report';
+import { createToast } from '@/lib/hooks/use-toast';
 
 interface ReportContextType {
   report: Report | null;
-  handleSave: () => Promise<void>;
+  handleSave: (reportToSave: Report) => Promise<void>;
   handleDelete: () => Promise<void>;
   showJson: boolean;
   setShowJson: React.Dispatch<React.SetStateAction<boolean>>;
@@ -38,44 +39,63 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
   const [showJson, setShowJson] = useState(false);
 
   useEffect(() => {
-    setLoading(true); // Always set loading to true when effect runs
-
     if (!reportId) {
-      setReport(null); // Set report to null if no reportId
-      setLoading(false); // Set loading to false
+      setReport(null);
+      setLoading(false);
       return;
     }
 
+    let isMounted = true;
     const fetchReport = async () => {
-      const { data, error } = await supabase
-        .from('reports')
-        .select('*')
-        .eq('id', reportId)
-        .single();
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('reports')
+          .select('*')
+          .eq('id', reportId)
+          .single();
 
-      if (error) {
-        console.error('Error fetching report:', error);
-        setReport(null);
-      } else {
-        setReport(data);
+        if (isMounted) {
+          if (error) {
+            console.error('Error fetching report:', error);
+            setReport(null);
+          } else {
+            setReport(data);
+          }
+        }
+      } catch (e) {
+        if (isMounted) {
+          console.error('Exception fetching report:', e);
+          setReport(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
     };
 
     fetchReport();
+
+    return () => {
+      isMounted = false;
+    };
   }, [reportId, supabase]);
 
-  const handleSave = async () => {
+  const handleSave = async (reportToSave: Report) => {
     setLoading(true);
-    if (report) {
+    if (reportToSave) {
       const { error } = await supabase
         .from('reports')
-        .update(report)
-        .eq('id', report.id);
+        .update(reportToSave)
+        .eq('id', reportToSave.id);
       if (error) {
         console.error('Error saving report:', error);
       } else {
-        alert('Report saved!');
+        createToast({
+          title: "Report Saved!",
+          description: "Your changes have been successfully saved.",
+        });
       }
     }
     setLoading(false);
@@ -94,7 +114,10 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
     if (error) {
       console.error('Error deleting report:', error);
     } else {
-      alert('Report deleted!');
+      createToast({
+        title: "Report Deleted!",
+        description: "The report has been successfully deleted.",
+      });
       router.push('/dashboard/reports');
     }
     setLoading(false);
