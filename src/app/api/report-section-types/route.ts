@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createRouteSupabase} from '@/lib/supabase/route-handler-client';
 import { ALL_REPORT_SECTION_TYPES } from '@/lib/schemas/report-template';
 
-export async function GET(request: Request) {
+export async function GET() {
   const supabase = await createRouteSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();

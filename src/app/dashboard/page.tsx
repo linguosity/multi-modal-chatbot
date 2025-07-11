@@ -3,6 +3,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
+  console.log('Rendering DashboardPage');
   const supabase = await createServerSupabase();
 
   const { data, error } = await supabase.auth.getUser();

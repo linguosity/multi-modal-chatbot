@@ -1,19 +1,12 @@
 'use client';
 
-import { createBrowserSupabase } from '@/lib/supabase/browser';
+import { signOut } from '@/app/auth/actions';
 import { Button } from './button';
-import { useRouter } from 'next/navigation';
 
 export function SignOutButton() {
-  const supabase = createBrowserSupabase();
-  const router = useRouter();
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.refresh();
-    router.push('/auth');
-    router.refresh();
-  };
-
-  return <Button onClick={handleSignOut}>Sign Out</Button>;
+  return (
+    <form action={signOut}>
+      <Button type="submit">Sign Out</Button>
+    </form>
+  );
 }

@@ -4,20 +4,29 @@ import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { ReportTemplateSchema } from '@/lib/schemas/report-template';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CustomModal } from '@/components/ui/custom-modal';
 import TemplateEditor from '@/components/template-editor';
+import { Drawer } from '@/components/ui/Drawer';
+// import { DrawerContent } from '@/components/ui/Drawer'; // Uncomment if your Drawer requires it!
 
 type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
 
 export default function TemplatesPage() {
+  console.log("TemplatesPage: Component rendered");
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list');
   const [editingTemplate, setEditingTemplate] = useState<ReportTemplate | undefined>(undefined);
+  const [showDrawer, setShowDrawer] = useState(false);
+
+  console.log("TemplatesPage state: ", { loading, error, templates, showDrawer, editingTemplate });
+  console.log("TemplatesPage: Component rendered");
+
+  console.log("TemplatesPage state: ", { loading, error, templates, showDrawer, editingTemplate });
+  // Diagnostic: Show current state
+  console.log("TemplatesPage state:", {
+    editingTemplate: undefined, showDrawer: undefined // these get updated below
+  });
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -29,8 +38,12 @@ export default function TemplatesPage() {
       }
       const data = await response.json();
       setTemplates(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     } finally {
       setLoading(false);
     }
@@ -70,18 +83,19 @@ export default function TemplatesPage() {
         setEditingTemplate(savedTemplate);
       }
 
-      setMode('list');
+      setShowDrawer(false);
       setEditingTemplate(undefined);
       fetchTemplates(); // Refresh the list
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     }
   };
 
-  const handleCancelEdit = () => {
-    setMode('list');
-    setEditingTemplate(undefined);
-  };
+  
 
   const handleDeleteTemplate = async (templateId: string) => {
     if (!window.confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
@@ -100,8 +114,12 @@ export default function TemplatesPage() {
       }
 
       fetchTemplates(); // Refresh the list
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     }
   };
 
@@ -113,20 +131,19 @@ export default function TemplatesPage() {
     return <div className="p-6 text-red-500">Error: {error}</div>;
   }
 
-  if (mode === 'create' || mode === 'edit') {
-    return (
-      <TemplateEditor
-        initialTemplate={editingTemplate}
-        onSave={handleSaveTemplate}
-        onCancel={handleCancelEdit}
-      />
-    );
-  }
-
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Report Templates</h1>
-      <Button onClick={() => { setMode('create'); setEditingTemplate(undefined); }} className="mb-4">Create New Template</Button>
+      <Button
+        onClick={() => {
+          console.log('Clicked "Create New Template"');
+          setShowDrawer(true);
+          setEditingTemplate(undefined);
+        }}
+        className="mb-4"
+      >
+        Create New Template
+      </Button>
 
       {templates.length === 0 ? (
         <p>No templates found. Create one to get started!</p>
@@ -136,24 +153,68 @@ export default function TemplatesPage() {
             <Card key={template.id}>
               <CardHeader>
                 <CardTitle>{template.name}</CardTitle>
-                <p className="text-sm text-gray-500">{template.description || 'No description'}</p>
+                <p className="text-sm text-gray-500">
+                  {template.description || 'No description'}
+                </p>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-gray-400">Created: {new Date(template.created_at || '').toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400">
+                  Created:{' '}
+                  {template.createdAt
+                    ? new Date(template.createdAt).toLocaleDateString()
+                    : '—'}
+                </p>
                 <div className="mt-4 flex justify-end space-x-2">
-                  <Button variant="secondary" size="sm" onClick={() => {
-                    setEditingTemplate(template);
-                    setMode('edit');
-                  }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      console.log('Clicked Edit for:', template);
+                      setEditingTemplate(template);
+                      setShowDrawer(true);
+                    }}
+                  >
                     Edit
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleDeleteTemplate(template.id || '')}>Delete</Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteTemplate(template.id || '')}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Diagnostic: Test Drawer always renders content */}
+      <Drawer
+          isOpen={showDrawer}
+          onClose={() => {
+            setShowDrawer(false);
+            setEditingTemplate(undefined);
+          }}
+        >
+          <div style={{ padding: 16, background: "#f8fafc" }}>
+            <div>
+              <b>Drawer is open?</b> {showDrawer ? "YES" : "NO"}
+            </div>
+            <div>
+              <b>Editing Template Name:</b> {editingTemplate?.name || <span style={{ color: "#888" }}>None</span>}
+            </div>
+          </div>
+          <TemplateEditor
+            initialTemplate={editingTemplate}
+            onSave={handleSaveTemplate}
+            onCancel={() => {
+              setShowDrawer(false);
+              setEditingTemplate(undefined);
+            }}
+          />
+        </Drawer>
     </div>
   );
 }

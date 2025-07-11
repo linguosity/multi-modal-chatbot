@@ -39,7 +39,7 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
   const [showJson, setShowJson] = useState(false);
 
   useEffect(() => {
-    if (!reportId) {
+    if (!reportId || reportId === 'seed-report-demo') {
       setReport(null);
       setLoading(false);
       return;

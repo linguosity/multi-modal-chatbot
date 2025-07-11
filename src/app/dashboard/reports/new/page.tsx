@@ -18,7 +18,6 @@ import type { z } from 'zod';
 type ReportType = z.infer<typeof ReportSchema>['type'];
 import { ReportTemplateSchema } from '@/lib/schemas/report-template'
 type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
-import { createBrowserSupabase } from '@/lib/supabase/browser'
 
 export default function NewReportPage() {
   const [type, setType] = useState<ReportType | ''>('')
@@ -31,7 +30,6 @@ export default function NewReportPage() {
   const [error, setError] = useState<string | null>(null)
   const [showJson, setShowJson] = useState(false)
   const router = useRouter()
-  const supabase = createBrowserSupabase();
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -45,8 +43,12 @@ export default function NewReportPage() {
         if (data.length > 0) {
           setSelectedTemplateId(data[0].id); // Select the first template as default
         }
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError('An unknown error occurred');
+        }
       } finally {
         setLoadingTemplates(false);
       }
@@ -81,10 +83,14 @@ export default function NewReportPage() {
 
       const newReport = await response.json()
       router.push(`/dashboard/reports/${newReport.id}`)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 

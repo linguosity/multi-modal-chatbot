@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import "./globals.css"
 import { createServerSupabase } from '@/lib/supabase/server';
-import { SignOutButton } from '@/components/ui/SignOutButton';
 import React from 'react';
 
 export const metadata: Metadata = {
@@ -12,6 +11,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  console.log('Rendering RootLayout');
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
 

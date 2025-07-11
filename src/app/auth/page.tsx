@@ -16,19 +16,17 @@ import { createBrowserSupabase } from '@/lib/supabase/browser'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
-import { User } from '@supabase/supabase-js';
-
 export default function LoginPage() {
+  console.log('Rendering AuthPage');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
   const supabase = createBrowserSupabase();
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         router.replace('/dashboard');
       } else {

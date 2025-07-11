@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint --config ./.eslintrc.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.55.1",
@@ -32,6 +32,7 @@
     "motion": "^12.23.0",
     "next": "15.3.4",
     "react": "^18.3.1",
+    "react-arborist": "^3.4.3",
     "react-dom": "^18.3.1",
     "rimraf": "^5.0.10",
     "sortable-tree": "^0.7.2",

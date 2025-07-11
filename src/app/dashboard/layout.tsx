@@ -1,18 +1,14 @@
 'use client';
 
-// Update the import path below to match the actual location and filename of your Supabase client.
-// For example, if your file is named 'client.ts' in the same folder, use:
-import { createBrowserSupabase } from "@/lib/supabase/browser";
-import { useRouter } from "next/navigation";
 import { ReportProvider } from '@/lib/context/ReportContext';
 import ReportActions from '@/components/ReportActions';
-import { useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { LayoutList, Settings } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
 import { ColorSettings } from '@/components/ColorSettings';
+import { SignOutButton } from '@/components/ui/SignOutButton';
 
 
 export default function DashboardLayout({
@@ -20,30 +16,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createBrowserSupabase();
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data?.user) {
-        router.push("/auth");
-      } else {
-        setUser(data.user);
-      }
-      setLoadingUser(false);
-    };
-    getUser();
-  }, [supabase, router]);
-
-  
-
-  if (loadingUser) {
-    return <div className="flex h-screen bg-gray-50"><div className="m-auto">Loading user...</div></div>;
-  }
 
   return (
     <ReportProvider>
@@ -149,31 +122,9 @@ export default function DashboardLayout({
                 Settings
               </span>
             </button>
-            <a
-              href="#"
-              className="group relative flex w-full justify-center rounded-lg px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="size-5 opacity-75"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                />
-              </svg>
-
-              <span
-                className="invisible absolute start-full top-1/2 ms-4 -translate-y-1/2 rounded-sm bg-gray-900 px-2 py-1.5 text-xs font-medium text-white group-hover:visible"
-              >
-                Logout
-              </span>
-            </a>
+            <div className="group relative flex w-full justify-center rounded-lg px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700">
+              <SignOutButton />
+            </div>
           </div>
         </div>
 
@@ -189,5 +140,5 @@ export default function DashboardLayout({
         </Drawer>
       </div>
     </ReportProvider>
-  ); 
+  );
 }

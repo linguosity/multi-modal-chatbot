@@ -1,5 +1,21 @@
 import { z } from 'zod';
 
+/** Recursive “bullet tree”:
+ *   • simple string
+ *   • OR { heading: string, points: DataPoint[] }
+ */
+export const DataPointSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.object({
+      heading: z.string(),
+      prose_template: z.string().optional(), // New field for the mini-template paragraph
+      points: z.array(DataPointSchema)
+    })
+  ])
+);
+export type DataPoint = z.infer<typeof DataPointSchema>;
+
 // Define standard section types for reports
 export const REPORT_SECTION_TYPES = {
   HEADING: "heading",
@@ -39,6 +55,8 @@ export const ReportSectionSchema = z.object({
   ]),
   title: z.string(),
   content: z.string(),
+  /**  accepts flat strings OR nested heading objects */
+  points: z.array(DataPointSchema).optional(),
   order: z.number().int(),
   isRequired: z.boolean().default(true),
   isGenerated: z.boolean().default(false),

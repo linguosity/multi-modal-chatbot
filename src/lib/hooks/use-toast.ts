@@ -9,7 +9,6 @@ type ToasterToast = ToastProps & {
 };
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000; // Keep toasts open until manually dismissed
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -75,7 +74,7 @@ const reducer = (state: State, action: Action): State => {
   }
 };
 
-const listeners: Function[] = [];
+const listeners: ((action: Action) => void)[] = [];
 
 const dispatch = (action: Action) => {
   listeners.forEach((listener) => listener(action));

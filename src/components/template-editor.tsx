@@ -4,7 +4,7 @@ import React, { useReducer, useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, Active } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -51,6 +51,7 @@ enum TemplateActionType {
   ADD_SECTION_TO_GROUP = 'ADD_SECTION_TO_GROUP',
   REMOVE_SECTION_FROM_GROUP = 'REMOVE_SECTION_FROM_GROUP',
   REORDER_ITEMS = 'REORDER_ITEMS',
+  UPDATE_SECTION_TITLE = 'UPDATE_SECTION_TITLE',
 }
 
 // Define Actions
@@ -62,12 +63,13 @@ type TemplateAction =
   | { type: TemplateActionType.UPDATE_GROUP_TITLE; payload: { groupId: string; title: string; availableSectionTypes: ReportSectionType[] } }
   | { type: TemplateActionType.ADD_SECTION_TO_GROUP; payload: { groupId: string; sectionTypeId: string; availableSectionTypes: ReportSectionType[] } }
   | { type: TemplateActionType.REMOVE_SECTION_FROM_GROUP; payload: { groupId: string; sectionTypeId: string; availableSectionTypes: ReportSectionType[] } }
-  | { type: TemplateActionType.REORDER_ITEMS; payload: { activeId: string; overId: string; availableSectionTypes: ReportSectionType[] } };
+  | { type: TemplateActionType.REORDER_ITEMS; payload: { activeId: string; overId: string; availableSectionTypes: ReportSectionType[] } }
+  | { type: TemplateActionType.UPDATE_SECTION_TITLE; payload: { sectionId: string; title: string; availableSectionTypes: ReportSectionType[] } };
 
 
 // Converts our ReportTemplateSchema to a flattened DND Kit compatible structure
 const convertTemplateToFlattenedItems = (template: ReportTemplate, availableSectionTypes: ReportSectionType[]): FlattenedItem[] => {
-    let flattened: FlattenedItem[] = [];
+    const flattened: FlattenedItem[] = [];
     template.groups.forEach(group => {
         flattened.push({
             id: group.id,
@@ -119,7 +121,7 @@ const convertFlattenedItemsToTemplate = (flattenedItems: FlattenedItem[], curren
 // Reducer Function
 const templateReducer = (state: ReportTemplate, action: TemplateAction): ReportTemplate => {
     const { availableSectionTypes } = 'payload' in action && action.payload && 'availableSectionTypes' in action.payload ? action.payload : { availableSectionTypes: [] };
-    let currentFlattened = convertTemplateToFlattenedItems(state, availableSectionTypes as ReportSectionType[]);
+    const currentFlattened = convertTemplateToFlattenedItems(state, availableSectionTypes as ReportSectionType[]);
 
     switch (action.type) {
         case TemplateActionType.SET_TEMPLATE:
@@ -185,7 +187,7 @@ const templateReducer = (state: ReportTemplate, action: TemplateAction): ReportT
 
                 const activeItem = currentFlattened[activeItemIndex];
                 
-                let newParentId: string | null = overItem.type === 'group' ? overItem.id : overItem.parentId;
+                const newParentId: string | null = overItem.type === 'group' ? overItem.id : overItem.parentId;
                 
                 if (activeItem.type === 'group' && newParentId !== null) {
                     return state;
@@ -200,6 +202,17 @@ const templateReducer = (state: ReportTemplate, action: TemplateAction): ReportT
                 }
 
                 return convertFlattenedItemsToTemplate(newItems, state);
+            }
+        case TemplateActionType.UPDATE_SECTION_TITLE:
+            {
+                const { sectionId, title } = action.payload;
+                const newFlattenedItems = currentFlattened.map(item => {
+                    if (item.id === sectionId && item.type === 'section') {
+                        return { ...item, data: { ...(item.data as ReportSectionType), default_title: title } };
+                    }
+                    return item;
+                });
+                return convertFlattenedItemsToTemplate(newFlattenedItems, state);
             }
         default:
             return state;
@@ -238,8 +251,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
         }
         const data = await response.json();
         setAvailableSectionTypes(data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError('An unknown error occurred');
+        }
       } finally {
         setLoading(false);
       }
@@ -312,6 +329,10 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
     dispatch({ type: TemplateActionType.REMOVE_SECTION_FROM_GROUP, payload: { groupId, sectionTypeId, availableSectionTypes } });
   };
 
+  const handleUpdateSectionTitle = (sectionId: string, title: string) => {
+    dispatch({ type: TemplateActionType.UPDATE_SECTION_TITLE, payload: { sectionId, title, availableSectionTypes } });
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -340,7 +361,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-1">
             <Card>
               <CardHeader>
@@ -356,7 +377,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
             </Card>
           </div>
 
-          <div className="md:col-span-2">
+          <div className="md:col-span-1">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Template Structure</CardTitle>
@@ -365,17 +386,20 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
                 </Button>
               </CardHeader>
               <CardContent>
-                <SortableContext items={sortedIds}>
-                  {flattenedItems.map(item => (
-                    <SortableItem
-                      key={item.id}
-                      item={item}
-                      onRemoveGroup={handleRemoveGroup}
-                      onUpdateGroupTitle={handleUpdateGroupTitle}
-                      onRemoveSection={handleRemoveSection}
-                    />
-                  ))}
-                </SortableContext>
+                <div role="tree">
+                  <SortableContext items={sortedIds}>
+                    {flattenedItems.map(item => (
+                      <SortableItem
+                        key={item.id}
+                        item={item}
+                        onRemoveGroup={handleRemoveGroup}
+                        onUpdateGroupTitle={handleUpdateGroupTitle}
+                        onRemoveSection={handleRemoveSection}
+                        onUpdateSectionTitle={handleUpdateSectionTitle}
+                      />
+                    ))}
+                  </SortableContext>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -391,7 +415,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
 };
 
 const PaletteItem = ({ id, title }: { id: string; title: string }) => {
-    const { attributes, listeners, setNodeRef, isDragging } = useSortable({
+    const { attributes, listeners, setNodeRef } = useSortable({
         id: `palette-${id}`,
         data: { isPaletteItem: true, id: id }
     });
@@ -403,14 +427,15 @@ const PaletteItem = ({ id, title }: { id: string; title: string }) => {
     );
 };
 
-const SortableItem = ({ item, onRemoveGroup, onUpdateGroupTitle, onRemoveSection }: {
+const SortableItem = ({ item, onRemoveGroup, onUpdateGroupTitle, onRemoveSection, onUpdateSectionTitle }: {
     item: FlattenedItem;
     onRemoveGroup: (id: string) => void;
     onUpdateGroupTitle: (id: string, title: string) => void;
     onRemoveSection: (groupId: string, sectionId: string) => void;
+    onUpdateSectionTitle: (sectionId: string, title: string) => void; // New prop
 }) => {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
-    const style = {
+    const style: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
         transition,
         marginLeft: `${item.depth * 20}px`,
@@ -419,18 +444,17 @@ const SortableItem = ({ item, onRemoveGroup, onUpdateGroupTitle, onRemoveSection
     if (item.type === 'group') {
         const group = item.data as ReportSectionGroup;
         return (
-            <div ref={setNodeRef} style={style} className="p-2 my-2 bg-gray-200 rounded">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                        <span {...attributes} {...listeners} className="cursor-grab p-1 touch-none"><GripVertical /></span>
-                        <Input
-                            value={group.title}
-                            onChange={(e) => onUpdateGroupTitle(item.id, e.target.value)}
-                            className="font-bold bg-transparent border-none"
-                        />
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => onRemoveGroup(item.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+            <div ref={setNodeRef} style={style} role="treeitem" aria-level={item.depth + 1} className="p-2 my-2 rounded flex items-center justify-between">
+                <div className="flex items-center flex-grow">
+                    <button {...attributes} {...listeners} className="cursor-grab p-1 touch-none" aria-label="Move group"><GripVertical /></button>
+                    <Input
+                        value={group.title}
+                        onChange={(e) => onUpdateGroupTitle(item.id, e.target.value)}
+                        className="font-bold bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        aria-label={`Group title, level ${item.depth + 1}`}
+                    />
                 </div>
+                <Button variant="ghost" size="sm" onClick={() => onRemoveGroup(item.id)} aria-label="Delete group"><Trash2 className="h-4 w-4 text-red-500" /></Button>
             </div>
         );
     }
@@ -438,14 +462,17 @@ const SortableItem = ({ item, onRemoveGroup, onUpdateGroupTitle, onRemoveSection
     if (item.type === 'section') {
         const section = item.data as ReportSectionType;
         return (
-            <div ref={setNodeRef} style={style} className="p-2 my-1 bg-white border rounded">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                        <span {...attributes} {...listeners} className="cursor-grab p-1 touch-none"><GripVertical /></span>
-                        <span>{section.default_title}</span>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => onRemoveSection(item.parentId!, item.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+            <div ref={setNodeRef} style={style} role="treeitem" aria-level={item.depth + 1} className="p-2 my-1 rounded flex items-center justify-between">
+                <div className="flex items-center flex-grow">
+                    <button {...attributes} {...listeners} className="cursor-grab p-1 touch-none" aria-label="Move section"><GripVertical /></button>
+                    <Input
+                        value={section.default_title}
+                        onChange={(e) => onUpdateSectionTitle(item.id, e.target.value)}
+                        className="bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        aria-label={`Section title, level ${item.depth + 1}`}
+                    />
                 </div>
+                <Button variant="ghost" size="sm" onClick={() => onRemoveSection(item.parentId!, item.id)} aria-label="Delete section"><Trash2 className="h-4 w-4 text-red-500" /></Button>
             </div>
         );
     }

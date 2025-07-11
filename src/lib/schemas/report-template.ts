@@ -4,6 +4,7 @@ export const ReportSectionTypeSchema = z.object({
   id: z.string().uuid(), // Unique ID for the section type (e.g., "reason_for_referral")
   name: z.string(), // Display name (e.g., "Reason for Referral")
   default_title: z.string(), // Add this field
+  ai_directive: z.string().optional(), // New field for instructions
   // Add any other properties relevant to a section type (e.g., default content, validation rules)
 });
 
