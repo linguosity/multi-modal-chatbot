@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TemplateEditor from '@/components/template-editor';
 import { Drawer } from '@/components/ui/Drawer';
-// import { DrawerContent } from '@/components/ui/Drawer'; // Uncomment if your Drawer requires it!
+import { AnimatePresence } from 'framer-motion';
 
 type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
 
@@ -85,7 +85,7 @@ export default function TemplatesPage() {
 
       setShowDrawer(false);
       setEditingTemplate(undefined);
-      fetchTemplates(); // Refresh the list
+      fetchTemplates(); // Refresh the list after saving
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -190,31 +190,34 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {/* Diagnostic: Test Drawer always renders content */}
-      <Drawer
-          isOpen={showDrawer}
-          onClose={() => {
-            setShowDrawer(false);
-            setEditingTemplate(undefined);
-          }}
-        >
-          <div style={{ padding: 16, background: "#f8fafc" }}>
-            <div>
-              <b>Drawer is open?</b> {showDrawer ? "YES" : "NO"}
-            </div>
-            <div>
-              <b>Editing Template Name:</b> {editingTemplate?.name || <span style={{ color: "#888" }}>None</span>}
-            </div>
-          </div>
-          <TemplateEditor
-            initialTemplate={editingTemplate}
-            onSave={handleSaveTemplate}
-            onCancel={() => {
+      <AnimatePresence>
+        {showDrawer && (
+          <Drawer
+            isOpen={showDrawer}
+            onClose={() => {
               setShowDrawer(false);
               setEditingTemplate(undefined);
             }}
-          />
-        </Drawer>
+          >
+            <div style={{ padding: 16, background: "#f8fafc" }}>
+              <div>
+                <b>Drawer is open?</b> {showDrawer ? "YES" : "NO"}
+              </div>
+              <div>
+                <b>Editing Template Name:</b> {editingTemplate?.name || <span style={{ color: "#888" }}>None</span>}
+              </div>
+            </div>
+            <TemplateEditor
+              initialTemplate={editingTemplate}
+              onSave={handleSaveTemplate}
+              onCancel={() => {
+                setShowDrawer(false);
+                setEditingTemplate(undefined);
+              }}
+            />
+          </Drawer>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { ReportTemplateSchema } from '@/lib/schemas/report-template';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const supabase = await createRouteSupabase();
-  const { id } = params;
+  const { id } = await params;
 
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -41,7 +41,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   const supabase = await createRouteSupabase();
-  const { id } = params;
+  const { id } = await params;
 
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -97,7 +97,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const supabase = await createRouteSupabase();
-  const { id } = params;
+  const { id } = await params;
 
   const { data: { user } } = await supabase.auth.getUser();
 

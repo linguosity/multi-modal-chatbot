@@ -17,12 +17,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 
 // Infer types from schemas
@@ -361,49 +355,47 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>Available Sections</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SortableContext items={availableSectionTypes.map(s => `palette-${s.id}`)}>
-                    {availableSectionTypes.map(sectionType => (
-                        <PaletteItem key={sectionType.id} id={sectionType.id} title={sectionType.default_title} />
-                    ))}
-                </SortableContext>
-              </CardContent>
-            </Card>
+        {/* Template Structure */}
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-semibold">Template Structure</h3>
+            <Button onClick={() => dispatch({ type: TemplateActionType.ADD_GROUP, payload: { availableSectionTypes } })}> 
+              <Plus className="mr-2 h-4 w-4" /> Add Group
+            </Button>
           </div>
-
-          <div className="md:col-span-1">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Template Structure</CardTitle>
-                <Button onClick={() => dispatch({ type: TemplateActionType.ADD_GROUP, payload: { availableSectionTypes } })}> 
-                  <Plus className="mr-2 h-4 w-4" /> Add Group
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div role="tree">
-                  <SortableContext items={sortedIds}>
-                    {flattenedItems.map(item => (
-                      <SortableItem
-                        key={item.id}
-                        item={item}
-                        onRemoveGroup={handleRemoveGroup}
-                        onUpdateGroupTitle={handleUpdateGroupTitle}
-                        onRemoveSection={handleRemoveSection}
-                        onUpdateSectionTitle={handleUpdateSectionTitle}
-                      />
-                    ))}
-                  </SortableContext>
-                </div>
-              </CardContent>
-            </Card>
+          <div role="tree" className="border rounded-md p-2">
+            <SortableContext items={sortedIds}>
+              {flattenedItems.map(item => (
+                <SortableItem
+                  key={item.id}
+                  item={item}
+                  onRemoveGroup={handleRemoveGroup}
+                  onUpdateGroupTitle={handleUpdateGroupTitle}
+                  onRemoveSection={handleRemoveSection}
+                  onUpdateSectionTitle={handleUpdateSectionTitle}
+                />
+              ))}
+            </SortableContext>
           </div>
         </div>
+
+        {/* Available Sections (Commented out for now) */}
+        {/*
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Available Sections</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SortableContext items={availableSectionTypes.map(s => `palette-${s.id}`)}>
+                  {availableSectionTypes.map(sectionType => (
+                      <PaletteItem key={sectionType.id} id={sectionType.id} title={sectionType.default_title} />
+                  ))}
+              </SortableContext>
+            </CardContent>
+          </Card>
+        </div>
+        */}
 
         <div className="mt-6 flex justify-end space-x-2">
           <Button variant="secondary" onClick={onCancel}>Cancel</Button>
@@ -414,18 +406,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
   );
 };
 
-const PaletteItem = ({ id, title }: { id: string; title: string }) => {
-    const { attributes, listeners, setNodeRef } = useSortable({
-        id: `palette-${id}`,
-        data: { isPaletteItem: true, id: id }
-    });
-    
-    return (
-        <div ref={setNodeRef} {...attributes} {...listeners} className="p-2 my-1 border rounded bg-gray-100 cursor-grab touch-none">
-            {title}
-        </div>
-    );
-};
+
 
 const SortableItem = ({ item, onRemoveGroup, onUpdateGroupTitle, onRemoveSection, onUpdateSectionTitle }: {
     item: FlattenedItem;

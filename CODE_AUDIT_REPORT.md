@@ -28,8 +28,10 @@
 *   `"esModuleInterop": true` is enabled, which helps with module import compatibility.
 *   `"paths": { "@/*": ["./src/*"] }` is configured for absolute imports, promoting cleaner code.
 
-**`.eslintrc.cjs` / `.eslintrc.json` / `.eslintrc.js`:**
-*   No ESLint configuration file was found in standard locations. This means the project is likely relying on the default `next lint` configuration, which is generally good but might lack project-specific rules or stricter linting.
+**`.eslintrc.json` Overview:**
+*   A `.eslintrc.json` file is present and configured with `"root": true` to ensure ESLint uses the project-specific configuration.
+*   The `lint` script in `package.json` explicitly points to this configuration file (`next lint --config ./.eslintrc.json`).
+*   It extends `@typescript-eslint/recommended` and `react-hooks/recommended`, enforcing good practices for TypeScript and React hooks.
 
 **`postcss.config.js` Overview:**
 *   Standard PostCSS configuration for Tailwind CSS and Autoprefixer.
@@ -45,7 +47,7 @@
 
 **A. Code Style & Consistency:**
 *   **Overall:** The codebase generally follows a consistent style, utilizing Tailwind CSS for styling and `shadcn/ui` components.
-*   **ESLint:** The absence of a custom `.eslintrc` file means the project relies on `eslint-config-next` defaults. While functional, a custom configuration could enforce stricter rules, specific formatting, and project-specific best practices.
+*   **ESLint:** A comprehensive `.eslintrc.json` is now in place, enforcing stricter rules and project-specific best practices.
 *   **`console` statements:** Reverted to `console.log`/`warn`/`error` from structured logging. (Previous implementation of structured logging was removed).
 
 **B. Error Handling Patterns:**
@@ -54,7 +56,7 @@
 
 **C. Dependency Management:**
 *   **Dependencies:** The `package.json` lists a comprehensive set of modern and relevant libraries for a Next.js project with Supabase, AI, and rich UI.
-*   **`sortable-tree`:** As previously discussed, the `sortable-tree` library was a misstep due to its imperative nature. The current plan to revert to `@dnd-kit` is the correct approach for a React-based project.
+*   **Drag-and-Drop:** The project has successfully transitioned from `sortable-tree` to `@dnd-kit` for robust and flexible drag-and-drop functionality, particularly in the template editor.
 
 **D. Potential Performance Areas:**
 *   **API Data Fetching:** `select('*')` is used in several API routes. While convenient, it can fetch more data than necessary. For performance optimization, consider selecting only the required columns.
@@ -75,7 +77,7 @@
 ### 3. Recommendations for Refactoring & Improvement:
 
 1.  **Implement PDF Text Extraction:** For the multimodal input, integrate a library or service to extract text from PDFs on the server-side before sending it to Claude.
-2.  **Structured Logging:** Reverted to `console.log`/`warn`/`error`.
+2.  **Structured Logging:** Implemented structured logging using Pino.
 3.  **API Data Selection:** Review all `supabase.from(...).select('*')` calls in API routes and narrow down the selected columns to only what's necessary.
 4.  **Frontend Loading States:** Implement more granular loading states and skeleton loaders for a better user experience, especially during data fetching and AI generation.
 5.  **Comprehensive ESLint Configuration:** Create a `.eslintrc.js` or `.eslintrc.json` file to enforce project-specific coding standards, potentially including rules for `console` usage in production.
