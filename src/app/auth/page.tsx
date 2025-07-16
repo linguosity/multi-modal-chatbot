@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image';
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -62,7 +61,13 @@ export default function LoginPage() {
       <Card className="w-full max-w-lg mx-auto">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold flex items-center justify-center">
-            <Image src="/images/linguosity_logo_1.svg" alt="Linguosity Logo" width={32} height={32} className="mr-2" />
+            <img 
+              src="/logo-animation.gif" 
+              alt="Linguosity Logo" 
+              className="h-8 w-auto mr-2 logo-pingpong"
+              width="32"
+              height="32"
+            />
             Linguosity
           </CardTitle>
           <CardDescription>Enter your credentials to access your dashboard</CardDescription>

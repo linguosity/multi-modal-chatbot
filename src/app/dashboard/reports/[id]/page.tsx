@@ -1,9 +1,11 @@
 'use client';
 
 import { useParams } from 'next/navigation'; 
-import { useState, useEffect } from 'react'
-import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { useState, useEffect } from 'react';
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
+
+import type { DataPoint, ReportSection } from '@/lib/schemas/report';
 import { SectionHeader } from "@/components/ui/card"
 import { useReport } from '@/lib/context/ReportContext';
 import { SlpReportSectionGroup, slpReportSectionGroups } from '@/lib/report-groups';
@@ -64,14 +66,20 @@ export default function ReportDetailPage() {
     });
   };
 
-  const onDragEnd = async (event: { active: { id: string }, over: { id: string } }) => {
+  const onDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    if (active.id !== over.id && report) {
-      const oldIndex = report.sections.findIndex((section) => section.id === active.id);
-      const newIndex = report.sections.findIndex((section) => section.id === over.id);
+    if (!over || active.id === over.id) return;
+
+    if (report) {
+      const oldIndex = report.sections.findIndex((section) => section.id === String(active.id));
+      const newIndex = report.sections.findIndex((section) => section.id === String(over.id));
+
+      if (oldIndex === -1 || newIndex === -1) return; // Defensive
+
       const updatedSections = arrayMove(report.sections, oldIndex, newIndex);
       const updatedReport = { ...report, sections: updatedSections };
       setReport(updatedReport);
+
       // Only save to Supabase if it's not a seed report
       if (!isSeedReport) {
         await handleSave(updatedReport);
@@ -96,7 +104,7 @@ export default function ReportDetailPage() {
                   {report.sections
                     .filter(section => Array.isArray(group.sectionTypes) && group.sectionTypes.includes(section.sectionType))
                     .map((section: ReportSection) => (
-                      <ReportSectionCard key={section.id} section={section} onUpdateSection={handleSectionUpdate} reportId={report.id} />
+                      <ReportSectionCard key={section.id} section={section} onUpdateSectionAction={handleSectionUpdate} reportId={report.id} />
                     ))}
                 </SortableContext>
               </div>

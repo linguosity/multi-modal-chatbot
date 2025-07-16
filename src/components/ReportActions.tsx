@@ -4,13 +4,19 @@ import { Button } from '@/components/ui/button';
 import { useReport } from '@/lib/context/ReportContext';
 
 export default function ReportActions() {
-  const { handleSave, handleDelete, showJson, setShowJson, loading } = useReport();
+  const { handleSave, handleDelete, showJson, setShowJson, loading, report } = useReport();
+
+  const handleSaveClick = async () => {
+    if (report) {
+      await handleSave(report);
+    }
+  };
 
   return (
     <ul className="space-y-1 border-t border-gray-100 pt-4">
       <li>
         <Button
-          onClick={handleSave}
+          onClick={handleSaveClick}
           disabled={loading}
           className="group relative flex justify-center rounded-sm px-2 py-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
         >

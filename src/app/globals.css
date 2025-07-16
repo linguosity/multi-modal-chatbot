@@ -87,3 +87,23 @@
     background-color: transparent;
   }
 }
+
+/* Logo ping-pong animation - plays forward then reverse */
+.logo-pingpong {
+  animation: logo-pingpong 4s ease-in-out infinite;
+}
+
+@keyframes logo-pingpong {
+  0% {
+    animation-direction: normal;
+  }
+  50% {
+    animation-direction: normal;
+  }
+  51% {
+    animation-direction: reverse;
+  }
+  100% {
+    animation-direction: reverse;
+  }
+}

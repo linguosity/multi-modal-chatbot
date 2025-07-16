@@ -29,7 +29,7 @@ export default function DashboardLayout({
               {/* wrapper to control size */}
               <div className="h-8 w-8 relative">
                 <Image
-                  src="/images/linguosity_logo_1.svg"
+                  src="/images/logo-animation.gif"
                   alt="Linguosity logo"
                   fill
                   className="object-contain text-teal-600"

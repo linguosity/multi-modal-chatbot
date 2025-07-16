@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
-import { ReportSchema, DEFAULT_SECTIONS } from '@/lib/schemas/report'
+import { ReportSchema, DEFAULT_SECTIONS, ReportSection } from '@/lib/schemas/report'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function GET() {
@@ -46,6 +46,20 @@ export async function POST(request: Request) {
     return new NextResponse(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
   }
 
+  // Fetch the template to get the sections
+  const { data: templateData, error: templateError } = await supabase
+    .from('report_templates')
+    .select('sections')
+    .eq('id', template_id)
+    .single();
+
+  let template = templateData;
+  if (templateError || !template) {
+    console.error({ templateError }, `Template with id ${template_id} not found.`);
+    // Fallback to default sections if template not found
+    template = { sections: Object.values(DEFAULT_SECTIONS) };
+  }
+
   const newReportData = {
     id: uuidv4(),
     studentId: studentId,
@@ -55,9 +69,11 @@ export async function POST(request: Request) {
     status: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    sections: Object.values(DEFAULT_SECTIONS).map(section => ({
+    sections: template.sections.map((section: ReportSection) => ({
       ...section,
       id: uuidv4(), // Give each section a unique ID
+      // Ensure points are initialized, even if template doesn't have them
+      points: section.points || [], 
     })),
   };
 

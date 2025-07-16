@@ -84,13 +84,23 @@ export async function POST(request: Request) {
   let systemMessageContent = "";
   let targetTool = "";
 
+  // Define a type for a section if not already defined
+  type Section = {
+    id: string;
+    ai_directive?: string;
+    points?: any;
+    content?: string;
+    isGenerated?: boolean;
+    // add other fields as needed
+  };
+
   if (generation_type === 'points') {
-    const targetSection = report.sections.find((s) => s.id === sectionId);
+    const targetSection = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
     const directive = targetSection?.ai_directive || "Generate a list of key points based on the provided context.";
     systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to generate a structured list of key points for a report section based on provided notes and data. You MUST call the 'update_report_section_points' tool. ${directive}`;
     targetTool = 'update_report_section_points';
   } else if (generation_type === 'prose') {
-    const targetSection = report.sections.find((s) => s.id === sectionId);
+    const targetSection = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
     if (!targetSection || !targetSection.points) {
       return new NextResponse(JSON.stringify({ error: 'Target section or points not found for prose generation.' }), { status: 400 });
     }
@@ -126,8 +136,8 @@ export async function POST(request: Request) {
     );
 
     if (toolCall) {
-      const { section_id, content, points } = toolCall.input;
-      const sectionIndex = report.sections.findIndex((sec) => sec.id === section_id);
+      const { section_id, content, points } = toolCall.input as { section_id: string; content?: string; points?: any };
+      const sectionIndex = (report.sections as Section[]).findIndex((sec: Section) => sec.id === section_id);
 
       if (sectionIndex !== -1) {
         if (generation_type === 'points') {

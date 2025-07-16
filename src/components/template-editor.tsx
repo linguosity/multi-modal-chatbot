@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useReducer, useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
+import React, { useEffect, useState } from 'react';
 
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, arrayMove, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableTree, SimpleTreeItemWrapper, TreeItemComponentProps } from 'dnd-kit-sortable-tree';
 
 import {
   ReportTemplateSchema,
@@ -14,243 +12,290 @@ import {
   ReportSectionTypeSchema
 } from '@/lib/schemas/report-template';
 
+// Import DEFAULT_SECTIONS from report.ts
+import { DEFAULT_SECTIONS } from '@/lib/schemas/report';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
+
+// New type system
+import { TreeItem, GroupNode, SectionNode, TemplateCreationMode } from '@/types/tree-types';
 
 // Infer types from schemas
 type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
 type ReportSectionGroup = z.infer<typeof ReportSectionGroupSchema>;
 type ReportSectionType = z.infer<typeof ReportSectionTypeSchema>;
 
-// --- DND Kit Tree Types ---
-interface FlattenedItem {
-  id: string;
-  parentId: string | null;
-  type: 'group' | 'section';
-  data: ReportSectionGroup | ReportSectionType;
-  depth: number;
-}
-
-// --- End DND Kit Tree Types ---
-
-// Define Action Types for the Reducer
-enum TemplateActionType {
-  SET_TEMPLATE = 'SET_TEMPLATE',
-  UPDATE_TEMPLATE_METADATA = 'UPDATE_TEMPLATE_METADATA',
-  ADD_GROUP = 'ADD_GROUP',
-  REMOVE_GROUP = 'REMOVE_GROUP',
-  UPDATE_GROUP_TITLE = 'UPDATE_GROUP_TITLE',
-  ADD_SECTION_TO_GROUP = 'ADD_SECTION_TO_GROUP',
-  REMOVE_SECTION_FROM_GROUP = 'REMOVE_SECTION_FROM_GROUP',
-  REORDER_ITEMS = 'REORDER_ITEMS',
-  UPDATE_SECTION_TITLE = 'UPDATE_SECTION_TITLE',
-}
-
-// Define Actions
-type TemplateAction =
-  | { type: TemplateActionType.SET_TEMPLATE; payload: ReportTemplate }
-  | { type: TemplateActionType.UPDATE_TEMPLATE_METADATA; payload: { name?: string; description?: string } }
-  | { type: TemplateActionType.ADD_GROUP; payload: { title?: string; availableSectionTypes: ReportSectionType[] } }
-  | { type: TemplateActionType.REMOVE_GROUP; payload: { groupId: string; availableSectionTypes: ReportSectionType[] } }
-  | { type: TemplateActionType.UPDATE_GROUP_TITLE; payload: { groupId: string; title: string; availableSectionTypes: ReportSectionType[] } }
-  | { type: TemplateActionType.ADD_SECTION_TO_GROUP; payload: { groupId: string; sectionTypeId: string; availableSectionTypes: ReportSectionType[] } }
-  | { type: TemplateActionType.REMOVE_SECTION_FROM_GROUP; payload: { groupId: string; sectionTypeId: string; availableSectionTypes: ReportSectionType[] } }
-  | { type: TemplateActionType.REORDER_ITEMS; payload: { activeId: string; overId: string; availableSectionTypes: ReportSectionType[] } }
-  | { type: TemplateActionType.UPDATE_SECTION_TITLE; payload: { sectionId: string; title: string; availableSectionTypes: ReportSectionType[] } };
-
-
-// Converts our ReportTemplateSchema to a flattened DND Kit compatible structure
-const convertTemplateToFlattenedItems = (template: ReportTemplate, availableSectionTypes: ReportSectionType[]): FlattenedItem[] => {
-    const flattened: FlattenedItem[] = [];
-    template.groups.forEach(group => {
-        flattened.push({
-            id: group.id,
-            parentId: null,
-            type: 'group' as const,
-            data: group,
-            depth: 0,
-        });
-        group.sectionTypeIds.forEach(sectionTypeId => {
-            const sectionType = availableSectionTypes.find(s => s.id === sectionTypeId);
-            if (sectionType) {
-                flattened.push({
-                    id: sectionTypeId,
-                    parentId: group.id,
-                    type: 'section' as const,
-                    data: sectionType,
-                    depth: 1,
-                });
-            }
-        });
-    });
-    return flattened;
-};
-
-// Converts a flattened DND Kit compatible structure back to ReportTemplateSchema
-const convertFlattenedItemsToTemplate = (flattenedItems: FlattenedItem[], currentTemplate: ReportTemplate): ReportTemplate => {
-    const newGroups: ReportSectionGroup[] = [];
-    const groupItems = flattenedItems.filter(item => item.type === 'group' && item.parentId === null);
-
-    groupItems.forEach(groupItem => {
-        const groupData = groupItem.data as ReportSectionGroup;
-        const sectionTypeIds = flattenedItems
-            .filter(item => item.type === 'section' && item.parentId === groupItem.id)
-            .map(item => item.id);
-        
-        newGroups.push({
-            id: groupData.id,
-            title: groupData.title,
-            sectionTypeIds: sectionTypeIds,
-        });
-    });
-    
-    const orderedGroupIds = groupItems.map(item => item.id);
-    newGroups.sort((a, b) => orderedGroupIds.indexOf(a.id) - orderedGroupIds.indexOf(b.id));
-
-    return { ...currentTemplate, groups: newGroups };
-};
-
-// Reducer Function
-const templateReducer = (state: ReportTemplate, action: TemplateAction): ReportTemplate => {
-    const { availableSectionTypes } = 'payload' in action && action.payload && 'availableSectionTypes' in action.payload ? action.payload : { availableSectionTypes: [] };
-    const currentFlattened = convertTemplateToFlattenedItems(state, availableSectionTypes as ReportSectionType[]);
-
-    switch (action.type) {
-        case TemplateActionType.SET_TEMPLATE:
-            return action.payload;
-        case TemplateActionType.UPDATE_TEMPLATE_METADATA:
-            return { ...state, ...action.payload };
-        case TemplateActionType.ADD_GROUP:
-            {
-                const { title } = action.payload;
-                const newGroup: ReportSectionGroup = {
-                    id: uuidv4(),
-                    title: title || 'New Group',
-                    sectionTypeIds: [],
-                };
-                const newFlattenedItems = [
-                    ...currentFlattened,
-                    { id: newGroup.id, parentId: null, type: 'group' as const, data: newGroup, depth: 0 },
-                ];
-                return convertFlattenedItemsToTemplate(newFlattenedItems, state);
-            }
-        case TemplateActionType.REMOVE_GROUP:
-            {
-                const { groupId } = action.payload;
-                const newFlattenedItems = currentFlattened.filter(item => item.id !== groupId && item.parentId !== groupId);
-                return convertFlattenedItemsToTemplate(newFlattenedItems, state);
-            }
-        case TemplateActionType.UPDATE_GROUP_TITLE:
-            {
-                const { groupId, title } = action.payload;
-                const newFlattenedItems = currentFlattened.map(item =>
-                    item.id === groupId && item.type === 'group' ? { ...item, data: { ...(item.data as ReportSectionGroup), title } } : item
-                );
-                return convertFlattenedItemsToTemplate(newFlattenedItems, state);
-            }
-        case TemplateActionType.ADD_SECTION_TO_GROUP:
-            {
-                const { groupId, sectionTypeId } = action.payload;
-                const sectionType = (action.payload.availableSectionTypes).find(s => s.id === sectionTypeId);
-                if (!sectionType) return state;
-
-                const newFlattenedItems = [
-                    ...currentFlattened,
-                    { id: sectionTypeId, parentId: groupId, type: 'section' as const, data: sectionType, depth: 1 },
-                ];
-                return convertFlattenedItemsToTemplate(newFlattenedItems, state);
-            }
-        case TemplateActionType.REMOVE_SECTION_FROM_GROUP:
-            {
-                const { groupId, sectionTypeId } = action.payload;
-                const newFlattenedItems = currentFlattened.filter(item => !(item.id === sectionTypeId && item.parentId === groupId));
-                return convertFlattenedItemsToTemplate(newFlattenedItems, state);
-            }
-        case TemplateActionType.REORDER_ITEMS:
-            {
-                const { activeId, overId } = action.payload;
-                const activeItemIndex = currentFlattened.findIndex(item => item.id === activeId);
-                const overItemIndex = currentFlattened.findIndex(item => item.id === overId);
-                const overItem = currentFlattened[overItemIndex];
-                
-                if (activeItemIndex === -1 || !overItem) {
-                    return state;
-                }
-
-                const activeItem = currentFlattened[activeItemIndex];
-                
-                const newParentId: string | null = overItem.type === 'group' ? overItem.id : overItem.parentId;
-                
-                if (activeItem.type === 'group' && newParentId !== null) {
-                    return state;
-                }
-
-                const newItems = arrayMove(currentFlattened, activeItemIndex, overItemIndex);
-                
-                const movedItem = newItems.find(item => item.id === activeId)!;
-                if (movedItem.parentId !== newParentId) {
-                    movedItem.parentId = newParentId;
-                    movedItem.depth = newParentId === null ? 0 : 1;
-                }
-
-                return convertFlattenedItemsToTemplate(newItems, state);
-            }
-        case TemplateActionType.UPDATE_SECTION_TITLE:
-            {
-                const { sectionId, title } = action.payload;
-                const newFlattenedItems = currentFlattened.map(item => {
-                    if (item.id === sectionId && item.type === 'section') {
-                        return { ...item, data: { ...(item.data as ReportSectionType), default_title: title } };
-                    }
-                    return item;
-                });
-                return convertFlattenedItemsToTemplate(newFlattenedItems, state);
-            }
-        default:
-            return state;
-    }
-};
-
-
+// --- Props expected from your TemplatesPage ---
 interface TemplateEditorProps {
   initialTemplate?: ReportTemplate;
-  onSave: (template: ReportTemplate) => void;
   onCancel: () => void;
+  onSave?: (templateData: any) => Promise<void>;
 }
 
-const initialTemplateState: ReportTemplate = {
-  id: uuidv4(),
-  name: '',
-  description: '',
-  groups: [],
-  user_id: '',
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
+// --- Helper to create section lookup from API data ---
+function createSectionLookup(sectionTypes: ReportSectionType[]): Record<string, ReportSectionType> {
+  return sectionTypes.reduce((acc, section) => {
+    acc[section.id] = section;
+    return acc;
+  }, {} as Record<string, ReportSectionType>);
+}
 
-const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave, onCancel }) => {
-  const [state, dispatch] = useReducer(templateReducer, initialTemplate || initialTemplateState);
+// --- Helper to convert template to tree structure ---
+function templateToTree(template: ReportTemplate, sectionLookup: Record<string, ReportSectionType>): TreeItem[] {
+  return template.groups?.map(group => ({
+    id: group.id,
+    name: group.title,
+    data: {
+      kind: 'group',
+      id: group.id,
+      title: group.title,
+      sectionTypeIds: group.sectionTypeIds
+    } as GroupNode,
+    children: group.sectionTypeIds.map(sectionId => {
+      const sectionType = sectionLookup[sectionId];
+      return {
+        id: sectionId,
+        name: sectionType?.name || 'Unknown Section',
+        data: {
+          kind: 'section',
+          id: sectionId,
+          name: sectionType?.name || 'Unknown Section',
+          default_title: sectionType?.default_title || 'Unknown Section',
+          ai_directive: sectionType?.ai_directive || 'Generate content for this section.'
+        } as SectionNode
+      };
+    })
+  })) || [];
+}
+
+// --- Helper to update a node's name in tree recursively ---
+function updateTreeItemName(tree: TreeItem[], id: string, newName: string): TreeItem[] {
+  return tree.map(item => {
+    if (item.id === id) {
+      // Update the name and the data object
+      const updatedData = item.data.kind === 'group' 
+        ? { ...item.data, title: newName } as GroupNode
+        : item.data;
+      return { ...item, name: newName, data: updatedData };
+    }
+    return item.children 
+      ? { ...item, children: updateTreeItemName(item.children, id, newName) }
+      : item;
+  });
+}
+
+// --- Helper to remove a section from any group in tree recursively ---
+function removeSectionFromTree(tree: TreeItem[], sectionId: string): TreeItem[] {
+  return tree.map(item => {
+    if (item.children) {
+      const filteredChildren = item.children.filter(child => child.id !== sectionId);
+      // Update the group's sectionTypeIds if it's a group
+      if (item.data.kind === 'group') {
+        const updatedData = {
+          ...item.data,
+          sectionTypeIds: filteredChildren.map(child => child.id)
+        } as GroupNode;
+        return { ...item, children: filteredChildren, data: updatedData };
+      }
+      return { ...item, children: filteredChildren };
+    }
+    return item;
+  });
+}
+
+// Top-level helper that produces a stable component type
+function makeTreeItemComponent(
+  onUpdateTreeItems: (updater: (items: TreeItem[]) => TreeItem[]) => void
+) {
+  return React.forwardRef<HTMLDivElement, TreeItemComponentProps<TreeItem>>(
+    function TreeItemComponent({ handleProps, ...props }, ref) {
+      return (
+        <TreeNode
+          {...props}
+          ref={ref}
+          handleProps={handleProps}
+          onUpdateTreeItems={onUpdateTreeItems}
+        />
+      );
+    }
+  );
+}
+
+// --- Clean TreeNode with custom handle & no duplicate grab area ---
+const TreeNode = React.forwardRef<HTMLDivElement, TreeItemComponentProps<TreeItem> & { 
+  onUpdateTreeItems: (updater: (items: TreeItem[]) => TreeItem[]) => void 
+}>(({ item, depth, handleProps, onUpdateTreeItems, ...wrapperProps }, ref) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftName, setDraftName] = useState(item.name);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Focus input when entering edit mode
+  React.useEffect(() => {
+    if (isEditing) inputRef.current?.focus();
+  }, [isEditing]);
+
+  // Commit changes
+  const commit = () => {
+    onUpdateTreeItems(items => updateTreeItemName(items, item.id, draftName));
+    setIsEditing(false);
+  };
+
+  // Cancel changes
+  const cancel = () => {
+    setDraftName(item.name);
+    setIsEditing(false);
+  };
+  
+  return (
+    <SimpleTreeItemWrapper
+      {...wrapperProps}
+      ref={ref}
+      item={item}
+      depth={depth}
+      manualDrag
+      showDragHandle={false}
+      className="list-none"        // leave padding alone
+      contentClassName="w-full"    // no !p-0 override
+    >
+      <div className="group flex items-center mb-1">
+        {/* Drag Handle (ONLY draggable area) */}
+        <div
+          {...handleProps}
+          className={`flex items-center justify-center px-2 h-8 cursor-grab flex-shrink-0 ${
+            depth === 0 ? 'hover:bg-blue-100' : 'hover:bg-gray-100'
+          }`}
+        >
+          <GripVertical className="h-3 w-3 text-gray-400" />
+        </div>
+        
+        {/* Text + actions */}
+        <div
+          className={`flex items-center flex-1 h-8 rounded-md text-sm font-medium overflow-hidden ${
+            depth === 0 ? 'bg-blue-50 text-blue-900' : 'bg-gray-50 text-gray-800'
+          }`}
+        >
+          {/* title / inline edit */}
+          <div className="flex items-center flex-1 px-2 min-w-0">
+            {isEditing ? (
+              <input
+                ref={inputRef}
+                value={draftName}
+                onChange={e => setDraftName(e.target.value)}
+                onBlur={commit}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') commit();
+                  if (e.key === 'Escape') cancel();
+                }}
+                className="bg-transparent border-none outline-none text-inherit font-inherit min-w-0 flex-1"
+                aria-label="Title"
+              />
+            ) : (
+              <span
+                className="min-w-0 flex-1 cursor-pointer select-none truncate"
+                onClick={() => setIsEditing(true)}
+                title={`${item.name} (Click to edit)`}
+              >
+                {item.name}
+              </span>
+            )}
+            
+            {/* Action Buttons - Compact and minimal */}
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Add Child Button (only for groups) */}
+              {depth === 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 hover:bg-green-100 flex-shrink-0"
+                  title="Add section"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newSectionId = uuidv4();
+                    const newSection: TreeItem = {
+                      id: newSectionId,
+                      name: 'New Section',
+                      data: {
+                        kind: 'section',
+                        id: newSectionId,
+                        name: 'New Section',
+                        default_title: 'New Section',
+                        ai_directive: 'Generate content for this section based on the provided context.'
+                      } as SectionNode,
+                    };
+                    
+                    onUpdateTreeItems(items =>
+                      items.map(groupItem =>
+                        groupItem.id === item.id
+                          ? {
+                              ...groupItem,
+                              children: [
+                                ...(groupItem.children || []),
+                                newSection,
+                              ],
+                            }
+                          : groupItem
+                      )
+                    );
+                  }}
+                >
+                  <Plus className="h-3 w-3 text-green-600" />
+                </Button>
+              )}
+              
+              {/* Delete Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-red-100 flex-shrink-0"
+                title={depth === 0 ? "Delete group" : "Delete section"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (depth === 0) {
+                    onUpdateTreeItems(items => items.filter(g => g.id !== item.id));
+                  } else {
+                    onUpdateTreeItems(items => removeSectionFromTree(items, item.id));
+                  }
+                }}
+              >
+                <Trash2 className="h-3 w-3 text-red-500" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </SimpleTreeItemWrapper>
+  );
+});
+TreeNode.displayName = 'TreeNode';
+
+const TemplateEditor: React.FC<TemplateEditorProps> = ({
+  initialTemplate,
+  onCancel,
+  onSave,
+}) => {
+  // --- Fetch section types from API (required for parsing) ---
   const [availableSectionTypes, setAvailableSectionTypes] = useState<ReportSectionType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Local state for the DnD tree view ---
+  const [treeItems, setTreeItems] = useState<TreeItem[]>([]);
+  // --- Form fields for name/description (sync with tree for real template object) ---
+  const [name, setName] = useState<string>(initialTemplate?.name || '');
+  const [description, setDescription] = useState<string>(initialTemplate?.description || '');
+
+  // --- Fetch all section types needed for display/lookup ---
   useEffect(() => {
     const fetchSectionTypes = async () => {
       try {
         const response = await fetch('/api/report-section-types');
-        if (!response.ok) {
-          throw new Error(`Error fetching section types: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error('Failed to fetch section types');
         const data = await response.json();
         setAvailableSectionTypes(data);
       } catch (err: unknown) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError('An unknown error occurred');
-        }
+        setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
@@ -258,207 +303,224 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ initialTemplate, onSave
     fetchSectionTypes();
   }, []);
 
+  // --- Template creation mode state ---
+  const [creationMode, setCreationMode] = useState<TemplateCreationMode>('default');
+
+  // Create stable TreeItemComponent to prevent remount cycles
+  const TreeItemComponent = React.useMemo(
+    () => makeTreeItemComponent(setTreeItems),
+    [] // setTreeItems identity is stable from React, so safe
+  );
+
+  // --- When initialTemplate or section types change, re-parse into treeItems ---
   useEffect(() => {
     if (initialTemplate) {
-      dispatch({ type: TemplateActionType.SET_TEMPLATE, payload: initialTemplate });
+      if (availableSectionTypes.length > 0) {
+        const sectionLookup = createSectionLookup(availableSectionTypes);
+        setTreeItems(templateToTree(initialTemplate, sectionLookup));
+      }
+      setName(initialTemplate.name || '');
+      setDescription(initialTemplate.description || '');
+    } else {
+      if (creationMode === 'default') {
+        createDefaultTemplate();
+      } else {
+        createScratchTemplate();
+      }
     }
-  }, [initialTemplate]);
+  }, [initialTemplate, availableSectionTypes, creationMode]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const flattenedItems = convertTemplateToFlattenedItems(state, availableSectionTypes);
-  const sortedIds = flattenedItems.map(item => item.id);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (!over || active.id === over.id) {
-      return;
-    }
+  // --- Create default template structure from DEFAULT_SECTIONS ---
+  const createDefaultTemplate = () => {
+    // Build groups using the predefined DEFAULT_SECTIONS structure
+    const defaultGroups = [
+      {
+        id: uuidv4(),
+        title: "Initial Information & Background",
+        sections: [
+          DEFAULT_SECTIONS.HEADING,
+          DEFAULT_SECTIONS.REASON_FOR_REFERRAL,
+          DEFAULT_SECTIONS.HEALTH_DEVELOPMENTAL_HISTORY,
+          DEFAULT_SECTIONS.FAMILY_BACKGROUND,
+          DEFAULT_SECTIONS.PARENT_CONCERN
+        ]
+      },
+      {
+        id: uuidv4(),
+        title: "Assessment Process & Results", 
+        sections: [
+          DEFAULT_SECTIONS.VALIDITY_STATEMENT,
+          DEFAULT_SECTIONS.ASSESSMENT_TOOLS,
+          DEFAULT_SECTIONS.ASSESSMENT_RESULTS,
+          DEFAULT_SECTIONS.LANGUAGE_SAMPLE
+        ]
+      },
+      {
+        id: uuidv4(),
+        title: "Conclusions & Recommendations",
+        sections: [
+          DEFAULT_SECTIONS.ELIGIBILITY_CHECKLIST,
+          DEFAULT_SECTIONS.CONCLUSION,
+          DEFAULT_SECTIONS.RECOMMENDATIONS,
+          DEFAULT_SECTIONS.ACCOMMODATIONS
+        ]
+      }
+    ];
     
-    const overItem = flattenedItems.find(item => item.id === over.id);
-
-    if (!overItem) {
-        return;
-    }
-
-    if (active.data.current?.isPaletteItem && overItem.type === 'group') {
-        dispatch({
-            type: TemplateActionType.ADD_SECTION_TO_GROUP,
-            payload: {
-                groupId: overItem.id,
-                sectionTypeId: (active.id as string).replace('palette-','') as string,
-                availableSectionTypes,
-            },
-        });
-        return;
-    }
+    const defaultTreeItems: TreeItem[] = defaultGroups.map((group) => {
+      const treeItem: TreeItem = {
+        id: group.id,
+        name: group.title,
+        data: {
+          kind: 'group',
+          id: group.id,
+          title: group.title,
+          sectionTypeIds: group.sections.map(s => s.id)
+        } as GroupNode,
+        children: group.sections.map((section) => {
+          return {
+            id: section.id,
+            name: section.title,
+            data: {
+              kind: 'section',
+              id: section.id,
+              name: section.title,
+              default_title: section.title,
+              ai_directive: (section as any).generationPrompt || 'Generate content for this section.'
+            } as SectionNode
+          };
+        })
+      };
+      
+      return treeItem;
+    });
     
-    if (!active.data.current?.isPaletteItem) {
-        dispatch({
-            type: TemplateActionType.REORDER_ITEMS,
-            payload: {
-                activeId: active.id as string,
-                overId: over.id as string,
-                availableSectionTypes,
-            },
-        });
-    }
+    setTreeItems(defaultTreeItems);
+    setName('New Report Template');
+    setDescription('Custom report template');
   };
 
-  const handleRemoveGroup = (groupId: string) => {
-    dispatch({ type: TemplateActionType.REMOVE_GROUP, payload: { groupId, availableSectionTypes } });
-  };
-
-  const handleUpdateGroupTitle = (groupId: string, title: string) => {
-    dispatch({ type: TemplateActionType.UPDATE_GROUP_TITLE, payload: { groupId, title, availableSectionTypes } });
-  };
   
-  const handleRemoveSection = (groupId: string, sectionTypeId: string) => {
-    dispatch({ type: TemplateActionType.REMOVE_SECTION_FROM_GROUP, payload: { groupId, sectionTypeId, availableSectionTypes } });
+
+  const createScratchTemplate = () => {
+    console.log('📝 createScratchTemplate: Creating empty template');
+    setTreeItems([]);
+    setName('New Template (From Scratch)');
+    setDescription('Custom template built from scratch');
   };
 
-  const handleUpdateSectionTitle = (sectionId: string, title: string) => {
-    dispatch({ type: TemplateActionType.UPDATE_SECTION_TITLE, payload: { sectionId, title, availableSectionTypes } });
+  if (loading) return <div className="p-6">Loading editor...</div>;
+  if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
+
+  // Handle save functionality
+  const handleSave = async () => {
+    try {
+      // Convert tree items back to template format
+      const templateData = {
+        name,
+        description,
+        groups: treeItems.map(item => ({
+          id: item.id,
+          title: item.name,
+          sectionTypeIds: item.children?.map(child => child.id) || []
+        }))
+      };
+
+      // Use the onSave prop if provided, otherwise just close
+      if (onSave) {
+        await onSave(templateData);
+      } else {
+        console.log('Saving template:', templateData);
+      }
+      
+      // Close the editor
+      onCancel();
+    } catch (error) {
+      console.error('Error saving template:', error);
+    }
   };
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div className="text-red-500">Error: {error}</div>;
-  }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
-      <div className="p-6">
-        <div className="mb-4">
-          <Label htmlFor="template-name">Template Name</Label>
-          <Input
-            id="template-name"
-            value={state.name}
-            onChange={(e) => dispatch({ type: TemplateActionType.UPDATE_TEMPLATE_METADATA, payload: { name: e.target.value } })}
-          />
-        </div>
-        <div className="mb-4">
-          <Label htmlFor="template-description">Description</Label>
-          <Input
-            id="template-description"
-            value={state.description || ''}
-            onChange={(e) => dispatch({ type: TemplateActionType.UPDATE_TEMPLATE_METADATA, payload: { description: e.target.value } })}
-          />
-        </div>
+    <div className="p-6 space-y-2 max-h-screen overflow-y-auto template-editor">
+      <style>{`
+        /* Aggressively target all possible border sources */
+        .template-editor * {
+          border: none !important;
+          box-shadow: none !important;
+          outline: none !important;
+        }
+        /* Remove padding from sortable tree items */
+        .dnd-sortable-tree_simple_tree-item {
+          padding: 0px !important;
+        }
+        /* But restore borders for inputs and buttons that need them */
+        .template-editor input[type="text"],
+        .template-editor input[type="radio"],
+        .template-editor button {
+          border: 1px solid #d1d5db !important;
+        }
+        .template-editor input[type="radio"] {
+          border-radius: 50% !important;
+        }
+        .template-editor button {
+          border-radius: 0.375rem !important;
+        }
+      `}</style>
 
-        {/* Template Structure */}
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold">Template Structure</h3>
-            <Button onClick={() => dispatch({ type: TemplateActionType.ADD_GROUP, payload: { availableSectionTypes } })}> 
-              <Plus className="mr-2 h-4 w-4" /> Add Group
-            </Button>
-          </div>
-          <div role="tree" className="border rounded-md p-2">
-            <SortableContext items={sortedIds}>
-              {flattenedItems.map(item => (
-                <SortableItem
-                  key={item.id}
-                  item={item}
-                  onRemoveGroup={handleRemoveGroup}
-                  onUpdateGroupTitle={handleUpdateGroupTitle}
-                  onRemoveSection={handleRemoveSection}
-                  onUpdateSectionTitle={handleUpdateSectionTitle}
-                />
-              ))}
-            </SortableContext>
-          </div>
+        {/* Simplified Template Creation Mode Selector */}
+      {!initialTemplate && (
+        <div className="flex items-center gap-4 mb-4">
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name="creationMode"
+              value="default"
+              checked={creationMode === 'default'}
+              onChange={(e) => setCreationMode(e.target.value as TemplateCreationMode)}
+              className="mr-1"
+            />
+            <span className="text-sm">default</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name="creationMode"
+              value="scratch"
+              checked={creationMode === 'scratch'}
+              onChange={(e) => setCreationMode(e.target.value as TemplateCreationMode)}
+              className="mr-1"
+            />
+            <span className="text-sm">scratch</span>
+          </label>
         </div>
-
-        {/* Available Sections (Commented out for now) */}
-        {/*
-        <div className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Available Sections</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SortableContext items={availableSectionTypes.map(s => `palette-${s.id}`)}>
-                  {availableSectionTypes.map(sectionType => (
-                      <PaletteItem key={sectionType.id} id={sectionType.id} title={sectionType.default_title} />
-                  ))}
-              </SortableContext>
-            </CardContent>
-          </Card>
+      )}
+      
+      {/* Template Name and Description in same row */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label className="block mb-1 text-sm font-medium">Template Name</label>
+          <Input value={name} onChange={e => setName(e.target.value)} />
         </div>
-        */}
-
-        <div className="mt-6 flex justify-end space-x-2">
-          <Button variant="secondary" onClick={onCancel}>Cancel</Button>
-          <Button onClick={() => onSave(state)}>Save Template</Button>
+        <div>
+          <label className="block mb-1 text-sm font-medium">Description</label>
+          <Input value={description} onChange={e => setDescription(e.target.value)} />
         </div>
       </div>
-    </DndContext>
+      
+      <SortableTree
+        items={treeItems}
+        onItemsChanged={setTreeItems}
+        TreeItemComponent={TreeItemComponent}
+        indentationWidth={16}
+        pointerSensorOptions={{activationConstraint: {distance: 5}}}
+      />
+      
+      <div className="mt-6 flex justify-end space-x-2">
+        <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+        <Button onClick={handleSave}>Save Template</Button>
+      </div>
+    </div>
   );
-};
-
-
-
-const SortableItem = ({ item, onRemoveGroup, onUpdateGroupTitle, onRemoveSection, onUpdateSectionTitle }: {
-    item: FlattenedItem;
-    onRemoveGroup: (id: string) => void;
-    onUpdateGroupTitle: (id: string, title: string) => void;
-    onRemoveSection: (groupId: string, sectionId: string) => void;
-    onUpdateSectionTitle: (sectionId: string, title: string) => void; // New prop
-}) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
-    const style: React.CSSProperties = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        marginLeft: `${item.depth * 20}px`,
-    };
-
-    if (item.type === 'group') {
-        const group = item.data as ReportSectionGroup;
-        return (
-            <div ref={setNodeRef} style={style} role="treeitem" aria-level={item.depth + 1} className="p-2 my-2 rounded flex items-center justify-between">
-                <div className="flex items-center flex-grow">
-                    <button {...attributes} {...listeners} className="cursor-grab p-1 touch-none" aria-label="Move group"><GripVertical /></button>
-                    <Input
-                        value={group.title}
-                        onChange={(e) => onUpdateGroupTitle(item.id, e.target.value)}
-                        className="font-bold bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                        aria-label={`Group title, level ${item.depth + 1}`}
-                    />
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => onRemoveGroup(item.id)} aria-label="Delete group"><Trash2 className="h-4 w-4 text-red-500" /></Button>
-            </div>
-        );
-    }
-
-    if (item.type === 'section') {
-        const section = item.data as ReportSectionType;
-        return (
-            <div ref={setNodeRef} style={style} role="treeitem" aria-level={item.depth + 1} className="p-2 my-1 rounded flex items-center justify-between">
-                <div className="flex items-center flex-grow">
-                    <button {...attributes} {...listeners} className="cursor-grab p-1 touch-none" aria-label="Move section"><GripVertical /></button>
-                    <Input
-                        value={section.default_title}
-                        onChange={(e) => onUpdateSectionTitle(item.id, e.target.value)}
-                        className="bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                        aria-label={`Section title, level ${item.depth + 1}`}
-                    />
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => onRemoveSection(item.parentId!, item.id)} aria-label="Delete section"><Trash2 className="h-4 w-4 text-red-500" /></Button>
-            </div>
-        );
-    }
-
-    return null;
 };
 
 export default TemplateEditor;
