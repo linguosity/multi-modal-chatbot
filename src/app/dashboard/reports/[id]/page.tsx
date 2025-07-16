@@ -8,7 +8,7 @@ import { arrayMove, SortableContext, rectSortingStrategy } from '@dnd-kit/sortab
 import type { DataPoint, ReportSection } from '@/lib/schemas/report';
 import { SectionHeader } from "@/components/ui/card"
 import { useReport } from '@/lib/context/ReportContext';
-import { SlpReportSectionGroup, slpReportSectionGroups } from '@/lib/report-groups';
+import { SlpReportSectionGroup } from '@/lib/report-groups';
 import { ReportSectionCard } from '@/components/ReportSectionCard';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -17,6 +17,67 @@ export default function ReportDetailPage() {
   const { report, loading, handleSave, setReport } = useReport();
   const [error, setError] = useState<string | null>(null);
   const [isSeedReport, setIsSeedReport] = useState(false);
+  const [templateGroups, setTemplateGroups] = useState<SlpReportSectionGroup[]>([]);
+
+  // Fetch template structure to generate dynamic groups
+  useEffect(() => {
+    const fetchTemplateGroups = async () => {
+      if (!report?.templateId) return;
+      
+      try {
+        console.log('🔍 Fetching template structure for report:', report.templateId);
+        const response = await fetch(`/api/report-templates/${report.templateId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch template');
+        }
+        const template = await response.json();
+        console.log('📋 Template data:', template);
+        
+        if (template.template_structure && Array.isArray(template.template_structure)) {
+          // Fetch section types to map UUIDs to names
+          const sectionTypesResponse = await fetch('/api/report-section-types');
+          const sectionTypes = await sectionTypesResponse.json();
+          
+          // Create mapping from UUID to name
+          const uuidToNameMap: Record<string, string> = {};
+          sectionTypes.forEach((st: any) => {
+            uuidToNameMap[st.id] = st.name;
+          });
+          
+          // Convert template groups to display groups
+          const dynamicGroups: SlpReportSectionGroup[] = template.template_structure.map((group: any) => ({
+            title: group.title,
+            sectionTypes: (group.sectionTypeIds || []).map((uuid: string) => uuidToNameMap[uuid]).filter(Boolean)
+          }));
+          
+          console.log('✅ Generated dynamic groups:', dynamicGroups);
+          setTemplateGroups(dynamicGroups);
+        } else {
+          console.warn('⚠️ Template has no structure, using fallback');
+          // Fallback to default groups if template has no structure
+          setTemplateGroups([
+            {
+              title: "Report Sections",
+              sectionTypes: report.sections.map(s => s.sectionType)
+            }
+          ]);
+        }
+      } catch (err) {
+        console.error('❌ Error fetching template:', err);
+        // Fallback: create a single group with all sections
+        setTemplateGroups([
+          {
+            title: "Report Sections", 
+            sectionTypes: report.sections.map(s => s.sectionType)
+          }
+        ]);
+      }
+    };
+
+    if (report && !isSeedReport) {
+      fetchTemplateGroups();
+    }
+  }, [report, isSeedReport]);
 
   useEffect(() => {
     if (id === 'seed-report-demo') {
@@ -31,6 +92,21 @@ export default function ReportDetailPage() {
           // Assuming seedData.reports is an array and we want the first one
           if (seedData.reports && seedData.reports.length > 0) {
             setReport(seedData.reports[0]);
+            // For seed reports, use hardcoded groups
+            setTemplateGroups([
+              {
+                title: "Initial Information & Background",
+                sectionTypes: ["reason_for_referral", "parent_concern", "health_developmental_history", "family_background"]
+              },
+              {
+                title: "Assessment Findings", 
+                sectionTypes: ["assessment_tools", "assessment_results", "language_sample", "validity_statement"]
+              },
+              {
+                title: "Summary, Eligibility & Recommendations",
+                sectionTypes: ["eligibility_checklist", "conclusion", "recommendations", "accommodations"]
+              }
+            ]);
           } else {
             setError('No seed reports found.');
           }
@@ -96,7 +172,7 @@ export default function ReportDetailPage() {
       <Toaster />
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {slpReportSectionGroups.map((group: SlpReportSectionGroup) => (
+          {templateGroups.map((group: SlpReportSectionGroup) => (
             <div key={group.title} className="md:col-span-2">
               <SectionHeader>{group.title}</SectionHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

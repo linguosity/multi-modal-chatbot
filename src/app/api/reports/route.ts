@@ -46,18 +46,63 @@ export async function POST(request: Request) {
     return new NextResponse(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
   }
 
-  // Fetch the template to get the sections
+  // Fetch the template to get the structure
   const { data: templateData, error: templateError } = await supabase
     .from('report_templates')
-    .select('sections')
+    .select('template_structure, name')
     .eq('id', template_id)
     .single();
 
-  let template = templateData;
-  if (templateError || !template) {
+  let sections;
+  if (templateError || !templateData) {
     console.error({ templateError }, `Template with id ${template_id} not found.`);
     // Fallback to default sections if template not found
-    template = { sections: Object.values(DEFAULT_SECTIONS) };
+    sections = Object.values(DEFAULT_SECTIONS);
+  } else {
+    console.log('✅ Found template:', templateData.name);
+    console.log('📋 Template structure:', templateData.template_structure);
+    
+    // Convert template structure (groups) to flat sections array
+    sections = [];
+    if (templateData.template_structure && Array.isArray(templateData.template_structure)) {
+      // Fetch section types to get the full section data
+      const { data: sectionTypes } = await supabase
+        .from('report_section_types')
+        .select('*');
+      
+      const sectionTypeMap = {};
+      if (sectionTypes) {
+        sectionTypes.forEach(st => {
+          sectionTypeMap[st.id] = st;
+        });
+      }
+      
+      // Convert groups to flat sections array
+      templateData.template_structure.forEach((group, groupIndex) => {
+        if (group.sectionTypeIds && Array.isArray(group.sectionTypeIds)) {
+          group.sectionTypeIds.forEach((sectionTypeId, sectionIndex) => {
+            const sectionType = sectionTypeMap[sectionTypeId];
+            if (sectionType) {
+              sections.push({
+                id: sectionTypeId,
+                sectionType: sectionType.name,
+                title: sectionType.default_title,
+                content: '', // Empty content for new reports
+                order: (groupIndex * 100) + sectionIndex, // Maintain order
+                isRequired: true,
+                isGenerated: false
+              });
+            }
+          });
+        }
+      });
+    }
+    
+    // Fallback to default if conversion failed
+    if (sections.length === 0) {
+      console.warn('⚠️ Template structure conversion failed, using default sections');
+      sections = Object.values(DEFAULT_SECTIONS);
+    }
   }
 
   const newReportData = {
@@ -69,7 +114,7 @@ export async function POST(request: Request) {
     status: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    sections: template.sections.map((section: ReportSection) => ({
+    sections: sections.map((section: ReportSection) => ({
       ...section,
       id: uuidv4(), // Give each section a unique ID
       // Ensure points are initialized, even if template doesn't have them
