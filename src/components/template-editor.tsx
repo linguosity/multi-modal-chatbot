@@ -293,8 +293,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
         const response = await fetch('/api/report-section-types');
         if (!response.ok) throw new Error('Failed to fetch section types');
         const data = await response.json();
+        console.log('🔍 Raw API response:', data);
+        console.log('🔍 Data type:', typeof data, 'Array?', Array.isArray(data));
+        console.log('🔍 Data length:', data?.length);
         setAvailableSectionTypes(data);
       } catch (err: unknown) {
+        console.error('❌ API fetch error:', err);
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setLoading(false);
@@ -330,72 +334,166 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
     }
   }, [initialTemplate, availableSectionTypes, creationMode]);
 
-  // --- Create default template structure from DEFAULT_SECTIONS ---
+  // --- Create default template structure using actual section type UUIDs ---
   const createDefaultTemplate = () => {
-    // Build groups using the predefined DEFAULT_SECTIONS structure
-    const defaultGroups = [
-      {
-        id: uuidv4(),
-        title: "Initial Information & Background",
-        sections: [
-          DEFAULT_SECTIONS.HEADING,
-          DEFAULT_SECTIONS.REASON_FOR_REFERRAL,
-          DEFAULT_SECTIONS.HEALTH_DEVELOPMENTAL_HISTORY,
-          DEFAULT_SECTIONS.FAMILY_BACKGROUND,
-          DEFAULT_SECTIONS.PARENT_CONCERN
-        ]
-      },
-      {
-        id: uuidv4(),
-        title: "Assessment Process & Results", 
-        sections: [
-          DEFAULT_SECTIONS.VALIDITY_STATEMENT,
-          DEFAULT_SECTIONS.ASSESSMENT_TOOLS,
-          DEFAULT_SECTIONS.ASSESSMENT_RESULTS,
-          DEFAULT_SECTIONS.LANGUAGE_SAMPLE
-        ]
-      },
-      {
-        id: uuidv4(),
-        title: "Conclusions & Recommendations",
-        sections: [
-          DEFAULT_SECTIONS.ELIGIBILITY_CHECKLIST,
-          DEFAULT_SECTIONS.CONCLUSION,
-          DEFAULT_SECTIONS.RECOMMENDATIONS,
-          DEFAULT_SECTIONS.ACCOMMODATIONS
-        ]
-      }
-    ];
-    
-    const defaultTreeItems: TreeItem[] = defaultGroups.map((group) => {
-      const treeItem: TreeItem = {
-        id: group.id,
-        name: group.title,
-        data: {
-          kind: 'group',
+    // If section types are available, use them for proper UUIDs
+    if (availableSectionTypes.length > 0) {
+      console.log('🔍 Available section types from API:', availableSectionTypes.map(t => ({
+        id: t.id,
+        name: t.name,
+        default_title: t.default_title
+      })));
+      
+      // Create a mapping from DEFAULT_SECTIONS keys to actual UUIDs
+      const sectionTypeMap: Record<string, ReportSectionType> = {};
+      
+      // Map DEFAULT_SECTIONS to actual section types by matching names/titles
+      Object.entries(DEFAULT_SECTIONS).forEach(([key, defaultSection]) => {
+        const matchingType = availableSectionTypes.find(type => {
+          // Try multiple matching strategies
+          return (
+            type.name === defaultSection.title ||
+            type.default_title === defaultSection.title ||
+            type.name === defaultSection.id ||
+            type.name.toLowerCase().replace(/\s+/g, '_') === defaultSection.id ||
+            type.name.toLowerCase() === defaultSection.title.toLowerCase() ||
+            type.default_title?.toLowerCase() === defaultSection.title.toLowerCase()
+          );
+        });
+        
+        if (matchingType) {
+          sectionTypeMap[key] = matchingType;
+          console.log(`✅ Mapped ${key} (${defaultSection.title}) -> ${matchingType.name} (${matchingType.id})`);
+        } else {
+          console.warn(`❌ No matching section type found for ${key} (${defaultSection.title})`);
+          console.log('Available section types:', availableSectionTypes.map(t => `${t.name} (${t.default_title})`));
+        }
+      });
+
+      console.log('📊 Section type mapping complete:', Object.keys(sectionTypeMap).length, 'of', Object.keys(DEFAULT_SECTIONS).length, 'mapped');
+
+      // Build groups using actual UUIDs
+      const defaultGroups = [
+        {
+          id: uuidv4(),
+          title: "Initial Information & Background",
+          sectionKeys: ['REASON_FOR_REFERRAL', 'HEALTH_DEVELOPMENTAL_HISTORY', 'FAMILY_BACKGROUND', 'PARENT_CONCERN']
+        },
+        {
+          id: uuidv4(),
+          title: "Assessment Process & Results", 
+          sectionKeys: ['VALIDITY_STATEMENT', 'ASSESSMENT_TOOLS', 'ASSESSMENT_RESULTS', 'LANGUAGE_SAMPLE']
+        },
+        {
+          id: uuidv4(),
+          title: "Conclusions & Recommendations",
+          sectionKeys: ['ELIGIBILITY_CHECKLIST', 'CONCLUSION', 'RECOMMENDATIONS', 'ACCOMMODATIONS']
+        }
+      ];
+      
+      const defaultTreeItems: TreeItem[] = defaultGroups.map((group) => {
+        // Get actual section types for this group
+        const groupSections = group.sectionKeys
+          .map(key => sectionTypeMap[key])
+          .filter(Boolean); // Remove any undefined mappings
+
+        const treeItem: TreeItem = {
           id: group.id,
-          title: group.title,
-          sectionTypeIds: group.sections.map(s => s.id)
-        } as GroupNode,
-        children: group.sections.map((section) => {
-          return {
-            id: section.id,
-            name: section.title,
-            data: {
-              kind: 'section',
+          name: group.title,
+          data: {
+            kind: 'group',
+            id: group.id,
+            title: group.title,
+            sectionTypeIds: groupSections.map(s => s.id) // Use actual UUIDs
+          } as GroupNode,
+          children: groupSections.map((sectionType) => {
+            return {
+              id: sectionType.id, // Use actual UUID
+              name: sectionType.name,
+              data: {
+                kind: 'section',
+                id: sectionType.id, // Use actual UUID
+                name: sectionType.name,
+                default_title: sectionType.default_title,
+                ai_directive: sectionType.ai_directive || 'Generate content for this section.'
+              } as SectionNode
+            };
+          })
+        };
+        
+        return treeItem;
+      });
+      
+      setTreeItems(defaultTreeItems);
+    } else {
+      // Fallback: Create basic template structure using DEFAULT_SECTIONS (for display only)
+      console.warn('⚠️ No section types available from API, creating fallback template');
+      
+      const defaultGroups = [
+        {
+          id: uuidv4(),
+          title: "Initial Information & Background",
+          sections: [
+            DEFAULT_SECTIONS.HEADING,
+            DEFAULT_SECTIONS.REASON_FOR_REFERRAL,
+            DEFAULT_SECTIONS.HEALTH_DEVELOPMENTAL_HISTORY,
+            DEFAULT_SECTIONS.FAMILY_BACKGROUND,
+            DEFAULT_SECTIONS.PARENT_CONCERN
+          ]
+        },
+        {
+          id: uuidv4(),
+          title: "Assessment Process & Results", 
+          sections: [
+            DEFAULT_SECTIONS.VALIDITY_STATEMENT,
+            DEFAULT_SECTIONS.ASSESSMENT_TOOLS,
+            DEFAULT_SECTIONS.ASSESSMENT_RESULTS,
+            DEFAULT_SECTIONS.LANGUAGE_SAMPLE
+          ]
+        },
+        {
+          id: uuidv4(),
+          title: "Conclusions & Recommendations",
+          sections: [
+            DEFAULT_SECTIONS.ELIGIBILITY_CHECKLIST,
+            DEFAULT_SECTIONS.CONCLUSION,
+            DEFAULT_SECTIONS.RECOMMENDATIONS,
+            DEFAULT_SECTIONS.ACCOMMODATIONS
+          ]
+        }
+      ];
+      
+      const fallbackTreeItems: TreeItem[] = defaultGroups.map((group) => {
+        const treeItem: TreeItem = {
+          id: group.id,
+          name: group.title,
+          data: {
+            kind: 'group',
+            id: group.id,
+            title: group.title,
+            sectionTypeIds: group.sections.map(s => s.id) // Will be non-UUID, but allows editing
+          } as GroupNode,
+          children: group.sections.map((section) => {
+            return {
               id: section.id,
               name: section.title,
-              default_title: section.title,
-              ai_directive: (section as any).generationPrompt || 'Generate content for this section.'
-            } as SectionNode
-          };
-        })
-      };
+              data: {
+                kind: 'section',
+                id: section.id,
+                name: section.title,
+                default_title: section.title,
+                ai_directive: (section as any).generationPrompt || 'Generate content for this section.'
+              } as SectionNode
+            };
+          })
+        };
+        
+        return treeItem;
+      });
       
-      return treeItem;
-    });
+      setTreeItems(fallbackTreeItems);
+    }
     
-    setTreeItems(defaultTreeItems);
     setName('New Report Template');
     setDescription('Custom report template');
   };

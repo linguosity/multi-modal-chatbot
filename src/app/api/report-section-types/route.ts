@@ -11,14 +11,34 @@ export async function GET() {
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
-  const { data: sectionTypes, error } = await supabase
+  // Try to fetch with ai_directive, fall back if column doesn't exist
+  let { data: sectionTypes, error } = await supabase
     .from('report_section_types')
-    .select('id, name, default_title, description');
+    .select('id, name, default_title, description, ai_directive');
+
+  // If ai_directive column doesn't exist, try without it
+  if (error && error.message?.includes('ai_directive')) {
+    console.log('ai_directive column not found, fetching without it');
+    const fallbackResult = await supabase
+      .from('report_section_types')
+      .select('id, name, default_title, description');
+    
+    sectionTypes = fallbackResult.data;
+    error = fallbackResult.error;
+    
+    // Add ai_directive as undefined to match schema
+    if (sectionTypes) {
+      sectionTypes = sectionTypes.map(st => ({ ...st, ai_directive: undefined }));
+    }
+  }
 
   if (error) {
     console.error('Error fetching report section types:', error);
     return new NextResponse(JSON.stringify({ error: 'Failed to fetch report section types' }), { status: 500 });
   }
+
+  console.log('✅ Fetched section types:', sectionTypes?.length, 'items');
+  console.log('📋 Section types:', sectionTypes?.map(st => ({ id: st.id, name: st.name })));
 
   // Validate fetched data against schema
   const parsedSectionTypes = ALL_REPORT_SECTION_TYPES.safeParse(sectionTypes);
