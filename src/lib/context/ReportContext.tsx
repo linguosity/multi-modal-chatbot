@@ -83,7 +83,7 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
   }, [reportId, supabase]);
 
   const handleSave = async (reportToSave: Report) => {
-    setLoading(true);
+    // Don't set loading to true for auto-saves to prevent UI disruption
     if (reportToSave) {
       const { error } = await supabase
         .from('reports')
@@ -91,14 +91,16 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
         .eq('id', reportToSave.id);
       if (error) {
         console.error('Error saving report:', error);
-      } else {
         createToast({
-          title: "Report Saved!",
-          description: "Your changes have been successfully saved.",
+          title: "Save Failed",
+          description: "There was an error saving your changes.",
+          variant: "destructive"
         });
+      } else {
+        // Subtle success indication - no toast for auto-saves
+        console.log('✅ Report auto-saved successfully');
       }
     }
-    setLoading(false);
   };
 
   const handleDelete = async () => {

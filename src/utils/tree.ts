@@ -1,5 +1,9 @@
 import { TreeItem, GroupNode, SectionNode } from '@/types/tree-types';
-import { ReportTemplate } from '@/lib/schemas/report-template';
+import { z } from 'zod';
+import { ReportTemplateSchema, ReportSectionGroupSchema } from '@/lib/schemas/report-template';
+
+type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
+type ReportSectionGroup = z.infer<typeof ReportSectionGroupSchema>;
 
 // Safe helper that never returns undefined
 export function ensureSection(
@@ -66,18 +70,26 @@ export function templateToTree(
   return treeItems;
 }
 
+// Type for API section data
+interface ApiSection {
+  id: string;
+  name?: string;
+  default_title?: string;
+  ai_directive?: string;
+}
+
 // Create section lookup from API data
-export function createSectionLookup(apiSections: unknown[]): Record<string, SectionNode> {
+export function createSectionLookup(apiSections: ApiSection[]): Record<string, SectionNode> {
   console.log('🗂️ createSectionLookup: Processing', apiSections.length, 'sections from API');
   
   const lookup: Record<string, SectionNode> = {};
   
-  apiSections.forEach(section => {
+  apiSections.forEach((section: ApiSection) => {
     const sectionNode: SectionNode = {
       kind: 'section',
       id: section.id,
-      name: section.name || section.default_title,
-      default_title: section.default_title || section.name,
+      name: section.name || section.default_title || section.id,
+      default_title: section.default_title || section.name || section.id,
       ai_directive: section.ai_directive
     };
     

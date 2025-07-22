@@ -40,71 +40,68 @@ export async function POST(request: Request) {
   const tools = [
     {
       name: "update_report_section",
-      description: "Updates the final prose content of a specific section within the report.",
+      description: "Updates the rich text content of a specific section within the report.",
       input_schema: {
         type: "object" as const,
         properties: {
           section_id: { type: "string", description: "The ID of the report section to update." },
-          content: { type: "string", description: "The new, AI-generated prose for the specified report section." }
-        },
-        required: ["section_id", "content"]
-      },
-    },
-    {
-      name: "update_report_section_points",
-      description: "Updates the key-points tree for a section",
-      input_schema: {
-        type: "object" as const,
-        properties: {
-          section_id: { type: "string", description: "The ID of the report section to update." },
-          points: {
-            type: "array",
-            items: {
-              oneOf: [
-                { type: "string" },
-                {
-                  type: "object",
-                  properties: {
-                    heading: { type: "string" },
-                    prose_template: { type: "string" }, // New field for the mini-template paragraph
-                    points: { type: "array", items: { type: "object" } } // This needs to be recursive, but OpenAPI doesn't support direct recursion like Zod.
-                  },
-                  required: ["heading", "points"]
-                }
-              ]
-            },
-            description: "An array of key points and optional nested heading objects."
+          content: { 
+            type: "string", 
+            description: "The new, AI-generated rich text content for the specified report section. Should be properly formatted HTML with appropriate structure (paragraphs, headings, lists, etc.)." 
           }
         },
-        required: ["section_id", "points"]
+        required: ["section_id", "content"]
       },
     }
   ];
 
-  let systemMessageContent = "";
-  let targetTool = "";
-
   // Define a type for a section if not already defined
   type Section = {
     id: string;
+    sectionType?: string;
+    title?: string;
     ai_directive?: string;
-    points?: any;
     content?: string;
     isGenerated?: boolean;
     // add other fields as needed
   };
 
-  if (generation_type === 'points') {
-    const targetSection = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
-    const directive = targetSection?.ai_directive || "Generate a list of key points based on the provided context.";
-    systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to generate a structured list of key points for a report section based on provided notes and data. You MUST call the 'update_report_section_points' tool. ${directive}`;
-    targetTool = 'update_report_section_points';
-  } else if (generation_type === 'prose') {
-    const targetSection = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
-    if (!targetSection || !targetSection.points) {
-      return new NextResponse(JSON.stringify({ error: 'Target section or points not found for prose generation.' }), { status: 400 });
-    }
-    systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to write a formal, well-written paragraph for a report section based on the provided list of key points. You MUST call the 'update_report_section' tool. The points are: ${JSON.stringify(targetSection.points, null, 2)}`;
+  const targetSection = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
+  if (!targetSection) {
+    return new NextResponse(JSON.stringify({ error: 'Target section not found.' }), { status: 400 });
+  }
+
+  // Get AI directive from section type or use default
+  const directive = targetSection.ai_directive || `Generate professional content for the ${targetSection.title || targetSection.sectionType} section of a speech-language evaluation report.`;
+  
+  let systemMessageContent = "";
+  let targetTool = "";
+
+  if (generation_type === 'prose') {
+    systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to generate professional, well-written content for a report section based on provided notes and context. 
+
+Section Type: ${targetSection.sectionType}
+Section Title: ${targetSection.title}
+Directive: ${directive}
+
+Generate rich text content that is:
+- Professional and clinical in tone
+- Appropriate for the specific section type
+- Based on the provided unstructured input
+- Formatted with proper HTML structure (paragraphs, headings, lists as needed)
+- Complete and ready for inclusion in a formal evaluation report
+
+You MUST call the 'update_report_section' tool with the generated content.`;
+    targetTool = 'update_report_section';
+  } else if (generation_type === 'points') {
+    // Legacy support - convert to prose generation
+    systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to generate professional content for a report section. 
+
+Section Type: ${targetSection.sectionType}
+Section Title: ${targetSection.title}
+Directive: ${directive}
+
+Generate rich text content based on the provided context. You MUST call the 'update_report_section' tool.`;
     targetTool = 'update_report_section';
   } else {
     return new NextResponse(JSON.stringify({ error: 'Invalid generation_type' }), { status: 400 });
@@ -136,16 +133,14 @@ export async function POST(request: Request) {
     );
 
     if (toolCall) {
-      const { section_id, content, points } = toolCall.input as { section_id: string; content?: string; points?: any };
+      const { section_id, content } = toolCall.input as { section_id: string; content: string };
       const sectionIndex = (report.sections as Section[]).findIndex((sec: Section) => sec.id === section_id);
 
       if (sectionIndex !== -1) {
-        if (generation_type === 'points') {
-          report.sections[sectionIndex].points = points;
-        } else {
-          report.sections[sectionIndex].content = content;
-        }
+        // Update the section content with AI-generated rich text
+        report.sections[sectionIndex].content = content;
         report.sections[sectionIndex].isGenerated = true;
+        report.sections[sectionIndex].lastUpdated = new Date().toISOString();
 
         const { error: updateError } = await supabase
           .from('reports')

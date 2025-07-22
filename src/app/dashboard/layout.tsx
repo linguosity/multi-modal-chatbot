@@ -32,6 +32,7 @@ export default function DashboardLayout({
                   src="/images/logo-animation.gif"
                   alt="Linguosity logo"
                   fill
+                  sizes="32px"
                   className="object-contain text-teal-600"
                 />
               </div>

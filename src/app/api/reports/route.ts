@@ -117,8 +117,8 @@ export async function POST(request: Request) {
     sections: sections.map((section: ReportSection) => ({
       ...section,
       id: uuidv4(), // Give each section a unique ID
-      // Ensure points are initialized, even if template doesn't have them
-      points: section.points || [], 
+      content: section.content || '', // Initialize with empty content for new reports
+      lastUpdated: new Date().toISOString(),
     })),
   };
 

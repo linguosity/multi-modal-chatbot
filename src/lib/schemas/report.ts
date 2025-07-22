@@ -54,9 +54,7 @@ export const ReportSectionSchema = z.object({
     REPORT_SECTION_TYPES.OTHER
   ]),
   title: z.string(),
-  content: z.string(),
-  /**  accepts flat strings OR nested heading objects */
-  points: z.array(DataPointSchema).optional(),
+  content: z.string(), // Rich text content with embedded templates
   order: z.number().int(),
   isRequired: z.boolean().default(true),
   isGenerated: z.boolean().default(false),
@@ -65,6 +63,8 @@ export const ReportSectionSchema = z.object({
   dataSource: z.string().optional(), // Reference to data that can populate this section
   icon: z.string().optional(),
   borderColor: z.string().optional(),
+  // Legacy support - will be migrated to content
+  points: z.array(DataPointSchema).optional(),
 });
 
 // Schema for report templates
@@ -201,7 +201,11 @@ export const DEFAULT_SECTIONS = {
     id: "validity_statement",
     sectionType: REPORT_SECTION_TYPES.VALIDITY_STATEMENT,
     title: "Validity Statement",
-    content: `The results of this evaluation are considered to be a valid representation of [Student]'s current speech and language skills. [Student] was cooperative throughout the assessment and appeared to understand task directions. [Include any factors that may have affected test validity, such as attention, motivation, or cultural/linguistic factors].`,
+    content: `<p>The results of this evaluation are considered to be a <strong>valid</strong> representation of <span data-field="student_name">[Student]</span>'s current speech and language skills.</p>
+
+<p><span data-field="student_name">[Student]</span> was <strong>cooperative</strong> throughout the assessment and appeared to understand task directions.</p>
+
+<p><em>Note: Include any factors that may have affected test validity, such as attention, motivation, or cultural/linguistic factors.</em></p>`,
     order: 6,
     isRequired: true,
     isGenerated: true,
@@ -225,7 +229,21 @@ export const DEFAULT_SECTIONS = {
     id: "assessment_results",
     sectionType: REPORT_SECTION_TYPES.ASSESSMENT_RESULTS,
     title: "Assessment Results",
-    content: `### Standardized Test Results\n[Include test scores, percentile ranks, and interpretation for each test administered]\n\n### Articulation/Phonology\n[Include summary of articulation skills, error patterns, stimulability, and intelligibility]\n\n### Language\n[Include summary of receptive and expressive language skills, including semantics, syntax, morphology, and pragmatics]\n\n### Other Areas Assessed\n[Include results from other relevant areas such as voice, fluency, etc. if applicable]`,
+    content: `<h3>Standardized Test Results</h3>
+<p data-field="standardized_tests">[Include test scores, percentile ranks, and interpretation for each test administered]</p>
+
+<h3>Articulation/Phonology</h3>
+<p data-field="articulation">[Include summary of articulation skills, error patterns, stimulability, and intelligibility]</p>
+
+<h3>Language Skills</h3>
+<h4>Receptive Language</h4>
+<p data-field="receptive_language">[Describe receptive language abilities]</p>
+
+<h4>Expressive Language</h4>
+<p data-field="expressive_language">[Include summary of expressive language skills, including semantics, syntax, morphology, and pragmatics]</p>
+
+<h3>Other Areas Assessed</h3>
+<p data-field="other_areas">[Include results from other relevant areas such as voice, fluency, etc. if applicable]</p>`,
     order: 8,
     isRequired: true,
     isGenerated: true,
@@ -272,7 +290,15 @@ export const DEFAULT_SECTIONS = {
     id: "recommendations",
     sectionType: REPORT_SECTION_TYPES.RECOMMENDATIONS,
     title: "Recommendations",
-    content: `The following recommendations are made based on the results of this evaluation:\n\n1. [Recommendation 1]\n2. [Recommendation 2]\n3. [Recommendation 3]\n\n[Include specific recommendations for services, intervention targets, and progress monitoring]`,
+    content: `<p>The following recommendations are made based on the results of this evaluation:</p>
+
+<ol>
+  <li data-field="recommendation_1">[Recommendation 1]</li>
+  <li data-field="recommendation_2">[Recommendation 2]</li>
+  <li data-field="recommendation_3">[Recommendation 3]</li>
+</ol>
+
+<p data-field="additional_notes">[Include specific recommendations for services, intervention targets, and progress monitoring]</p>`,
     order: 12,
     isRequired: true,
     isGenerated: true,
