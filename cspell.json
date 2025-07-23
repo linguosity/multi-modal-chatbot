@@ -64,7 +64,6 @@
     "globals",
     "layout",
     "ColorSettings",
-    "ReportActions",
     "ReportInputSection",
     "TiptapEditor",
     "customModal",

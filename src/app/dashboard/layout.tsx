@@ -1,7 +1,7 @@
 'use client';
 
 import { ReportProvider } from '@/lib/context/ReportContext';
-import ReportActions from '@/components/ReportActions';
+
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -106,7 +106,7 @@ export default function DashboardLayout({
                       </span>
                     </Link>
                   </li>
-                  <ReportActions />
+
                 </ul>
               </div>
             </div>

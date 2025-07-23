@@ -9,7 +9,7 @@ import { Settings, Edit3 } from 'lucide-react'
 interface FieldSchema {
   key: string
   label: string
-  type: 'string' | 'boolean' | 'number' | 'array' | 'object'
+  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select'
   required?: boolean
   options?: string[] // For select/dropdown fields
   placeholder?: string
@@ -29,6 +29,7 @@ interface DynamicStructuredBlockProps {
   onChange: (data: any, generatedText: string) => void
   onSchemaChange?: (newSchema: SectionSchema) => void
   onSaveAsTemplate?: (schema: SectionSchema) => void
+  mode?: 'data' | 'template' // Accept mode as prop instead of managing internally
 }
 
 export default function DynamicStructuredBlock({ 
@@ -36,11 +37,11 @@ export default function DynamicStructuredBlock({
   initialData = {}, 
   onChange,
   onSchemaChange,
-  onSaveAsTemplate
+  onSaveAsTemplate,
+  mode = 'data'
 }: DynamicStructuredBlockProps) {
   const [data, setData] = useState<any>(initialData)
   const [showUploadModal, setShowUploadModal] = useState(false)
-  const [editMode, setEditMode] = useState<'data' | 'schema'>('data')
 
   // Initialize data based on schema
   useEffect(() => {
@@ -301,38 +302,8 @@ export default function DynamicStructuredBlock({
 
   return (
     <div className="h-full">
-      {/* Mode Toggle */}
-      {(onSchemaChange || onSaveAsTemplate) && (
-        <div className="border-b border-gray-200 px-6 py-3 bg-gray-50">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setEditMode('data')}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                editMode === 'data' 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Edit3 className="h-3 w-3 inline mr-1" />
-              Data Entry
-            </button>
-            <button
-              onClick={() => setEditMode('schema')}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                editMode === 'schema' 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Settings className="h-3 w-3 inline mr-1" />
-              Edit Template
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Content */}
-      {editMode === 'schema' ? (
+      {mode === 'template' ? (
         <DynamicSchemaEditor
           schema={schema}
           onSchemaChange={onSchemaChange!}

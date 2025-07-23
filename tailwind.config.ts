@@ -56,6 +56,12 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Brand colors from logo
+        brand: {
+          black: "#000000",
+          beige: "#C8BA93", 
+          rust: "#CD7B56",
+        },
         // Custom colors based on UI/UX guidelines
         charcoal: "#333333",
         gray: {

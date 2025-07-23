@@ -3,8 +3,12 @@
 import { useParams, useRouter, usePathname } from 'next/navigation'
 import { ReportSection } from '@/lib/schemas/report'
 import { useReport } from '@/lib/context/ReportContext'
-import { ChevronDown, ChevronRight, Plus, FileText, CheckCircle, Circle, AlertCircle } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, FileText } from 'lucide-react'
 import { useState } from 'react'
+import { useSectionDnd, SectionId } from '@/lib/hooks/useSectionDnd'
+import { SectionTocItem, Section as TocSection } from './SectionTocItem'
+import { DndContext } from '@dnd-kit/core'
+import { SortableContext } from '@dnd-kit/sortable'
 
 interface SectionGroup {
   title: string
@@ -26,12 +30,96 @@ const DEFAULT_GROUPS: SectionGroup[] = [
   }
 ]
 
+// Component for rendering draggable sections within a group
+function GroupSectionList({
+  sections,
+  currentSectionId,
+  onNavigate,
+  onReorder,
+  getSectionStatus,
+  getSectionIcon
+}: {
+  sections: ReportSection[]
+  currentSectionId: string | undefined
+  onNavigate: (sectionId: string) => void
+  onReorder: (newOrder: string[]) => void
+  getSectionStatus: (section: ReportSection) => string
+  getSectionIcon: (status: string) => React.ReactNode
+}) {
+  const sectionIds = sections.map(s => s.id)
+  const { sensors, handleDragEnd, strategy, collisionDetection } = useSectionDnd(sectionIds, onReorder)
+
+  // Convert ReportSection to TocSection format
+  const createTocSection = (section: ReportSection): TocSection => {
+    const status = getSectionStatus(section)
+    return {
+      id: section.id,
+      title: section.title,
+      required: section.isRequired,
+      complete: status === 'complete'
+    }
+  }
+
+  return (
+    <div className="ml-4">
+      <DndContext 
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={sectionIds} strategy={strategy}>
+          <div className="space-y-1">
+            {sections.map((section) => {
+              const status = getSectionStatus(section)
+              const isActive = currentSectionId === section.id
+              const tocSection = createTocSection(section)
+
+              return (
+                <div 
+                  key={section.id} 
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors relative ${
+                    isActive 
+                      ? 'bg-brand-rust/10 text-brand-black font-medium' 
+                      : 'hover:bg-brand-beige/20 text-gray-700'
+                  }`}
+                  onClick={() => onNavigate(section.id)}
+                >
+                  {/* Active indicator bar */}
+                  {isActive && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-rust rounded-r-full" />
+                  )}
+                  
+                  <div className="flex-shrink-0 ml-1">
+                    {getSectionIcon(status)}
+                  </div>
+                  <span className="truncate flex-1 text-sm">
+                    {section.title}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </div>
+  )
+}
+
 export function ReportSidebar() {
-  const { report } = useReport()
+  const { report, setReport } = useReport()
   const router = useRouter()
   const pathname = usePathname()
   const { id: reportId } = useParams<{ id: string }>()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  
+  // If report is null, show a loading state
+  if (!report) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center">
+        <div className="animate-pulse text-gray-400">Loading report...</div>
+      </div>
+    )
+  }
 
   // Get current section ID from URL
   const currentSectionId = pathname.split('/').pop()
@@ -48,14 +136,20 @@ export function ReportSidebar() {
   const getSectionIcon = (status: string) => {
     switch (status) {
       case 'complete':
-        return <CheckCircle className="h-4 w-4 text-emerald-600" />
+        return <span className="text-brand-beige text-lg">●</span>
       case 'required-empty':
-        return <AlertCircle className="h-4 w-4 text-red-500" />
+        return <span className="text-brand-rust text-lg border-2 border-brand-rust rounded-full w-4 h-4 inline-block"></span>
       case 'optional-empty':
-        return <Circle className="h-4 w-4 text-gray-400" />
+        return <span className="text-gray-400 text-lg">○</span>
       default:
-        return <Circle className="h-4 w-4 text-gray-400" />
+        return <span className="text-gray-400 text-lg">○</span>
     }
+  }
+
+  const getGroupStats = (groupSections: ReportSection[]) => {
+    const completed = groupSections.filter(s => getSectionStatus(s) === 'complete').length
+    const total = groupSections.length
+    return { completed, total }
   }
 
   const toggleGroup = (groupTitle: string) => {
@@ -72,12 +166,8 @@ export function ReportSidebar() {
     router.push(`/dashboard/reports/${reportId}/${sectionId}`)
   }
 
-  const getFirstSectionId = () => {
-    return report.sections[0]?.id
-  }
-
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-2 mb-2">
@@ -106,39 +196,64 @@ export function ReportSidebar() {
                 {/* Group Header */}
                 <button
                   onClick={() => toggleGroup(group.title)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md"
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md"
                 >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                  {group.title}
+                  <div className="flex items-center gap-2">
+                    {isCollapsed ? (
+                      <ChevronRight className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                    {group.title}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {getGroupStats(groupSections).completed}/{getGroupStats(groupSections).total}
+                  </div>
                 </button>
 
                 {/* Group Sections */}
                 {!isCollapsed && (
-                  <div className="ml-4 space-y-1">
-                    {groupSections.map((section) => {
-                      const status = getSectionStatus(section)
-                      const isActive = currentSectionId === section.id
-
-                      return (
-                        <button
-                          key={section.id}
-                          onClick={() => navigateToSection(section.id)}
-                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors ${
-                            isActive
-                              ? 'bg-indigo-50 text-indigo-800 font-medium'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          {getSectionIcon(status)}
-                          <span className="truncate">{section.title}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <GroupSectionList
+                    sections={groupSections}
+                    currentSectionId={currentSectionId}
+                    onNavigate={navigateToSection}
+                    onReorder={(newOrder) => {
+                      try {
+                        // Create a new sections array with the updated order for this group
+                        const updatedSections = [...report.sections];
+                        
+                        // Find the indices of the sections in this group
+                        const groupIndices = groupSections.map(section => 
+                          updatedSections.findIndex(s => s.id === section.id)
+                        );
+                        
+                        // Validate that all sections were found
+                        if (groupIndices.some(idx => idx === -1)) {
+                          console.warn('Some sections not found during reordering');
+                          return;
+                        }
+                        
+                        // Replace the sections in this group with the reordered ones
+                        newOrder.forEach((id, index) => {
+                          const newSection = groupSections.find(s => s.id === id);
+                          const targetIndex = groupIndices[index];
+                          if (newSection && targetIndex !== undefined && targetIndex !== -1) {
+                            updatedSections[targetIndex] = newSection;
+                          }
+                        });
+                        
+                        // Update the report with the new section order
+                        setReport({
+                          ...report,
+                          sections: updatedSections
+                        });
+                      } catch (error) {
+                        console.error('Error reordering sections:', error);
+                      }
+                    }}
+                    getSectionStatus={getSectionStatus}
+                    getSectionIcon={getSectionIcon}
+                  />
                 )}
               </div>
             )
@@ -150,7 +265,7 @@ export function ReportSidebar() {
       <div className="p-4 border-t border-gray-200">
         <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
           <Plus className="h-4 w-4" />
-          Add Section
+          + Section
         </button>
       </div>
     </div>

@@ -359,13 +359,6 @@ export default function DynamicSchemaEditor({
       {/* Schema Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-gray-800">Template Structure</h3>
-        <Button
-          onClick={() => onSaveAsTemplate(schema)}
-          size="sm"
-          className="bg-green-600 hover:bg-green-700"
-        >
-          Save as Template
-        </Button>
       </div>
 
       {/* Fields */}
@@ -377,7 +370,7 @@ export default function DynamicSchemaEditor({
       <div className="flex justify-center">
         <Button
           onClick={() => setShowAddField({})}
-          variant="outline"
+          variant="default"
           size="sm"
           className="border-dashed"
         >
@@ -408,7 +401,7 @@ export default function DynamicSchemaEditor({
             <div className="flex justify-end gap-2 mt-4">
               <Button
                 onClick={() => setShowAddField(null)}
-                variant="outline"
+                variant="default"
                 size="sm"
               >
                 Cancel
