@@ -47,7 +47,7 @@ export default function DynamicStructuredBlock({
     const initializeData = (fields: FieldSchema[]): any => {
       const result: any = {}
       fields.forEach(field => {
-        if (field.type === 'boolean') {
+        if (field.type === 'boolean' || field.type === 'checkbox') {
           result[field.key] = false
         } else if (field.type === 'number') {
           result[field.key] = 0
@@ -179,6 +179,51 @@ export default function DynamicStructuredBlock({
                 No
               </button>
             </div>
+          </div>
+        )
+
+      case 'checkbox':
+        return (
+          <div key={fieldPath} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={value || false}
+              onChange={(e) => updateFieldValue(e.target.checked)}
+              className="rounded"
+            />
+            <label className="text-sm text-gray-700">{field.label}</label>
+          </div>
+        )
+
+      case 'date':
+        return (
+          <div key={fieldPath} className="space-y-1">
+            <label className="text-sm text-gray-700">{field.label}:</label>
+            <input
+              type="date"
+              value={value || ''}
+              onChange={(e) => updateFieldValue(e.target.value)}
+              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        )
+
+      case 'select':
+        return (
+          <div key={fieldPath} className="space-y-1">
+            <label className="text-sm text-gray-700">{field.label}:</label>
+            <select
+              value={value || ''}
+              onChange={(e) => updateFieldValue(e.target.value)}
+              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Select an option...</option>
+              {(field.options || []).map((option, index) => (
+                <option key={index} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
         )
 

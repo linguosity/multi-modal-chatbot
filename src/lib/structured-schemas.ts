@@ -3,7 +3,7 @@
 export interface FieldSchema {
   key: string;
   label: string;
-  type: 'string' | 'boolean' | 'number' | 'array' | 'object';
+  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select';
   required?: boolean;
   options?: string[]; // For dropdown/select fields
   placeholder?: string;
@@ -31,6 +31,68 @@ export interface StructuredSchema {
     }[];
   }[];
 }
+
+// Header Section
+export const HEADER_SECTION: SectionSchema = {
+  key: 'header',
+  title: 'Report Header',
+  prose_template: `{student_name} - Speech and Language Evaluation\nDate of Birth: {date_of_birth}\nStudent ID: {student_id}\nEvaluation Date(s): {evaluation_dates}\nEvaluator: {evaluator_name}, {evaluator_credentials}\nSchool: {school_name}\nEligibility Status: {eligibility_status}`,
+  fields: [
+    {
+      key: 'student_name',
+      label: 'Student Name',
+      type: 'string',
+      placeholder: 'Enter student full name...',
+      required: true
+    },
+    {
+      key: 'date_of_birth',
+      label: 'Date of Birth',
+      type: 'date',
+      required: true
+    },
+    {
+      key: 'student_id',
+      label: 'Student ID',
+      type: 'string',
+      placeholder: 'Enter student ID number...',
+      required: true
+    },
+    {
+      key: 'evaluation_dates',
+      label: 'Evaluation Date(s)',
+      type: 'date',
+      required: true
+    },
+    {
+      key: 'evaluator_name',
+      label: 'Evaluator Name',
+      type: 'string',
+      placeholder: 'Enter evaluator full name...',
+      required: true
+    },
+    {
+      key: 'evaluator_credentials',
+      label: 'Evaluator Credentials',
+      type: 'string',
+      placeholder: 'M.S., CCC-SLP, etc...',
+      required: true
+    },
+    {
+      key: 'school_name',
+      label: 'School Name',
+      type: 'string',
+      placeholder: 'Enter school name...',
+      required: true
+    },
+    {
+      key: 'eligibility_status',
+      label: 'Eligibility Status',
+      type: 'select',
+      options: ['Eligible', 'Not Eligible', 'Pending', 'Re-evaluation Required']
+    }
+  ]
+};
 
 // New Section Schema Format
 export const VALIDITY_STATEMENT_SECTION: SectionSchema = {
@@ -218,7 +280,7 @@ export const HEALTH_DEVELOPMENTAL_HISTORY_SECTION: SectionSchema = {
     {
       key: 'birth_complications',
       label: 'Birth/pregnancy complications',
-      type: 'boolean'
+      type: 'checkbox'
     },
     {
       key: 'birth_details',
@@ -269,7 +331,7 @@ export const FAMILY_BACKGROUND_SECTION: SectionSchema = {
     {
       key: 'family_history',
       label: 'Family history of communication disorders',
-      type: 'boolean'
+      type: 'checkbox'
     },
     {
       key: 'family_history_details',
@@ -372,14 +434,14 @@ export const CONCLUSION_SECTION: SectionSchema = {
     {
       key: 'severity_level',
       label: 'Severity Level',
-      type: 'string',
-      placeholder: 'Mild, Moderate, Severe...'
+      type: 'select',
+      options: ['Mild', 'Moderate', 'Severe']
     },
     {
       key: 'prognosis',
       label: 'Prognosis',
-      type: 'string',
-      placeholder: 'Excellent, Good, Fair, Poor...'
+      type: 'select',
+      options: ['Excellent', 'Good', 'Fair', 'Poor']
     },
     {
       key: 'summary_statement',
@@ -556,6 +618,9 @@ export const RECOMMENDATIONS_SCHEMA: StructuredSchema = {
 // Get new section schema for section type
 export function getSectionSchemaForType(sectionType: string): SectionSchema | null {
   switch (sectionType) {
+    case 'header':
+    case 'heading':
+      return HEADER_SECTION;
     case 'validity_statement':
       return VALIDITY_STATEMENT_SECTION;
     case 'assessment_results':

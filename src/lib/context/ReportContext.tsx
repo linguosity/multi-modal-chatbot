@@ -26,19 +26,25 @@ export const useReport = () => {
 
 interface ReportProviderProps {
   children: React.ReactNode;
+  initialReport?: Report | null;
 }
 
-export const ReportProvider: React.FC<ReportProviderProps> = ({ children }) => {
+export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initialReport }) => {
   const supabase = useMemo(() => createBrowserSupabase(), []);
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const reportId = params.id;
 
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [report, setReport] = useState<Report | null>(initialReport || null);
+  const [loading, setLoading] = useState(initialReport ? false : true);
   const [showJson, setShowJson] = useState(false);
 
   useEffect(() => {
+    // Skip fetching if we already have an initialReport
+    if (initialReport) {
+      return;
+    }
+    
     if (!reportId || reportId === 'seed-report-demo') {
       setReport(null);
       setLoading(false);

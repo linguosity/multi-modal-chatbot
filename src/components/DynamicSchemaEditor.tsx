@@ -7,7 +7,7 @@ import { Plus, X, Edit2 } from 'lucide-react'
 interface FieldSchema {
   key: string
   label: string
-  type: 'string' | 'boolean' | 'number' | 'array' | 'object'
+  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select'
   required?: boolean
   options?: string[]
   placeholder?: string
@@ -36,7 +36,10 @@ interface FieldTypeOption {
 const FIELD_TYPES: FieldTypeOption[] = [
   { value: 'string', label: 'Text Field', description: 'Single line text input' },
   { value: 'boolean', label: 'Yes/No', description: 'Boolean choice buttons' },
+  { value: 'checkbox', label: 'Checkbox', description: 'Single checkbox for true/false' },
   { value: 'number', label: 'Number', description: 'Numeric input' },
+  { value: 'date', label: 'Date', description: 'Date picker input' },
+  { value: 'select', label: 'Dropdown', description: 'Dropdown selection list' },
   { value: 'array', label: 'List', description: 'Multiple text items' },
   { value: 'object', label: 'Group', description: 'Container for other fields' }
 ]
@@ -310,13 +313,28 @@ export default function DynamicSchemaEditor({
               </div>
             </div>
             
-            {draftField.type === 'string' && (
+            {(draftField.type === 'string' || draftField.type === 'date') && (
               <div>
                 <label className="text-xs text-gray-600">Placeholder:</label>
                 <input
                   type="text"
                   value={draftField.placeholder || ''}
                   onChange={(e) => updateDraftField({ placeholder: e.target.value })}
+                  className="w-full text-xs border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+            
+            {draftField.type === 'select' && (
+              <div>
+                <label className="text-xs text-gray-600">Options (comma-separated):</label>
+                <input
+                  type="text"
+                  value={(draftField.options || []).join(', ')}
+                  onChange={(e) => updateDraftField({ 
+                    options: e.target.value.split(',').map(opt => opt.trim()).filter(opt => opt) 
+                  })}
+                  placeholder="Option 1, Option 2, Option 3"
                   className="w-full text-xs border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
                 />
               </div>

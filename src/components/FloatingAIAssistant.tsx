@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -25,6 +25,13 @@ export const FloatingAIAssistant: React.FC<Props> = ({
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Auto-select the current section if there's only one
+  useEffect(() => {
+    if (sections.length === 1) {
+      setSelectedSections([sections[0].id])
+    }
+  }, [sections])
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(event.target.files || [])
@@ -155,29 +162,31 @@ export const FloatingAIAssistant: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Section Selection */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Apply to Sections
-                </label>
-                <div className="max-h-32 overflow-y-auto space-y-2 border border-gray-200 rounded p-2">
-                  {sections.map((section) => (
-                    <div key={section.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={section.id}
-                        checked={selectedSections.includes(section.id)}
-                        onCheckedChange={() => toggleSection(section.id)}
-                      />
-                      <label
-                        htmlFor={section.id}
-                        className="text-sm text-gray-700 cursor-pointer flex-1"
-                      >
-                        {section.title}
-                      </label>
-                    </div>
-                  ))}
+              {/* Section Selection - Only show if multiple sections */}
+              {sections.length > 1 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Apply to Sections
+                  </label>
+                  <div className="max-h-32 overflow-y-auto space-y-2 border border-gray-200 rounded p-2">
+                    {sections.map((section) => (
+                      <div key={section.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={section.id}
+                          checked={selectedSections.includes(section.id)}
+                          onCheckedChange={() => toggleSection(section.id)}
+                        />
+                        <label
+                          htmlFor={section.id}
+                          className="text-sm text-gray-700 cursor-pointer flex-1"
+                        >
+                          {section.title}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Generate Button */}
               <Button
@@ -193,7 +202,7 @@ export const FloatingAIAssistant: React.FC<Props> = ({
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Generate Content
+                    {sections.length === 1 ? 'Generate Content' : `Generate for ${selectedSections.length} Section${selectedSections.length !== 1 ? 's' : ''}`}
                   </>
                 )}
               </Button>
