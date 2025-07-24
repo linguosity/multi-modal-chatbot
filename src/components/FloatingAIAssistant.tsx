@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Sparkles, Upload, FileText, Image, X, Check } from 'lucide-react'
+import { Sparkles, Upload, FileText, Image, X, Check, Volume2 } from 'lucide-react'
 import { ReportSection } from '@/lib/schemas/report'
 
 interface Props {
@@ -122,13 +122,13 @@ export const FloatingAIAssistant: React.FC<Props> = ({
                     className="w-full justify-start text-gray-600 border-dashed"
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Upload Images or PDFs
+                    Upload Images, PDFs, or Audio
                   </Button>
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/*,.pdf"
+                    accept="image/*,.pdf,audio/*"
                     onChange={handleFileUpload}
                     className="hidden"
                   />
@@ -141,6 +141,8 @@ export const FloatingAIAssistant: React.FC<Props> = ({
                           <div className="flex items-center gap-2">
                             {file.type.startsWith('image/') ? (
                               <Image className="h-4 w-4 text-blue-500" />
+                            ) : file.type.startsWith('audio/') ? (
+                              <Volume2 className="h-4 w-4 text-green-500" />
                             ) : (
                               <FileText className="h-4 w-4 text-red-500" />
                             )}

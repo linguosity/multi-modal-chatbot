@@ -176,7 +176,7 @@ export default function SectionPage() {
               <div className="relative">
                 <Button
                   onClick={() => setShowAIAssistant(!showAIAssistant)}
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   className={`flex items-center gap-1 ${showAIAssistant ? 'bg-blue-50 border-blue-300' : ''}`}
                 >
@@ -197,7 +197,7 @@ export default function SectionPage() {
                       let body: any = {
                         reportId: report.id,
                         sectionId: section.id,
-                        generation_type: 'prose',
+                        generation_type: files && files.length > 0 ? 'multi_modal_assessment' : 'prose',
                         unstructuredInput: input || `Generate content for ${section.title} section.`
                       }
                       
@@ -205,9 +205,9 @@ export default function SectionPage() {
                       if (files && files.length > 0) {
                         const formData = new FormData()
                         formData.append('reportId', report.id)
-                        formData.append('sectionId', section.id)
-                        formData.append('generation_type', 'prose')
-                        formData.append('unstructuredInput', input || `Generate content for ${section.title} section.`)
+                        // Don't append sectionId for multi-modal assessment - let AI determine sections
+                        formData.append('generation_type', 'multi_modal_assessment')
+                        formData.append('unstructuredInput', input || `Generate content based on uploaded assessment materials.`)
                         
                         files.forEach((file, index) => {
                           formData.append(`file_${index}`, file)
@@ -226,9 +226,21 @@ export default function SectionPage() {
                       const json = await res.json()
                       if (!res.ok) throw new Error(json.error || 'AI generation failed')
                       
-                      // Update content
-                      handleContentChange(json.updatedSection.content)
-                      forceSave()
+                      // Handle different response formats
+                      if (files && files.length > 0) {
+                        // Multi-modal assessment response
+                        if (json.updatedSections && json.updatedSections.includes(section.id)) {
+                          // Refresh the report to get updated content
+                          window.location.reload()
+                        } else {
+                          console.log('Multi-modal processing completed:', json.message)
+                          // Show success message or handle as needed
+                        }
+                      } else {
+                        // Single section response
+                        handleContentChange(json.updatedSection.content)
+                        forceSave()
+                      }
                     } catch (error) {
                       console.error('AI generation failed:', error)
                     }

@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { Sparkles, Upload, FileText, Image, X } from 'lucide-react'
+import { Sparkles, Upload, FileText, Image, X, Volume2 } from 'lucide-react'
 import { ReportSection } from '@/lib/schemas/report'
 
 interface Props {
@@ -106,13 +106,13 @@ export const CompactAIAssistant: React.FC<Props> = ({
               className="w-full justify-start text-gray-600 border-dashed h-8 text-xs"
             >
               <Upload className="h-3 w-3 mr-2" />
-              Upload Images or PDFs
+              Upload Images, PDFs, or Audio
             </Button>
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,.pdf"
+              accept="image/*,.pdf,audio/*"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -125,6 +125,8 @@ export const CompactAIAssistant: React.FC<Props> = ({
                     <div className="flex items-center gap-1.5">
                       {file.type.startsWith('image/') ? (
                         <Image className="h-3 w-3 text-blue-500" />
+                      ) : file.type.startsWith('audio/') ? (
+                        <Volume2 className="h-3 w-3 text-green-500" />
                       ) : (
                         <FileText className="h-3 w-3 text-red-500" />
                       )}
