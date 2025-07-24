@@ -5,8 +5,20 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 export async function signOut() {
-  const supabase = await createServerSupabase();
-  await supabase.auth.signOut();
-  revalidatePath('/', 'layout');
-  redirect('/auth');
+  try {
+    const supabase = await createServerSupabase();
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error('Sign out error:', error);
+      // Even if there's an error, we should still redirect
+    }
+    
+    revalidatePath('/', 'layout');
+    redirect('/auth');
+  } catch (error) {
+    console.error('Sign out failed:', error);
+    // Force redirect even if sign out fails
+    redirect('/auth');
+  }
 }

@@ -58,6 +58,7 @@ export const ReportSectionSchema = z.object({
   order: z.number().int(),
   isRequired: z.boolean().default(true),
   isGenerated: z.boolean().default(false),
+  isCompleted: z.boolean().default(false), // Track section completion
   generationPrompt: z.string().optional(),
   lastUpdated: z.string().optional(),
   dataSource: z.string().optional(), // Reference to data that can populate this section
@@ -86,6 +87,18 @@ export const ReportTemplateSchema = z.object({
   createdBy: z.string().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+});
+
+// Schema for student bio metadata
+export const StudentBioSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  age: z.string().optional(),
+  studentId: z.string().optional(), // User-generated school ID, not report UUID
+  grade: z.string().optional(),
+  primaryLanguages: z.string().optional(),
+  eligibilityStatus: z.string().optional(),
 });
 
 // Schema for complete reports
@@ -125,6 +138,9 @@ export const ReportSchema = z.object({
   sections: z.array(ReportSectionSchema),
 
   // Additional metadata
+  metadata: z.object({
+    studentBio: StudentBioSchema.optional(),
+  }).optional(),
   tags: z.array(z.string()).optional(),
   finalizedDate: z.string().optional(),
   printVersion: z.string().optional(),
@@ -323,3 +339,4 @@ export type ReportSectionType = keyof typeof REPORT_SECTION_TYPES;
 export type ReportSection = z.infer<typeof ReportSectionSchema>;
 export type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
 export type Report = z.infer<typeof ReportSchema>;
+export type StudentBio = z.infer<typeof StudentBioSchema>;

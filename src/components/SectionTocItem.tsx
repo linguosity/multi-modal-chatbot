@@ -2,6 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SectionId } from '../lib/hooks/useSectionDnd';
 import { GripVertical } from 'lucide-react';
+import { SectionToggle } from './ui/ProgressIndicator';
 
 // Using the existing report section type from your schemas
 export interface Section {
@@ -14,11 +15,13 @@ export interface Section {
 export function SectionTocItem({
   section,
   active,
-  onSelect
+  onSelect,
+  onToggleComplete
 }: {
   section: Section;
   active: boolean;
   onSelect: () => void;
+  onToggleComplete?: (sectionId: SectionId) => void;
 }) {
   const {
     setNodeRef,
@@ -52,16 +55,24 @@ export function SectionTocItem({
       </span>
 
       <div 
-        className="flex-1 flex items-center gap-2 min-w-0"
+        className="flex-1 flex items-center justify-between gap-2 min-w-0"
         onClick={onSelect}
       >
-        <span className="truncate">{section.title}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="truncate">{section.title}</span>
+          {section.required && !section.complete && (
+            <span className="text-red-500 flex-shrink-0 text-xs" title="Required">*</span>
+          )}
+        </div>
         
-        {section.complete ? (
-          <span className="text-emerald-500 flex-shrink-0" title="Complete">●</span>
-        ) : section.required ? (
-          <span className="text-red-500 flex-shrink-0" title="Required">●</span>
-        ) : null}
+        {onToggleComplete && (
+          <SectionToggle
+            isCompleted={section.complete || false}
+            onToggle={() => onToggleComplete(section.id)}
+            size="sm"
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+          />
+        )}
       </div>
     </div>
   );

@@ -35,14 +35,21 @@ export interface StructuredSchema {
 // Header Section
 export const HEADER_SECTION: SectionSchema = {
   key: 'header',
-  title: 'Report Header',
-  prose_template: `{student_name} - Speech and Language Evaluation\nDate of Birth: {date_of_birth}\nStudent ID: {student_id}\nEvaluation Date(s): {evaluation_dates}\nEvaluator: {evaluator_name}, {evaluator_credentials}\nSchool: {school_name}\nEligibility Status: {eligibility_status}`,
+  title: 'Student Information',
+  prose_template: `{first_name} {last_name} - Speech and Language Evaluation\nDate of Birth: {date_of_birth} (Age: {age})\nStudent ID: {student_id}\nGrade: {grade}\nPrimary Language(s): {primary_languages}\nReport Date: {report_date}\nEvaluation Date(s): {evaluation_dates}\nEvaluator: {evaluator_name}, {evaluator_credentials}\nSchool: {school_name}\nEligibility Status: {eligibility_status}`,
   fields: [
     {
-      key: 'student_name',
-      label: 'Student Name',
+      key: 'first_name',
+      label: 'First Name',
       type: 'string',
-      placeholder: 'Enter student full name...',
+      placeholder: 'Enter student first name...',
+      required: true
+    },
+    {
+      key: 'last_name',
+      label: 'Last Name',
+      type: 'string',
+      placeholder: 'Enter student last name...',
       required: true
     },
     {
@@ -52,6 +59,12 @@ export const HEADER_SECTION: SectionSchema = {
       required: true
     },
     {
+      key: 'age',
+      label: 'Age',
+      type: 'string',
+      placeholder: 'Auto-calculated or enter manually...'
+    },
+    {
       key: 'student_id',
       label: 'Student ID',
       type: 'string',
@@ -59,9 +72,30 @@ export const HEADER_SECTION: SectionSchema = {
       required: true
     },
     {
+      key: 'grade',
+      label: 'Grade',
+      type: 'select',
+      options: ['Pre-K', 'TK', 'K', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'],
+      required: true
+    },
+    {
+      key: 'primary_languages',
+      label: 'Primary Language(s)',
+      type: 'string',
+      placeholder: 'English, Spanish, etc...',
+      required: true
+    },
+    {
+      key: 'report_date',
+      label: 'Report Date',
+      type: 'date',
+      required: true
+    },
+    {
       key: 'evaluation_dates',
       label: 'Evaluation Date(s)',
-      type: 'date',
+      type: 'string',
+      placeholder: 'Enter evaluation dates...',
       required: true
     },
     {
@@ -89,7 +123,7 @@ export const HEADER_SECTION: SectionSchema = {
       key: 'eligibility_status',
       label: 'Eligibility Status',
       type: 'select',
-      options: ['Eligible', 'Not Eligible', 'Pending', 'Re-evaluation Required']
+      options: ['Eligible', 'Not Eligible', 'Pending', 'Re-evaluation Required', 'Initial Evaluation']
     }
   ]
 };
@@ -382,24 +416,56 @@ export const ASSESSMENT_TOOLS_SECTION: SectionSchema = {
 export const ELIGIBILITY_CHECKLIST_SECTION: SectionSchema = {
   key: 'eligibility_checklist',
   title: 'Eligibility Determination',
-  prose_template: `Speech impairment criteria: {speech_criteria}. Language impairment criteria: {language_criteria}. Educational impact: {educational_impact}. Special education services required: {services_required}. Justification: {justification}`,
+  prose_template: `California Education Code Section 56337 Eligibility Criteria:\n\nSpeech impairment criteria (Ed Code 56337(a)): {speech_criteria}. {speech_justification}\n\nLanguage impairment criteria (Ed Code 56337(b)): {language_criteria}. {language_justification}\n\nEducational impact demonstrated (Ed Code 56026.5): {educational_impact}. {educational_impact_details}\n\nAdverse effect on educational performance: {adverse_effect}. {adverse_effect_details}\n\nSpecial education services required: {services_required}. {services_justification}\n\nOverall eligibility determination: {overall_eligibility}`,
   fields: [
     {
       key: 'speech_criteria',
-      label: 'Meets criteria for speech impairment',
+      label: 'Meets criteria for speech impairment (Ed Code 56337(a))',
       type: 'boolean',
       required: true
+    },
+    {
+      key: 'speech_justification',
+      label: 'Speech impairment justification',
+      type: 'string',
+      placeholder: 'Describe how speech disorder meets Ed Code 56337(a) criteria: articulation, voice, or fluency disorder that adversely affects educational performance...'
     },
     {
       key: 'language_criteria',
-      label: 'Meets criteria for language impairment',
+      label: 'Meets criteria for language impairment (Ed Code 56337(b))',
       type: 'boolean',
       required: true
     },
     {
+      key: 'language_justification',
+      label: 'Language impairment justification',
+      type: 'string',
+      placeholder: 'Describe how language disorder meets Ed Code 56337(b) criteria: receptive/expressive language disorder that adversely affects educational performance...'
+    },
+    {
       key: 'educational_impact',
-      label: 'Educational impact demonstrated',
+      label: 'Educational impact demonstrated (Ed Code 56026.5)',
       type: 'boolean',
+      required: true
+    },
+    {
+      key: 'educational_impact_details',
+      label: 'Educational impact details',
+      type: 'string',
+      placeholder: 'Describe specific ways the communication disorder impacts educational performance, academic achievement, or functional performance...',
+      required: true
+    },
+    {
+      key: 'adverse_effect',
+      label: 'Adverse effect on educational performance',
+      type: 'boolean',
+      required: true
+    },
+    {
+      key: 'adverse_effect_details',
+      label: 'Adverse effect details',
+      type: 'string',
+      placeholder: 'Provide specific examples of how the disorder adversely affects the student\'s educational performance...',
       required: true
     },
     {
@@ -409,10 +475,17 @@ export const ELIGIBILITY_CHECKLIST_SECTION: SectionSchema = {
       required: true
     },
     {
-      key: 'justification',
-      label: 'Justification',
+      key: 'services_justification',
+      label: 'Services justification',
       type: 'string',
-      placeholder: 'Provide detailed justification for eligibility determination...',
+      placeholder: 'Explain why special education services are necessary to address the identified needs...',
+      required: true
+    },
+    {
+      key: 'overall_eligibility',
+      label: 'Overall eligibility determination',
+      type: 'select',
+      options: ['Eligible for Speech/Language Services', 'Not Eligible - Does not meet criteria', 'Not Eligible - No adverse educational impact', 'Pending additional assessment'],
       required: true
     }
   ]
@@ -615,8 +688,117 @@ export const RECOMMENDATIONS_SCHEMA: StructuredSchema = {
   ]
 };
 
+// Import state eligibilities
+import { stateEligibilities } from './schemas/state-eligibilities'
+
+// Generate state-specific eligibility schema
+export function generateStateEligibilitySchema(state: string = 'California'): SectionSchema {
+  const stateData = stateEligibilities[state as keyof typeof stateEligibilities]
+  
+  if (!stateData) {
+    // Fallback to California if state not found
+    return ELIGIBILITY_CHECKLIST_SECTION
+  }
+
+  return {
+    key: 'eligibility_checklist',
+    title: `Eligibility Determination (${state})`,
+    prose_template: `${state} Eligibility Criteria:\n\nDefinition: ${stateData.definition}\n\nEligibility Requirements: ${stateData.eligibility}\n\n${stateData.state_specific ? `State-Specific Criteria: ${stateData.state_specific}\n\n` : ''}Speech impairment criteria: {speech_criteria}. {speech_justification}\n\nLanguage impairment criteria: {language_criteria}. {language_justification}\n\nEducational impact demonstrated: {educational_impact}. {educational_impact_details}\n\nAdverse effect on educational performance: {adverse_effect}. {adverse_effect_details}\n\nSpecial education services required: {services_required}. {services_justification}\n\nOverall eligibility determination: {overall_eligibility}`,
+    fields: [
+      {
+        key: 'state_definition',
+        label: `${state} Definition`,
+        type: 'string',
+        placeholder: stateData.definition,
+        required: false
+      },
+      {
+        key: 'speech_criteria',
+        label: 'Meets criteria for speech impairment',
+        type: 'boolean',
+        required: true
+      },
+      {
+        key: 'speech_justification',
+        label: 'Speech impairment justification',
+        type: 'string',
+        placeholder: `Describe how speech disorder meets ${state} criteria...`
+      },
+      {
+        key: 'language_criteria',
+        label: 'Meets criteria for language impairment',
+        type: 'boolean',
+        required: true
+      },
+      {
+        key: 'language_justification',
+        label: 'Language impairment justification',
+        type: 'string',
+        placeholder: `Describe how language disorder meets ${state} criteria...`
+      },
+      {
+        key: 'educational_impact',
+        label: 'Educational impact demonstrated',
+        type: 'boolean',
+        required: true
+      },
+      {
+        key: 'educational_impact_details',
+        label: 'Educational impact details',
+        type: 'string',
+        placeholder: 'Describe specific ways the communication disorder impacts educational performance...',
+        required: true
+      },
+      {
+        key: 'adverse_effect',
+        label: 'Adverse effect on educational performance',
+        type: 'boolean',
+        required: true
+      },
+      {
+        key: 'adverse_effect_details',
+        label: 'Adverse effect details',
+        type: 'string',
+        placeholder: 'Provide specific examples of how the disorder adversely affects educational performance...',
+        required: true
+      },
+      {
+        key: 'services_required',
+        label: 'Requires special education services',
+        type: 'boolean',
+        required: true
+      },
+      {
+        key: 'services_justification',
+        label: 'Services justification',
+        type: 'string',
+        placeholder: 'Explain why special education services are necessary...',
+        required: true
+      },
+      {
+        key: 'overall_eligibility',
+        label: 'Overall eligibility determination',
+        type: 'select',
+        options: ['Eligible for Speech/Language Services', 'Not Eligible - Does not meet criteria', 'Not Eligible - No adverse educational impact', 'Pending additional assessment'],
+        required: true
+      },
+      ...(stateData.preschool ? [{
+        key: 'preschool_considerations',
+        label: 'Preschool considerations (if applicable)',
+        type: 'string',
+        placeholder: stateData.preschool
+      }] : [])
+    ]
+  }
+}
+
+// Get available states
+export function getAvailableStates(): string[] {
+  return Object.keys(stateEligibilities).sort()
+}
+
 // Get new section schema for section type
-export function getSectionSchemaForType(sectionType: string): SectionSchema | null {
+export function getSectionSchemaForType(sectionType: string, userState?: string): SectionSchema | null {
   switch (sectionType) {
     case 'header':
     case 'heading':
@@ -638,7 +820,7 @@ export function getSectionSchemaForType(sectionType: string): SectionSchema | nu
     case 'assessment_tools':
       return ASSESSMENT_TOOLS_SECTION;
     case 'eligibility_checklist':
-      return ELIGIBILITY_CHECKLIST_SECTION;
+      return userState ? generateStateEligibilitySchema(userState) : ELIGIBILITY_CHECKLIST_SECTION;
     case 'conclusion':
       return CONCLUSION_SECTION;
     case 'recommendations':

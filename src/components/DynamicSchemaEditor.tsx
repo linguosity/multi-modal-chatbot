@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus, X, Edit2 } from 'lucide-react'
+import { Plus, X, Edit2, FileText } from 'lucide-react'
+import { generateStateEligibilitySchema } from '@/lib/structured-schemas'
+import { useUserSettings } from '@/lib/context/UserSettingsContext'
 
 interface FieldSchema {
   key: string
@@ -34,7 +36,7 @@ interface FieldTypeOption {
 }
 
 const FIELD_TYPES: FieldTypeOption[] = [
-  { value: 'string', label: 'Text Field', description: 'Single line text input' },
+  { value: 'string', label: 'Text Field', description: 'Multi-line text area' },
   { value: 'boolean', label: 'Yes/No', description: 'Boolean choice buttons' },
   { value: 'checkbox', label: 'Checkbox', description: 'Single checkbox for true/false' },
   { value: 'number', label: 'Number', description: 'Numeric input' },
@@ -44,16 +46,42 @@ const FIELD_TYPES: FieldTypeOption[] = [
   { value: 'object', label: 'Group', description: 'Container for other fields' }
 ]
 
+// Special template sections
+const TEMPLATE_SECTIONS = [
+  { 
+    key: 'eligibility_checklist', 
+    label: 'State Eligibility Checklist', 
+    description: 'Add state-specific eligibility criteria' 
+  }
+]
+
 export default function DynamicSchemaEditor({ 
   schema, 
   onSchemaChange, 
   onSaveAsTemplate 
 }: DynamicSchemaEditorProps) {
+  const { settings } = useUserSettings()
   const [editingField, setEditingField] = useState<{ originalPath: string; currentPath: string } | null>(null)
   const [showAddField, setShowAddField] = useState<{ parentPath?: string } | null>(null)
   const [draftField, setDraftField] = useState<FieldSchema | null>(null)
   const [originalField, setOriginalField] = useState<FieldSchema | null>(null)
   const editingRef = useRef<HTMLDivElement>(null)
+
+  const addTemplateSection = (sectionKey: string) => {
+    if (sectionKey === 'eligibility_checklist') {
+      const eligibilitySchema = generateStateEligibilitySchema(settings.preferredState)
+      const newSchema = { ...schema }
+      
+      // Add all eligibility fields to the current schema
+      newSchema.fields = [...newSchema.fields, ...eligibilitySchema.fields]
+      newSchema.prose_template = schema.prose_template 
+        ? `${schema.prose_template}\n\n${eligibilitySchema.prose_template}`
+        : eligibilitySchema.prose_template
+      
+      onSchemaChange(newSchema)
+    }
+    setShowAddField(null)
+  }
 
   const addField = (fieldType: FieldSchema['type'], parentPath?: string) => {
     const newField: FieldSchema = {
@@ -382,23 +410,106 @@ export default function DynamicSchemaEditor({
       {/* Add Field Modal */}
       {showAddField && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96">
+          <div className="bg-white rounded-lg p-6 w-[800px] max-h-[80vh] overflow-y-auto">
             <h4 className="font-medium mb-4">Add New Field</h4>
-            <div className="space-y-3">
-              {FIELD_TYPES.map(type => (
+            {/* Template Sections */}
+            <div className="mb-6">
+              <h5 className="font-medium text-gray-800 mb-3">Template Sections</h5>
+              <div className="grid grid-cols-1 gap-3">
+                {TEMPLATE_SECTIONS.map(section => (
+                  <button
+                    key={section.key}
+                    onClick={() => addTemplateSection(section.key)}
+                    className="text-left p-4 border-2 border-dashed border-blue-300 rounded hover:bg-blue-50 hover:border-blue-400 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <div className="font-medium text-sm text-blue-900">{section.label}</div>
+                    </div>
+                    <div className="text-xs text-blue-700">{section.description}</div>
+                    <div className="text-xs text-blue-600 mt-1">
+                      Uses {settings.preferredState} criteria
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Individual Fields */}
+            <div>
+              <h5 className="font-medium text-gray-800 mb-3">Individual Fields</h5>
+              <div className="grid grid-cols-2 gap-4">
+                {FIELD_TYPES.map(type => (
                 <button
                   key={type.value}
                   onClick={() => {
                     addField(type.value, showAddField.parentPath)
                   }}
-                  className="w-full text-left p-3 border rounded hover:bg-gray-50"
+                  className="text-left p-4 border rounded hover:bg-gray-50 hover:border-blue-300 transition-colors"
                 >
-                  <div className="font-medium text-sm">{type.label}</div>
-                  <div className="text-xs text-gray-600">{type.description}</div>
+                  <div className="font-medium text-sm mb-2">{type.label}</div>
+                  <div className="text-xs text-gray-600 mb-3">{type.description}</div>
+                  
+                  {/* Visual Examples */}
+                  <div className="bg-gray-50 p-2 rounded text-xs">
+                    {type.value === 'string' && (
+                      <textarea 
+                        className="w-full h-12 px-2 py-1 border rounded resize-none text-xs" 
+                        placeholder="Enter your text here..."
+                        readOnly
+                      />
+                    )}
+                    {type.value === 'boolean' && (
+                      <div className="flex gap-1">
+                        <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">Yes</span>
+                        <span className="bg-gray-200 text-gray-600 px-2 py-1 rounded-full text-xs">No</span>
+                      </div>
+                    )}
+                    {type.value === 'checkbox' && (
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" className="rounded" readOnly />
+                        <span className="text-xs">Check this option</span>
+                      </div>
+                    )}
+                    {type.value === 'number' && (
+                      <input 
+                        type="number" 
+                        className="w-full px-2 py-1 border rounded text-xs" 
+                        placeholder="123"
+                        readOnly
+                      />
+                    )}
+                    {type.value === 'date' && (
+                      <input 
+                        type="date" 
+                        className="w-full px-2 py-1 border rounded text-xs"
+                        readOnly
+                      />
+                    )}
+                    {type.value === 'select' && (
+                      <select className="w-full px-2 py-1 border rounded text-xs" disabled>
+                        <option>Option 1</option>
+                        <option>Option 2</option>
+                      </select>
+                    )}
+                    {type.value === 'array' && (
+                      <textarea 
+                        className="w-full h-8 px-2 py-1 border rounded resize-none text-xs" 
+                        placeholder="Item 1, Item 2, Item 3"
+                        readOnly
+                      />
+                    )}
+                    {type.value === 'object' && (
+                      <div className="border-l-2 border-blue-200 pl-2">
+                        <div className="text-xs text-gray-500">📁 Contains other fields</div>
+                      </div>
+                    )}
+                  </div>
                 </button>
-              ))}
+                ))}
+              </div>
             </div>
-            <div className="flex justify-end gap-2 mt-4">
+            <div className="flex justify-end gap-2 mt-6">
               <Button
                 onClick={() => setShowAddField(null)}
                 variant="default"

@@ -4,23 +4,27 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect } from 'react'
 import { useReport } from '@/lib/context/ReportContext'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Settings, Edit3, Save, Download, FolderOpen, Upload, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Settings, Edit3, Save, Download, FolderOpen, Upload, Trash2, Sparkles } from 'lucide-react'
 import { SplitButton } from '@/components/ui/split-button'
 import { getSectionSchemaForType } from '@/lib/structured-schemas'
+import { useUserSettings } from '@/lib/context/UserSettingsContext'
 import DynamicStructuredBlock from '@/components/DynamicStructuredBlock'
 import TiptapEditor from '@/components/TiptapEditor'
 import { useAutosave } from '@/lib/hooks/useAutosave'
-import { FloatingAIAssistant } from '@/components/FloatingAIAssistant'
+import { CompactAIAssistant } from '@/components/CompactAIAssistant'
 import { motion } from 'framer-motion'
+import { SettingsButton } from '@/components/UserSettingsModal'
 
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
   const router = useRouter()
   const { report, handleSave, handleDelete } = useReport()
+  const { settings } = useUserSettings()
   const [mode, setMode] = useState<'data' | 'template'>('data')
   const [showJsonDebug] = useState(false)
   const [sectionContent, setSectionContent] = useState('')
   const [currentSchema, setCurrentSchema] = useState<any>(null)
+  const [showAIAssistant, setShowAIAssistant] = useState(false)
 
   if (!report) {
     return (
@@ -49,7 +53,7 @@ export default function SectionPage() {
   const prevSection = currentIndex > 0 ? report.sections[currentIndex - 1] : null
   const nextSection = currentIndex < report.sections.length - 1 ? report.sections[currentIndex + 1] : null
 
-  const sectionSchema = getSectionSchemaForType(section.sectionType)
+  const sectionSchema = getSectionSchemaForType(section.sectionType, settings.preferredState)
   const hasStructuredSchema = !!sectionSchema
 
   // Initialize schema state
@@ -108,8 +112,8 @@ export default function SectionPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex items-start justify-between">
+      <div className="border-b border-gray-200 bg-white px-6 pt-4 pb-0">
+        <div className="flex items-end justify-between">
           <div>
             <motion.h1 
               key={`title-${sectionId}`}
@@ -120,23 +124,23 @@ export default function SectionPage() {
             >
               {section.title}
             </motion.h1>
-            {lastSaved && (
-              <div className="text-xs text-gray-500 mt-1">
-                Last saved • {new Date(lastSaved).toLocaleTimeString()}
-              </div>
-            )}
+            <div className="text-xs text-gray-500 mt-1 h-4">
+              {lastSaved && (
+                <>Last saved • {new Date(lastSaved).toLocaleTimeString()}</>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-end gap-4">
             {/* Tabs positioned to the right of header */}
             {hasStructuredSchema && (
-              <div className="flex gap-0 relative" style={{ marginBottom: '-1px' }}>
+              <div className="flex gap-0 relative -mb-px z-10">
                 <button
                   onClick={() => setMode('data')}
-                  className={`px-4 py-2 text-sm rounded-t-md border border-gray-200 border-b-0 outline-none flex items-center gap-1 transition-colors ${
+                  className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
                     mode === 'data' 
-                      ? 'bg-white text-gray-900 font-semibold relative z-20' 
-                      : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 relative z-10'
+                      ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
+                      : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
                   }`}
                 >
                   <Edit3 className="h-3 w-3" />
@@ -144,10 +148,10 @@ export default function SectionPage() {
                 </button>
                 <button
                   onClick={() => setMode('template')}
-                  className={`px-4 py-2 text-sm rounded-t-md border border-gray-200 border-b-0 outline-none flex items-center gap-1 transition-colors ${
+                  className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
                     mode === 'template' 
-                      ? 'bg-white text-gray-900 font-semibold relative z-20' 
-                      : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 relative z-10'
+                      ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
+                      : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
                   }`}
                 >
                   <Settings className="h-3 w-3" />
@@ -156,16 +160,82 @@ export default function SectionPage() {
               </div>
             )}
           
-            <div className="flex items-center gap-3">
-            {isSaving ? (
-              <div className="flex items-center gap-2 text-sm text-blue-600">
-                <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                Saving...
-              </div>
-            ) : null}
+            <div className="flex items-end gap-3">
+            <div className="flex items-center gap-2 text-sm min-w-[80px] h-6">
+              {isSaving ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  <span className="text-blue-600">Saving...</span>
+                </>
+              ) : null}
+            </div>
             
             {/* Consolidated Action Bar */}
             <div className="flex items-center gap-2">
+              {/* AI Assistant Button */}
+              <div className="relative">
+                <Button
+                  onClick={() => setShowAIAssistant(!showAIAssistant)}
+                  variant="outline"
+                  size="sm"
+                  className={`flex items-center gap-1 ${showAIAssistant ? 'bg-blue-50 border-blue-300' : ''}`}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  AI
+                </Button>
+                
+                <CompactAIAssistant
+                  sections={[section]}
+                  reportId={report.id}
+                  isOpen={showAIAssistant}
+                  onToggle={() => setShowAIAssistant(!showAIAssistant)}
+                  onGenerateContent={async (sectionIds, input, files) => {
+                    if (!sectionIds.includes(section.id)) return
+                    
+                    try {
+                      // Create request body
+                      let body: any = {
+                        reportId: report.id,
+                        sectionId: section.id,
+                        generation_type: 'prose',
+                        unstructuredInput: input || `Generate content for ${section.title} section.`
+                      }
+                      
+                      // Handle file uploads if present
+                      if (files && files.length > 0) {
+                        const formData = new FormData()
+                        formData.append('reportId', report.id)
+                        formData.append('sectionId', section.id)
+                        formData.append('generation_type', 'prose')
+                        formData.append('unstructuredInput', input || `Generate content for ${section.title} section.`)
+                        
+                        files.forEach((file, index) => {
+                          formData.append(`file_${index}`, file)
+                        })
+                        
+                        body = formData
+                      }
+                      
+                      // Make API request
+                      const res = await fetch('/api/ai/generate-section', {
+                        method: 'POST',
+                        ...(files && files.length > 0 ? {} : { headers: { 'Content-Type': 'application/json' } }),
+                        body: files && files.length > 0 ? body : JSON.stringify(body)
+                      })
+                      
+                      const json = await res.json()
+                      if (!res.ok) throw new Error(json.error || 'AI generation failed')
+                      
+                      // Update content
+                      handleContentChange(json.updatedSection.content)
+                      forceSave()
+                    } catch (error) {
+                      console.error('AI generation failed:', error)
+                    }
+                  }}
+                />
+              </div>
+              
               <SplitButton
                 onClick={forceSave}
                 variant="primary"
@@ -236,7 +306,7 @@ export default function SectionPage() {
                 Save Report
               </SplitButton>
               
-
+              <SettingsButton />
             </div>
             </div>
           </div>
@@ -257,57 +327,7 @@ export default function SectionPage() {
           className="max-w-4xl mx-auto"
         >
           {/* Content card that connects with tabs */}
-          <section className={`border border-gray-200 bg-white p-6 mx-6 mt-0 mb-6 ${hasStructuredSchema ? 'rounded-b-md rounded-tl-md' : 'rounded-md mt-6'}`}>
-              {/* AI Assistant */}
-              <FloatingAIAssistant
-                sections={[section]}
-                reportId={report.id}
-                onGenerateContent={async (sectionIds, input, files) => {
-                  if (!sectionIds.includes(section.id)) return
-                  
-                  try {
-                    // Create request body
-                    let body: any = {
-                      reportId: report.id,
-                      sectionId: section.id,
-                      generation_type: 'prose',
-                      unstructuredInput: input || `Generate content for ${section.title} section.`
-                    }
-                    
-                    // Handle file uploads if present
-                    if (files && files.length > 0) {
-                      const formData = new FormData()
-                      formData.append('reportId', report.id)
-                      formData.append('sectionId', section.id)
-                      formData.append('generation_type', 'prose')
-                      formData.append('unstructuredInput', input || `Generate content for ${section.title} section.`)
-                      
-                      files.forEach((file, index) => {
-                        formData.append(`file_${index}`, file)
-                      })
-                      
-                      body = formData
-                    }
-                    
-                    // Make API request
-                    const res = await fetch('/api/ai/generate-section', {
-                      method: 'POST',
-                      ...(files && files.length > 0 ? {} : { headers: { 'Content-Type': 'application/json' } }),
-                      body: files && files.length > 0 ? body : JSON.stringify(body)
-                    })
-                    
-                    const json = await res.json()
-                    if (!res.ok) throw new Error(json.error || 'AI generation failed')
-                    
-                    // Update content
-                    handleContentChange(json.updatedSection.content)
-                    forceSave()
-                  } catch (error) {
-                    console.error('AI generation failed:', error)
-                  }
-                }}
-              />
-              
+          <section className={`relative bg-white p-6 mx-6 mb-6 ${hasStructuredSchema ? 'z-10 pt-4 -translate-y-px' : 'mt-6'}`}>
               {/* Main Content */}
               {hasStructuredSchema && currentSchema ? (
                 <DynamicStructuredBlock

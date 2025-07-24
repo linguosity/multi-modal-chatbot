@@ -91,10 +91,32 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
   const handleSave = async (reportToSave: Report) => {
     // Don't set loading to true for auto-saves to prevent UI disruption
     if (reportToSave) {
-      const { error } = await supabase
+      // First, try to save with metadata
+      let { error } = await supabase
         .from('reports')
         .update(reportToSave)
         .eq('id', reportToSave.id);
+      
+      // If metadata column doesn't exist, try saving without it
+      if (error && (error.message?.includes("metadata") || error.code === "PGRST204")) {
+        console.warn('Metadata column not found, saving without metadata. Please run database migration.');
+        const { metadata, ...reportWithoutMetadata } = reportToSave;
+        const { error: retryError } = await supabase
+          .from('reports')
+          .update(reportWithoutMetadata)
+          .eq('id', reportToSave.id);
+        error = retryError;
+        
+        // Show a toast about the missing metadata column
+        if (!retryError) {
+          createToast({
+            title: "Partial Save",
+            description: "Report saved, but student bio data requires database update. Please contact admin.",
+            variant: "default"
+          });
+        }
+      }
+      
       if (error) {
         console.error('Error saving report:', error);
         createToast({
@@ -105,6 +127,8 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
       } else {
         // Subtle success indication - no toast for auto-saves
         console.log('✅ Report auto-saved successfully');
+        // Update local state to reflect the save
+        setReport(reportToSave);
       }
     }
   };

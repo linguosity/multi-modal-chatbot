@@ -26,15 +26,23 @@ interface MigrationResult {
   }>;
 }
 
+interface SchemaMigrationStatus {
+  metadataColumnExists: boolean;
+  error?: string;
+}
+
 export const MigrationPanel: React.FC = () => {
   const [migrationStatus, setMigrationStatus] = useState<MigrationStatus | null>(null);
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
+  const [schemaMigrationStatus, setSchemaMigrationStatus] = useState<SchemaMigrationStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [schemaLoading, setSchemaLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Check migration status on component mount
   useEffect(() => {
     checkMigrationStatus();
+    checkSchemaMigrationStatus();
   }, []);
 
   const checkMigrationStatus = async () => {
@@ -51,6 +59,40 @@ export const MigrationPanel: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkSchemaMigrationStatus = async () => {
+    try {
+      const response = await fetch('/api/migrate-schema');
+      if (!response.ok) {
+        throw new Error('Failed to check schema migration status');
+      }
+      const status = await response.json();
+      setSchemaMigrationStatus(status);
+    } catch (err) {
+      console.error('Schema migration check failed:', err);
+      setSchemaMigrationStatus({ metadataColumnExists: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    }
+  };
+
+  const runSchemaMigration = async () => {
+    setSchemaLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/migrate-schema', {
+        method: 'POST',
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Schema migration failed');
+      }
+      // Refresh schema migration status
+      await checkSchemaMigrationStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setSchemaLoading(false);
     }
   };
 
@@ -126,13 +168,51 @@ export const MigrationPanel: React.FC = () => {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-blue-600" />
-          Report Migration Required
-        </CardTitle>
-      </CardHeader>
+    <div className="space-y-4">
+      {/* Schema Migration Card */}
+      {schemaMigrationStatus && !schemaMigrationStatus.metadataColumnExists && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-600" />
+              Database Schema Update Required
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-md p-4">
+              <h4 className="font-medium text-orange-900 mb-2">Schema Update Needed</h4>
+              <p className="text-sm text-orange-800">
+                The database needs to be updated to support student bio information and other metadata. 
+                This is required for the StudentBioCard to save data properly.
+              </p>
+            </div>
+            
+            <Button 
+              onClick={runSchemaMigration} 
+              disabled={schemaLoading}
+              className="w-full"
+            >
+              {schemaLoading ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Updating Schema...
+                </>
+              ) : (
+                'Update Database Schema'
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Report Migration Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-blue-600" />
+            Report Migration Required
+          </CardTitle>
+        </CardHeader>
       <CardContent className="space-y-4">
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
           <h4 className="font-medium text-blue-900 mb-2">What's changing?</h4>
@@ -220,5 +300,6 @@ export const MigrationPanel: React.FC = () => {
         )}
       </CardContent>
     </Card>
+    </div>
   );
 };

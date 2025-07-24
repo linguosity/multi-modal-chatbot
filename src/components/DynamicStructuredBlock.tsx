@@ -156,12 +156,12 @@ export default function DynamicStructuredBlock({
     switch (field.type) {
       case 'boolean':
         return (
-          <div key={fieldPath} className="flex items-center gap-3">
-            <label className="text-sm text-gray-700">{field.label}:</label>
+          <div key={fieldPath} className="space-y-2 h-fit">
+            <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
             <div className="flex">
               <button
                 onClick={() => updateFieldValue(true)}
-                className={`rounded-l-full py-1 px-3 text-xs font-medium border ${
+                className={`rounded-l-full py-2 px-4 text-sm font-medium border ${
                   value 
                     ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
                     : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -171,7 +171,7 @@ export default function DynamicStructuredBlock({
               </button>
               <button
                 onClick={() => updateFieldValue(false)}
-                className={`rounded-r-full py-1 px-3 text-xs font-medium border-l-0 border ${
+                className={`rounded-r-full py-2 px-4 text-sm font-medium border-l-0 border ${
                   !value 
                     ? 'bg-red-100 text-red-700 border-red-200' 
                     : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -244,8 +244,8 @@ export default function DynamicStructuredBlock({
 
       case 'array':
         return (
-          <div key={fieldPath} className="space-y-2">
-            <label className="text-sm text-gray-700">{field.label}:</label>
+          <div key={fieldPath} className="space-y-2 h-fit">
+            <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
             <textarea
               value={Array.isArray(value) ? value.join(', ') : ''}
               onChange={(e) => {
@@ -253,8 +253,8 @@ export default function DynamicStructuredBlock({
                 updateFieldValue(items)
               }}
               placeholder="Enter items separated by commas..."
-              className="w-full px-2 py-2 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-              rows={2}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              rows={3}
             />
             {Array.isArray(value) && value.length > 0 && (
               <div className="text-xs text-gray-500">
@@ -278,14 +278,14 @@ export default function DynamicStructuredBlock({
 
       default: // string
         return (
-          <div key={fieldPath} className="space-y-1">
-            <label className="text-sm text-gray-700">{field.label}:</label>
-            <input
-              type="text"
+          <div key={fieldPath} className="space-y-2 h-fit">
+            <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
+            <textarea
               value={value || ''}
               onChange={(e) => updateFieldValue(e.target.value)}
               placeholder={field.placeholder}
-              className="w-full border-b border-gray-300 focus:border-blue-400 outline-none py-1 text-sm bg-transparent"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              rows={3}
             />
           </div>
         )
@@ -312,7 +312,7 @@ export default function DynamicStructuredBlock({
       ) : (
         <div className="p-6">
           {/* Dynamic Fields */}
-          <div className="space-y-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 items-start">
             {schema.fields.map(field => renderField(field, data[field.key]))}
           </div>
         </div>

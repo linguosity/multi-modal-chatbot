@@ -4,6 +4,8 @@ import { useParams, useRouter, usePathname } from 'next/navigation'
 import { ReportSection } from '@/lib/schemas/report'
 import { useReport } from '@/lib/context/ReportContext'
 import { ChevronDown, ChevronRight, Plus, FileText } from 'lucide-react'
+import { StudentBioCard } from './StudentBioCard'
+import { SectionToggle, ProgressIndicator } from './ui/ProgressIndicator'
 import { useState } from 'react'
 import { useSectionDnd, SectionId } from '@/lib/hooks/useSectionDnd'
 import { SectionTocItem, Section as TocSection } from './SectionTocItem'
@@ -37,7 +39,8 @@ function GroupSectionList({
   onNavigate,
   onReorder,
   getSectionStatus,
-  getSectionIcon
+  getSectionIcon,
+  onToggleCompletion
 }: {
   sections: ReportSection[]
   currentSectionId: string | undefined
@@ -45,6 +48,7 @@ function GroupSectionList({
   onReorder: (newOrder: string[]) => void
   getSectionStatus: (section: ReportSection) => string
   getSectionIcon: (status: string) => React.ReactNode
+  onToggleCompletion: (sectionId: string) => void
 }) {
   const sectionIds = sections.map(s => s.id)
   const { sensors, handleDragEnd, strategy, collisionDetection } = useSectionDnd(sectionIds, onReorder)
@@ -77,24 +81,35 @@ function GroupSectionList({
               return (
                 <div 
                   key={section.id} 
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors relative ${
+                  className={`group flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors relative ${
                     isActive 
                       ? 'bg-brand-rust/10 text-brand-black font-medium' 
                       : 'hover:bg-brand-beige/20 text-gray-700'
                   }`}
-                  onClick={() => onNavigate(section.id)}
                 >
                   {/* Active indicator bar */}
                   {isActive && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-rust rounded-r-full" />
                   )}
                   
-                  <div className="flex-shrink-0 ml-1">
-                    {getSectionIcon(status)}
+                  <div 
+                    className="flex items-center gap-2 flex-1 cursor-pointer"
+                    onClick={() => onNavigate(section.id)}
+                  >
+                    <div className="flex-shrink-0 ml-1">
+                      {getSectionIcon(status)}
+                    </div>
+                    <span className="truncate flex-1 text-sm">
+                      {section.title}
+                    </span>
                   </div>
-                  <span className="truncate flex-1 text-sm">
-                    {section.title}
-                  </span>
+                  
+                  <SectionToggle
+                    isCompleted={section.isCompleted || false}
+                    onToggle={() => onToggleCompletion(section.id)}
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
                 </div>
               )
             })}
@@ -106,7 +121,7 @@ function GroupSectionList({
 }
 
 export function ReportSidebar() {
-  const { report, setReport } = useReport()
+  const { report, setReport, handleSave } = useReport()
   const router = useRouter()
   const pathname = usePathname()
   const { id: reportId } = useParams<{ id: string }>()
@@ -147,7 +162,7 @@ export function ReportSidebar() {
   }
 
   const getGroupStats = (groupSections: ReportSection[]) => {
-    const completed = groupSections.filter(s => getSectionStatus(s) === 'complete').length
+    const completed = groupSections.filter(s => s.isCompleted).length
     const total = groupSections.length
     return { completed, total }
   }
@@ -166,17 +181,36 @@ export function ReportSidebar() {
     router.push(`/dashboard/reports/${reportId}/${sectionId}`)
   }
 
+  const toggleSectionCompletion = async (sectionId: string) => {
+    if (!report) return
+    
+    const updatedSections = report.sections.map(section => 
+      section.id === sectionId 
+        ? { ...section, isCompleted: !section.isCompleted }
+        : section
+    )
+    
+    const updatedReport = {
+      ...report,
+      sections: updatedSections
+    }
+    
+    setReport(updatedReport)
+    
+    // Save to database
+    try {
+      await handleSave(updatedReport)
+    } catch (error) {
+      console.error('Failed to save section completion:', error)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-2 mb-2">
-          <FileText className="h-5 w-5 text-gray-600" />
-          <h1 className="font-semibold text-gray-900 truncate">{report.title}</h1>
-        </div>
-        <div className="text-xs text-gray-500">
-          {report.sections.length} sections • {report.status}
-        </div>
+        {/* Student Bio Card */}
+        <StudentBioCard />
       </div>
 
       {/* Navigation */}
@@ -206,9 +240,12 @@ export function ReportSidebar() {
                     )}
                     {group.title}
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {getGroupStats(groupSections).completed}/{getGroupStats(groupSections).total}
-                  </div>
+                  <ProgressIndicator
+                    completed={getGroupStats(groupSections).completed}
+                    total={getGroupStats(groupSections).total}
+                    size="sm"
+                    showText={false}
+                  />
                 </button>
 
                 {/* Group Sections */}
@@ -217,6 +254,7 @@ export function ReportSidebar() {
                     sections={groupSections}
                     currentSectionId={currentSectionId}
                     onNavigate={navigateToSection}
+                    onToggleCompletion={toggleSectionCompletion}
                     onReorder={(newOrder) => {
                       try {
                         // Create a new sections array with the updated order for this group
