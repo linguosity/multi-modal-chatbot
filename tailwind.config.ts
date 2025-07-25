@@ -28,65 +28,49 @@ const config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        // New pastel-based palette
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "#F2C2A8", // Pastel Rust (for buttons, accents)
+          foreground: "#333333", // Soft Black (for text on primary)
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          DEFAULT: "#F5F0E6", // Pastel Beige (for backgrounds, secondary buttons)
+          foreground: "#333333", // Soft Black (for text on secondary)
         },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+        destructive: { // Keep as is, for error states
+          DEFAULT: "#EF4444",
+          foreground: "#FFFFFF",
         },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+        muted: { // For subtle text/elements
+          DEFAULT: "#E8E2D4", // Lighter beige
+          foreground: "#555555", // Medium gray
         },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+        accent: { // For subtle highlights
+          DEFAULT: "#F2C2A8", // Same as primary light
+          foreground: "#333333",
         },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+        popover: { // For popovers/cards
+          DEFAULT: "#FFFFFF",
+          foreground: "#333333",
         },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+        card: { // For cards
+          DEFAULT: "#FFFFFF",
+          foreground: "#333333",
         },
-        // Brand colors from logo
+        background: "#F5F0E6", // Overall page background - Pastel Beige
+        foreground: "#333333", // Overall text color - Soft Black
+
+        // Original brand colors (can be used for specific, strong accents if needed)
         brand: {
           black: "#000000",
-          beige: "#C8BA93", 
+          beige: "#C8BA93",
           rust: "#CD7B56",
         },
-        // Custom colors based on UI/UX guidelines
-        charcoal: "#333333",
+        // Simplified gray scale for consistency
         gray: {
-          50: "#f9fafb",
-          100: "#f3f4f6",
-          200: "#e5e7eb",
-          300: "#d1d5db",
-          700: "#374151",
-          900: "#111827",
-        },
-        teal: {
-          600: "#2DD4BF",
-        },
-        blue: {
-          50: "#eff6ff",
-          700: "#1d4ed8",
-        },
-        indigo: {
-          600: "#4f46e5",
-          700: "#4338ca",
-        },
-        red: {
-          500: "#ef4444",
-          600: "#dc2626",
-          700: "#b91c1c",
+          'light': '#F9FAFB', // Very light gray
+          'medium': '#E5E7EB', // Light gray
+          'dark': '#333333', // Soft black (same as foreground)
         },
       },
       borderRadius: {

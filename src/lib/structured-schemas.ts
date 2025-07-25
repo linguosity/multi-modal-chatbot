@@ -703,7 +703,7 @@ export function generateStateEligibilitySchema(state: string = 'California'): Se
   return {
     key: 'eligibility_checklist',
     title: `Eligibility Determination (${state})`,
-    prose_template: `${state} Eligibility Criteria:\n\nDefinition: ${stateData.definition}\n\nEligibility Requirements: ${stateData.eligibility}\n\n${stateData.state_specific ? `State-Specific Criteria: ${stateData.state_specific}\n\n` : ''}Speech impairment criteria: {speech_criteria}. {speech_justification}\n\nLanguage impairment criteria: {language_criteria}. {language_justification}\n\nEducational impact demonstrated: {educational_impact}. {educational_impact_details}\n\nAdverse effect on educational performance: {adverse_effect}. {adverse_effect_details}\n\nSpecial education services required: {services_required}. {services_justification}\n\nOverall eligibility determination: {overall_eligibility}`,
+    prose_template: `${state} Eligibility Criteria:\n\nDefinition: ${stateData.definition}\n\nEligibility Requirements: ${stateData.eligibility}\n\nSpeech impairment criteria: {speech_criteria}. {speech_justification}\n\nLanguage impairment criteria: {language_criteria}. {language_justification}\n\nEducational impact demonstrated: {educational_impact}. {educational_impact_details}\n\nAdverse effect on educational performance: {adverse_effect}. {adverse_effect_details}\n\nSpecial education services required: {services_required}. {services_justification}\n\nOverall eligibility determination: {overall_eligibility}`,
     fields: [
       {
         key: 'state_definition',
@@ -785,7 +785,7 @@ export function generateStateEligibilitySchema(state: string = 'California'): Se
       ...(stateData.preschool ? [{
         key: 'preschool_considerations',
         label: 'Preschool considerations (if applicable)',
-        type: 'string',
+        type: 'string' as const,
         placeholder: stateData.preschool
       }] : [])
     ]

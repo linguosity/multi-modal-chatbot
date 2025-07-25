@@ -14,6 +14,8 @@ import { useAutosave } from '@/lib/hooks/useAutosave'
 import { CompactAIAssistant } from '@/components/CompactAIAssistant'
 import { motion } from 'framer-motion'
 import { SettingsButton } from '@/components/UserSettingsModal'
+import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
+import { useToast } from '@/lib/context/ToastContext'
 
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
@@ -25,6 +27,8 @@ export default function SectionPage() {
   const [sectionContent, setSectionContent] = useState('')
   const [currentSchema, setCurrentSchema] = useState<any>(null)
   const [showAIAssistant, setShowAIAssistant] = useState(false)
+  const { addRecentUpdate } = useRecentUpdates()
+  const { showAIUpdateToast } = useToast()
 
   if (!report) {
     return (
@@ -193,11 +197,27 @@ export default function SectionPage() {
                     if (!sectionIds.includes(section.id)) return
                     
                     try {
+                      // Determine generation type based on section schema and input
+                      let generationType = 'prose'; // Default
+                      
+                      if (files && files.length > 0) {
+                        // Check if section has structured schema for structured processing
+                        const sectionSchema = getSectionSchemaForType(section.sectionType || '');
+                        if (sectionSchema && sectionSchema.fields && sectionSchema.fields.length > 0) {
+                          generationType = 'structured_data_processing';
+                        } else {
+                          generationType = 'multi_modal_assessment';
+                        }
+                      } else if (currentSchema && currentSchema.fields && currentSchema.fields.length > 0) {
+                        // For text-only input, use structured processing if schema exists
+                        generationType = 'structured_data_processing';
+                      }
+
                       // Create request body
                       let body: any = {
                         reportId: report.id,
                         sectionId: section.id,
-                        generation_type: files && files.length > 0 ? 'multi_modal_assessment' : 'prose',
+                        generation_type: generationType,
                         unstructuredInput: input || `Generate content for ${section.title} section.`
                       }
                       
@@ -206,7 +226,7 @@ export default function SectionPage() {
                         const formData = new FormData()
                         formData.append('reportId', report.id)
                         // Don't append sectionId for multi-modal assessment - let AI determine sections
-                        formData.append('generation_type', 'multi_modal_assessment')
+                        formData.append('generation_type', generationType)
                         formData.append('unstructuredInput', input || `Generate content based on uploaded assessment materials.`)
                         
                         files.forEach((file, index) => {
@@ -227,17 +247,42 @@ export default function SectionPage() {
                       if (!res.ok) throw new Error(json.error || 'AI generation failed')
                       
                       // Handle different response formats
-                      if (files && files.length > 0) {
-                        // Multi-modal assessment response
-                        if (json.updatedSections && json.updatedSections.includes(section.id)) {
+                      if (generationType === 'structured_data_processing' || generationType === 'multi_modal_assessment') {
+                        // Structured data or multi-modal assessment response
+                        console.log('🎯 AI Processing Response:', json);
+                        
+                        if (json.updatedSections && json.updatedSections.length > 0) {
+                          // Collect all field changes for toast
+                          const allChanges: string[] = [];
+                          
+                          // Track updates for visual indicators
+                          json.updatedSections.forEach((sectionId: string) => {
+                            // Extract field changes from the response if available
+                            const changes = json.analysisResult?.content_analysis?.identified_updates
+                              ?.filter((update: any) => update.section_id === sectionId)
+                              ?.map((update: any) => update.field_path) || ['content'];
+                            
+                            console.log(`📍 Tracking update for section ${sectionId}:`, changes);
+                            addRecentUpdate(sectionId, changes, 'ai_update');
+                            allChanges.push(...changes);
+                          });
+                          
+                          // Show toast notification
+                          showAIUpdateToast(json.updatedSections, allChanges);
+                          
                           // Refresh the report to get updated content
-                          window.location.reload()
+                          console.log('🔄 Refreshing page to show updates...');
+                          setTimeout(() => {
+                            window.location.reload();
+                          }, 1000); // Small delay to show the toast
                         } else {
-                          console.log('Multi-modal processing completed:', json.message)
-                          // Show success message or handle as needed
+                          console.log('ℹ️ Processing completed but no sections were updated:', json.message)
+                          // Show info message
+                          showAIUpdateToast([], []);
                         }
                       } else {
-                        // Single section response
+                        // Single section response (legacy prose generation)
+                        console.log('📝 Legacy prose generation completed');
                         handleContentChange(json.updatedSection.content)
                         forceSave()
                       }
@@ -344,8 +389,12 @@ export default function SectionPage() {
               {hasStructuredSchema && currentSchema ? (
                 <DynamicStructuredBlock
                   schema={currentSchema}
-                  initialData={{}}
+                  initialData={(() => {
+                    console.log(`📊 Passing structured_data to ${section.title}:`, section.structured_data);
+                    return section.structured_data || {};
+                  })()}
                   mode={mode}
+                  sectionId={section.id}
                   onChange={(_, generatedText) => {
                     handleContentChange(generatedText)
                   }}

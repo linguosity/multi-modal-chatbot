@@ -3,6 +3,8 @@ import "./globals.css"
 import { createServerSupabase } from '@/lib/supabase/server';
 import React from 'react';
 import { UserSettingsProvider } from '@/lib/context/UserSettingsContext';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
   title: "Linguosity",
@@ -17,11 +19,12 @@ export default async function RootLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <html lang="en" className="h-full">
-      <body className="h-full m-0 flex flex-col">
+    <html lang="en" className="h-full scroll-smooth">
+      <body className="h-full m-0 flex flex-col bg-background text-foreground">
+        
         <React.StrictMode>
           <UserSettingsProvider>
-            {children}
+            <main className="flex-1">{children}</main>
           </UserSettingsProvider>
         </React.StrictMode>
       </body>

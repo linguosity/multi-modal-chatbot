@@ -1,8 +1,9 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SectionId } from '../lib/hooks/useSectionDnd';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Sparkles, Zap } from 'lucide-react';
 import { SectionToggle } from './ui/ProgressIndicator';
+import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext';
 
 // Using the existing report section type from your schemas
 export interface Section {
@@ -32,6 +33,23 @@ export function SectionTocItem({
     isDragging
   } = useSortable({ id: section.id });
 
+  const { isRecentlyUpdated, getRecentUpdate, clearRecentUpdate } = useRecentUpdates();
+  const isUpdated = isRecentlyUpdated(section.id);
+  const recentUpdate = getRecentUpdate(section.id);
+
+  // Debug logging
+  if (isUpdated) {
+    console.log(`✨ Section ${section.id} (${section.title}) is recently updated:`, recentUpdate);
+  }
+
+  const handleSelect = () => {
+    // Clear the update indicator when user clicks on the section
+    if (isUpdated) {
+      clearRecentUpdate(section.id);
+    }
+    onSelect();
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -40,8 +58,9 @@ export function SectionTocItem({
         transition,
         opacity: isDragging ? 0.5 : 1
       }}
-      className={`group flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors
-        ${active ? 'bg-indigo-50 text-indigo-700 font-medium' : 'hover:bg-gray-100'}`}
+      className={`group flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-all duration-300 relative
+        ${active ? 'bg-indigo-50 text-indigo-700 font-medium' : 'hover:bg-gray-100'}
+        ${isUpdated ? 'bg-gradient-to-r from-green-50 to-blue-50 border-l-4 border-green-400 shadow-sm animate-pulse' : ''}`}
     >
       {/* grab handle */}
       <span
@@ -56,12 +75,35 @@ export function SectionTocItem({
 
       <div 
         className="flex-1 flex items-center justify-between gap-2 min-w-0"
-        onClick={onSelect}
+        onClick={handleSelect}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="truncate">{section.title}</span>
+          {/* AI Update Indicator */}
+          {isUpdated && (
+            <div className="flex-shrink-0 relative">
+              {recentUpdate?.type === 'ai_update' ? (
+                <Sparkles className="h-4 w-4 text-blue-500 animate-pulse" title={`AI updated ${recentUpdate.changes.length} fields`} />
+              ) : (
+                <Zap className="h-4 w-4 text-green-500 animate-pulse" title="Recently updated" />
+              )}
+              {/* Pulse ring animation */}
+              <div className="absolute inset-0 rounded-full bg-blue-400 opacity-75 animate-ping"></div>
+            </div>
+          )}
+          
+          <span className={`truncate ${isUpdated ? 'font-medium text-gray-900' : ''}`}>
+            {section.title}
+          </span>
+          
           {section.required && !section.complete && (
             <span className="text-red-500 flex-shrink-0 text-xs" title="Required">*</span>
+          )}
+          
+          {/* Update count badge */}
+          {isUpdated && recentUpdate && recentUpdate.changes.length > 0 && (
+            <span className="bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium animate-bounce">
+              {recentUpdate.changes.length}
+            </span>
           )}
         </div>
         

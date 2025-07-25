@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react'
 import { ReportSidebar } from '@/components/ReportSidebar'
 import { useReport } from '@/lib/context/ReportContext'
 import { createBrowserSupabase } from '@/lib/supabase/browser'
+import { RecentUpdatesProvider } from '@/lib/context/RecentUpdatesContext'
+import { ToastProvider } from '@/lib/context/ToastContext'
 
 export default function ReportLayout({
   children,
@@ -74,16 +76,20 @@ export default function ReportLayout({
   }
 
   return (
-    <div className="flex h-screen bg-white">
-      {/* Sidebar */}
-      <div className="w-80 bg-gray-50 border-r border-gray-200 flex-shrink-0">
-        <ReportSidebar />
-      </div>
-      
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        {children}
-      </div>
-    </div>
+    <ToastProvider>
+      <RecentUpdatesProvider>
+        <div className="flex h-screen bg-white">
+          {/* Sidebar */}
+          <div className="w-80 bg-gray-50 border-r border-gray-200 flex-shrink-0">
+            <ReportSidebar />
+          </div>
+          
+          {/* Main Content */}
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
+        </div>
+      </RecentUpdatesProvider>
+    </ToastProvider>
   )
 }

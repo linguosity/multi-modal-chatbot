@@ -1,37 +1,44 @@
 import OpenAI from 'openai';
-import { fromBuffer } from 'pdf2pic';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// File size limits (in bytes)
+// File size limits (in bytes) - Updated to match Claude API limits
 export const FILE_SIZE_LIMITS = {
-  PDF: 10 * 1024 * 1024, // 10MB
-  IMAGE: 5 * 1024 * 1024, // 5MB
+  PDF: 32 * 1024 * 1024, // 32MB (Claude API limit)
+  IMAGE: 30 * 1024 * 1024, // 30MB (Claude API limit)
   AUDIO: 25 * 1024 * 1024, // 25MB (OpenAI Whisper limit)
 };
 
-// Supported file types
+// Supported file types - Expanded to match Claude API support
 export const SUPPORTED_FILE_TYPES = {
   PDF: ['application/pdf'],
   IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
   AUDIO: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'audio/ogg', 'audio/flac'],
+  DOCUMENT: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/csv', 'text/plain', 'text/html']
+};
+
+// PDF processing limits
+export const PDF_LIMITS = {
+  MAX_PAGES: 100, // Claude API limit for visual PDF analysis
+  MAX_SIZE: 32 * 1024 * 1024, // 32MB
 };
 
 export interface ProcessedFile {
   name: string;
   type: string;
   size: number;
-  content: string;
-  processingMethod: 'pdf-parse' | 'claude-vision' | 'whisper-transcription';
+  content: string; // Base64 content for all file types
+  processingMethod: 'claude-pdf' | 'claude-vision' | 'whisper-transcription';
   confidence?: number;
+  pageCount?: number; // For PDFs
 }
 
 export interface FileValidationResult {
   isValid: boolean;
   error?: string;
-  fileType?: 'PDF' | 'IMAGE' | 'AUDIO';
+  fileType?: 'PDF' | 'IMAGE' | 'AUDIO' | 'DOCUMENT';
 }
 
 /**
@@ -39,7 +46,7 @@ export interface FileValidationResult {
  */
 export function validateFile(file: File): FileValidationResult {
   // Check file type
-  let fileType: 'PDF' | 'IMAGE' | 'AUDIO' | undefined;
+  let fileType: 'PDF' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | undefined;
   
   if (SUPPORTED_FILE_TYPES.PDF.includes(file.type)) {
     fileType = 'PDF';
@@ -47,15 +54,17 @@ export function validateFile(file: File): FileValidationResult {
     fileType = 'IMAGE';
   } else if (SUPPORTED_FILE_TYPES.AUDIO.includes(file.type)) {
     fileType = 'AUDIO';
+  } else if (SUPPORTED_FILE_TYPES.DOCUMENT.includes(file.type)) {
+    fileType = 'DOCUMENT';
   } else {
     return {
       isValid: false,
-      error: `Unsupported file type: ${file.type}. Supported types: PDF, Images (JPEG, PNG, WebP, GIF), Audio (MP3, WAV, M4A, OGG, FLAC)`
+      error: `Unsupported file type: ${file.type}. Supported types: PDF, Images (JPEG, PNG, WebP, GIF), Audio (MP3, WAV, M4A, OGG, FLAC), Documents (DOCX, CSV, TXT, HTML)`
     };
   }
 
   // Check file size
-  const sizeLimit = FILE_SIZE_LIMITS[fileType];
+  const sizeLimit = fileType === 'DOCUMENT' ? FILE_SIZE_LIMITS.PDF : FILE_SIZE_LIMITS[fileType];
   if (file.size > sizeLimit) {
     const sizeMB = Math.round(sizeLimit / (1024 * 1024));
     return {
@@ -68,18 +77,48 @@ export function validateFile(file: File): FileValidationResult {
 }
 
 /**
- * Extracts text content from PDF files
+ * Estimates PDF page count (rough approximation based on file size)
+ * For more accurate count, would need to parse PDF structure
  */
-export async function extractPDFText(file: File): Promise<string> {
+export function estimatePDFPageCount(file: File): number {
+  // Rough estimate: 50KB per page for typical text PDFs
+  // This is very approximate - actual parsing would be more accurate
+  const avgPageSize = 50 * 1024; // 50KB
+  return Math.ceil(file.size / avgPageSize);
+}
+
+/**
+ * Validates PDF-specific constraints
+ */
+export function validatePDF(file: File): FileValidationResult {
+  const basicValidation = validateFile(file);
+  if (!basicValidation.isValid) return basicValidation;
+
+  // Check page count estimate
+  const estimatedPages = estimatePDFPageCount(file);
+  if (estimatedPages > PDF_LIMITS.MAX_PAGES) {
+    return {
+      isValid: false,
+      error: `PDF appears to have ~${estimatedPages} pages. Claude supports PDFs up to ${PDF_LIMITS.MAX_PAGES} pages for visual analysis. Consider splitting the document.`
+    };
+  }
+
+  return { isValid: true, fileType: 'PDF' };
+}
+
+/**
+ * Converts PDF to base64 for direct Claude API consumption
+ */
+export async function processPDFDirect(file: File): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const data = await pdfParse(buffer);
-    return data.text;
+    return buffer.toString('base64');
   } catch (error) {
-    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
+
 
 /**
  * Converts file to base64 for Claude Vision API
@@ -124,7 +163,15 @@ export async function transcribeAudio(file: File): Promise<string> {
  * Processes a single file and returns extracted content
  */
 export async function processFile(file: File): Promise<ProcessedFile> {
-  const validation = validateFile(file);
+  let validation: FileValidationResult;
+  
+  // Use PDF-specific validation for PDFs
+  if (file.type === 'application/pdf') {
+    validation = validatePDF(file);
+  } else {
+    validation = validateFile(file);
+  }
+  
   if (!validation.isValid) {
     throw new Error(validation.error);
   }
@@ -134,19 +181,21 @@ export async function processFile(file: File): Promise<ProcessedFile> {
     type: file.type,
     size: file.size,
     content: '',
-    processingMethod: 'pdf-parse', // Will be updated based on actual processing
+    processingMethod: 'claude-pdf', // Default, will be updated
   };
 
   try {
     switch (validation.fileType) {
       case 'PDF':
-        processedFile.content = await extractPDFText(file);
-        processedFile.processingMethod = 'pdf-parse';
+      case 'DOCUMENT':
+        processedFile.content = await processPDFDirect(file);
+        processedFile.processingMethod = 'claude-pdf';
+        if (file.type === 'application/pdf') {
+          processedFile.pageCount = estimatePDFPageCount(file);
+        }
         break;
       
       case 'IMAGE':
-        // For images, we'll return the base64 data and let Claude Vision handle it
-        // The actual OCR will happen in the Claude API call
         processedFile.content = await fileToBase64(file);
         processedFile.processingMethod = 'claude-vision';
         break;
@@ -197,7 +246,7 @@ export function filesToClaudeContent(processedFiles: ProcessedFile[]): Array<{ t
 
   for (const file of processedFiles) {
     if (file.processingMethod === 'claude-vision') {
-      // For images, add as image content for Claude Vision
+      // Direct image support
       content.push({
         type: "image",
         source: {
@@ -206,12 +255,18 @@ export function filesToClaudeContent(processedFiles: ProcessedFile[]): Array<{ t
           data: file.content
         }
       });
-    } else {
-      // For PDF and audio, add as text content
-      const methodLabel = file.processingMethod === 'pdf-parse' ? 'PDF' : 'Audio Transcript';
+    } else if (file.processingMethod === 'claude-pdf') {
+      // For now, use text content with base64 data until document type is confirmed
+      const pageInfo = file.pageCount ? ` (~${file.pageCount} pages)` : '';
       content.push({
         type: "text",
-        text: `${methodLabel} from ${file.name}:\n${file.content}`
+        text: `PDF Document: ${file.name}${pageInfo}\n\nBase64 Content: ${file.content.substring(0, 100)}...`
+      });
+    } else if (file.processingMethod === 'whisper-transcription') {
+      // Audio transcript
+      content.push({
+        type: "text",
+        text: `Audio Transcript from ${file.name}:\n${file.content}`
       });
     }
   }

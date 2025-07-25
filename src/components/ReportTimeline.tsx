@@ -277,17 +277,13 @@ export function ReportTimeline() {
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex items-center space-x-2 mt-3" onClick={(e) => e.preventDefault()}>
-                  <Link href={`/dashboard/reports/${report.id}`}>
-                    <Button size="sm" variant="outline" onClick={(e) => e.stopPropagation()}>
-                      Continue Working
-                    </Button>
-                  </Link>
-                  <Link href={`/dashboard/reports/${report.id}`}>
-                    <Button size="sm" variant="ghost" onClick={(e) => e.stopPropagation()}>
-                      View Details
-                    </Button>
-                  </Link>
+                <div className="flex items-center space-x-2 mt-3">
+                  <Button size="sm" variant="outline">
+                    Continue Working
+                  </Button>
+                  <Button size="sm" variant="ghost">
+                    View Details
+                  </Button>
                 </div>
                 </div>
               </div>

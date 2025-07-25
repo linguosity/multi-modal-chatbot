@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import UploadModal from './UploadModal'
 import DynamicSchemaEditor from './DynamicSchemaEditor'
-import { generateText } from '@tiptap/react'
 import { Settings, Edit3 } from 'lucide-react'
+import { FieldHighlight } from './ui/FieldHighlight'
 
 interface FieldSchema {
   key: string
@@ -30,6 +30,7 @@ interface DynamicStructuredBlockProps {
   onSchemaChange?: (newSchema: SectionSchema) => void
   onSaveAsTemplate?: (schema: SectionSchema) => void
   mode?: 'data' | 'template' // Accept mode as prop instead of managing internally
+  sectionId?: string // Add sectionId for field highlighting
 }
 
 export default function DynamicStructuredBlock({ 
@@ -38,7 +39,8 @@ export default function DynamicStructuredBlock({
   onChange,
   onSchemaChange,
   onSaveAsTemplate,
-  mode = 'data'
+  mode = 'data',
+  sectionId
 }: DynamicStructuredBlockProps) {
   const [data, setData] = useState<any>(initialData)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -136,6 +138,19 @@ export default function DynamicStructuredBlock({
     onChange(newData, generatedText)
   }
 
+  // Helper function to wrap fields with highlighting
+  const wrapWithHighlight = (fieldPath: string, content: React.ReactNode) => {
+    if (!sectionId || mode === 'template') {
+      return content // No highlighting in template mode or without sectionId
+    }
+    
+    return (
+      <FieldHighlight key={fieldPath} sectionId={sectionId} fieldPath={fieldPath} className="group">
+        {content}
+      </FieldHighlight>
+    )
+  }
+
   // Render field based on type
   const renderField = (field: FieldSchema, value: any, path: string[] = []): React.ReactNode => {
     const fieldPath = [...path, field.key].join('.')
@@ -155,7 +170,7 @@ export default function DynamicStructuredBlock({
 
     switch (field.type) {
       case 'boolean':
-        return (
+        return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-2 h-fit">
             <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
             <div className="flex">
@@ -181,10 +196,10 @@ export default function DynamicStructuredBlock({
               </button>
             </div>
           </div>
-        )
+        ))
 
       case 'checkbox':
-        return (
+        return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -194,10 +209,10 @@ export default function DynamicStructuredBlock({
             />
             <label className="text-sm text-gray-700">{field.label}</label>
           </div>
-        )
+        ))
 
       case 'date':
-        return (
+        return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-1">
             <label className="text-sm text-gray-700">{field.label}:</label>
             <input
@@ -207,10 +222,10 @@ export default function DynamicStructuredBlock({
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
-        )
+        ))
 
       case 'select':
-        return (
+        return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-1">
             <label className="text-sm text-gray-700">{field.label}:</label>
             <select
@@ -226,10 +241,10 @@ export default function DynamicStructuredBlock({
               ))}
             </select>
           </div>
-        )
+        ))
 
       case 'number':
-        return (
+        return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-1">
             <label className="text-sm text-gray-700">{field.label}:</label>
             <input
@@ -240,10 +255,10 @@ export default function DynamicStructuredBlock({
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
-        )
+        ))
 
       case 'array':
-        return (
+        return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-2 h-fit">
             <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
             <textarea
@@ -262,22 +277,24 @@ export default function DynamicStructuredBlock({
               </div>
             )}
           </div>
-        )
+        ))
 
       case 'object':
         return (
           <div key={fieldPath} className="space-y-2">
             <h4 className="text-sm font-medium text-gray-700">{field.label}</h4>
             <div className="pl-4 border-l-2 border-gray-200 space-y-2">
-              {field.children?.map(childField => 
-                renderField(childField, value?.[childField.key], [...path, field.key])
-              )}
+              {field.children?.map(childField => (
+                <React.Fragment key={childField.key}>
+                  {renderField(childField, value?.[childField.key], [...path, field.key])}
+                </React.Fragment>
+              ))}
             </div>
           </div>
         )
 
       default: // string
-        return (
+        return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-2 h-fit">
             <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
             <textarea
@@ -288,7 +305,7 @@ export default function DynamicStructuredBlock({
               rows={3}
             />
           </div>
-        )
+        ))
     }
   }
 
@@ -313,7 +330,11 @@ export default function DynamicStructuredBlock({
         <div className="p-6">
           {/* Dynamic Fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 items-start">
-            {schema.fields.map(field => renderField(field, data[field.key]))}
+            {schema.fields.map(field => (
+              <React.Fragment key={field.key}>
+                {renderField(field, data[field.key])}
+              </React.Fragment>
+            ))}
           </div>
         </div>
       )}
