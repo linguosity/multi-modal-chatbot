@@ -7,6 +7,7 @@ interface UserSettings {
   evaluatorName: string
   evaluatorCredentials: string
   schoolName: string
+  showToastNotifications: boolean;
 }
 
 interface UserSettingsContextType {
@@ -19,7 +20,8 @@ const defaultSettings: UserSettings = {
   preferredState: 'California',
   evaluatorName: '',
   evaluatorCredentials: '',
-  schoolName: ''
+  schoolName: '',
+  showToastNotifications: true,
 }
 
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined)

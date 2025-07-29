@@ -18,12 +18,13 @@ import type { z } from 'zod';
 type ReportType = z.infer<typeof ReportSchema>['type'];
 import { ReportTemplateSchema } from '@/lib/schemas/report-template'
 type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
+import { createDefaultTemplate } from '@/lib/structured-schemas'
 
 export default function NewReportPage() {
   const [type, setType] = useState<ReportType | ''>('')
   const [title, setTitle] = useState('')
   const [studentId, setStudentId] = useState('')
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>('default');
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [loading, setLoading] = useState(false)
@@ -40,9 +41,7 @@ export default function NewReportPage() {
         }
         const data = await response.json();
         setTemplates(data);
-        if (data.length > 0) {
-          setSelectedTemplateId(data[0].id); // Select the first template as default
-        }
+        // Default template is already selected ('default')
       } catch (err: unknown) {
         if (err instanceof Error) {
           setError(err.message);
@@ -68,12 +67,33 @@ export default function NewReportPage() {
     }
 
     try {
+      let requestBody;
+      
+      if (selectedTemplateId === 'default') {
+        // Use the default template structure
+        const defaultTemplate = createDefaultTemplate();
+        requestBody = { 
+          title, 
+          studentId, 
+          type, 
+          sections: defaultTemplate.sections 
+        };
+      } else {
+        // Use existing template
+        requestBody = { 
+          title, 
+          studentId, 
+          type, 
+          template_id: selectedTemplateId 
+        };
+      }
+
       const response = await fetch('/api/reports', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title, studentId, type, template_id: selectedTemplateId }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -101,6 +121,10 @@ export default function NewReportPage() {
   if (error) {
     return <div className="p-6 text-red-500">Error: {error}</div>;
   }
+
+  // Debug logging
+  console.log('Templates loaded:', templates);
+  console.log('Selected template ID:', selectedTemplateId);
 
   return (
     <div className="p-6">
@@ -145,14 +169,17 @@ export default function NewReportPage() {
         </div>
         <div>
           <Label htmlFor="template">Report Template</Label>
-          <Select onValueChange={(value: string) => setSelectedTemplateId(value)} value={selectedTemplateId}>
+          <Select onValueChange={(value: string) => setSelectedTemplateId(value)} value={selectedTemplateId} defaultValue="default">
             <SelectTrigger className="w-[240px]">
               <SelectValue placeholder="Select a template" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="default">
+                Default Template (Current Schemas)
+              </SelectItem>
               {templates.map(template => (
                 <SelectItem key={template.id} value={template.id || ''}>
-                  {template.name}
+                  {template.name} (Legacy)
                 </SelectItem>
               ))}
             </SelectContent>

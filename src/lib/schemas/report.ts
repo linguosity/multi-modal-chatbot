@@ -64,6 +64,8 @@ export const ReportSectionSchema = z.object({
   dataSource: z.string().optional(), // Reference to data that can populate this section
   icon: z.string().optional(),
   borderColor: z.string().optional(),
+  // Structured data for sections with schemas (assessment results, validity statements, etc.)
+  structured_data: z.record(z.any()).optional(),
   // Legacy support - will be migrated to content
   points: z.array(DataPointSchema).optional(),
 });

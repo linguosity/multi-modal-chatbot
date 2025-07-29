@@ -205,15 +205,15 @@ export function StudentBioCard() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-blue-900 text-base truncate">
-              {editData.firstName} {editData.lastName}
+              {report?.metadata?.studentBio?.firstName || 'Student'} {report?.metadata?.studentBio?.lastName || 'Name'}
             </div>
             <div className="text-sm text-blue-700 mt-1">
-              {editData.studentId && (
+              {report?.metadata?.studentBio?.studentId && (
                 <span className="font-mono bg-blue-100 px-2 py-0.5 rounded text-xs mr-2">
-                  ID: {editData.studentId}
+                  ID: {report.metadata.studentBio.studentId}
                 </span>
               )}
-              {editData.grade ? `Grade ${editData.grade}` : 'Grade --'} • {editData.age ? `Age ${editData.age}` : 'Age --'}
+              {report?.metadata?.studentBio?.grade ? `Grade ${report.metadata.studentBio.grade}` : 'Grade --'} • {report?.metadata?.studentBio?.age ? `Age ${report.metadata.studentBio.age}` : 'Age --'}
             </div>
           </div>
           <Edit3 className="h-3 w-3 text-blue-600 opacity-60" />
@@ -374,11 +374,11 @@ export function StudentBioCard() {
               ) : (
                 <div className="text-sm text-gray-900">
                   <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                    editData.eligibilityStatus === 'Eligible' ? 'bg-green-100 text-green-800' :
-                    editData.eligibilityStatus === 'Not Eligible' ? 'bg-red-100 text-red-800' :
+                    report?.metadata?.studentBio?.eligibilityStatus === 'Eligible' ? 'bg-green-100 text-green-800' :
+                    report?.metadata?.studentBio?.eligibilityStatus === 'Not Eligible' ? 'bg-red-100 text-red-800' :
                     'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {editData.eligibilityStatus}
+                    {report?.metadata?.studentBio?.eligibilityStatus || 'Pending'}
                   </span>
                 </div>
               )}

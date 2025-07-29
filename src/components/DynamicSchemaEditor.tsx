@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus, X, Edit2, FileText } from 'lucide-react'
+import { Plus, X, SlidersHorizontal, FileText } from 'lucide-react'
 import { generateStateEligibilitySchema } from '@/lib/structured-schemas'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
 
@@ -97,18 +97,26 @@ export default function DynamicSchemaEditor({
     if (parentPath) {
       // Add as child to specific parent
       const pathParts = parentPath.split('.')
-      let current: any = newSchema.fields
-      
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        const fieldIndex = current.findIndex((f: FieldSchema) => f.key === pathParts[i])
-        current = current[fieldIndex].children || []
+      let currentFields: FieldSchema[] | undefined = newSchema.fields
+      let parentField: FieldSchema | undefined;
+
+      for (const part of pathParts) {
+        parentField = currentFields?.find(f => f.key === part)
+        if (parentField) {
+          currentFields = parentField.children
+        } else {
+          console.error("Parent field not found");
+          return;
+        }
       }
-      
-      const parentIndex = current.findIndex((f: FieldSchema) => f.key === pathParts[pathParts.length - 1])
-      if (!current[parentIndex].children) {
-        current[parentIndex].children = []
+
+      if (parentField) {
+        if (!parentField.children) {
+          parentField.children = []
+        }
+        parentField.children.push(newField)
       }
-      current[parentIndex].children.push(newField)
+
     } else {
       // Add as sibling to root level
       newSchema.fields.push(newField)
@@ -204,15 +212,28 @@ export default function DynamicSchemaEditor({
   const removeField = (fieldPath: string) => {
     const newSchema = { ...schema }
     const pathParts = fieldPath.split('.')
+    const fieldKey = pathParts.pop()
     
-    let current: any = newSchema.fields
-    for (let i = 0; i < pathParts.length - 1; i++) {
-      const fieldIndex = current.findIndex((f: FieldSchema) => f.key === pathParts[i])
-      current = current[fieldIndex].children || []
+    let currentFields: FieldSchema[] | undefined = newSchema.fields
+    if (pathParts.length > 0) {
+      let parentField: FieldSchema | undefined;
+      for (const part of pathParts) {
+        parentField = currentFields?.find(f => f.key === part)
+        if (parentField) {
+          currentFields = parentField.children
+        } else {
+          console.error("Parent field not found");
+          return;
+        }
+      }
     }
-    
-    const fieldIndex = current.findIndex((f: FieldSchema) => f.key === pathParts[pathParts.length - 1])
-    current.splice(fieldIndex, 1)
+
+    if (currentFields && fieldKey) {
+      const fieldIndex = currentFields.findIndex(f => f.key === fieldKey)
+      if (fieldIndex > -1) {
+        currentFields.splice(fieldIndex, 1)
+      }
+    }
     
     onSchemaChange(newSchema)
   }
@@ -239,7 +260,7 @@ export default function DynamicSchemaEditor({
           </div>
           
           <div className="flex items-center gap-1">
-            {field.type === 'object' && (
+            {(field.type === 'object' || field.type === 'array') && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -255,7 +276,7 @@ export default function DynamicSchemaEditor({
               onClick={() => startEditing(fieldPath)}
               className="h-6 w-6 p-0"
             >
-              <Edit2 className="h-3 w-3" />
+              <SlidersHorizontal className="h-3 w-3" />
             </Button>
             <Button
               size="sm"
@@ -371,7 +392,7 @@ export default function DynamicSchemaEditor({
         )}
 
         {/* Child Fields */}
-        {field.type === 'object' && field.children && (
+        {(field.type === 'object' || field.type === 'array') && field.children && (
           <div className="pl-4 border-l-2 border-gray-200 space-y-2">
             {field.children.map(childField => 
               renderField(childField, [...path, field.key])

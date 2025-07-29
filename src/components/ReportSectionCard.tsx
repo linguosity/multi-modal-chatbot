@@ -1,13 +1,16 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Info } from 'lucide-react'
+import { Info, Pencil, Puzzle } from 'lucide-react'
+import { useReport } from '@/lib/context/ReportContext'
 import TiptapEditor from './TiptapEditor'
 import DynamicStructuredBlock from './DynamicStructuredBlock'
 import { ReportSection } from '@/lib/schemas/report'
 import { getSectionSchemaForType } from '@/lib/structured-schemas'
+import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
+import { cn } from '@/lib/utils'
 
 interface Props {
   section: ReportSection
@@ -24,9 +27,12 @@ export const ReportSectionCard: React.FC<Props> = ({
   reportId,
   onUpdateSectionAction
 }) => {
-  const [tab, setTab] = useState<'structured' | 'editor'>('structured')
+  const { updateSectionData } = useReport();
+  const { isRecentlyUpdated, clearRecentUpdate } = useRecentUpdates();
+  const [tab, setTab] = useState<'report' | 'template'>('report')
   const [generatedContent, setGeneratedContent] = useState<string>('')
   const [currentSchema, setCurrentSchema] = useState<any>(null)
+  const [isClicked, setIsClicked] = useState(false)
 
   // Check if structured schema is available for this section type
   const sectionSchema = getSectionSchemaForType(section.sectionType)
@@ -65,34 +71,71 @@ export const ReportSectionCard: React.FC<Props> = ({
     onUpdateSectionAction(section.id, newContent, true); // Save on blur
   }, [section.id, onUpdateSectionAction]);
 
+  // Handle section click to clear update indicator
+  const handleSectionClick = useCallback(() => {
+    console.log(`🖱️ Section clicked: ${section.id} (${section.title})`);
+    console.log(`📊 Is recently updated: ${isRecentlyUpdated(section.id)}, Is clicked: ${isClicked}`);
+    
+    if (isRecentlyUpdated(section.id) && !isClicked) {
+      console.log(`✨ Starting fade animation for section ${section.id}`);
+      setIsClicked(true);
+      // Clear the update indicator after a brief delay to show the fade animation
+      setTimeout(() => {
+        console.log(`🧹 Clearing indicator for section ${section.id} after fade`);
+        clearRecentUpdate(section.id);
+        setIsClicked(false);
+      }, 300);
+    }
+  }, [section.id, section.title, isRecentlyUpdated, clearRecentUpdate, isClicked]);
+
+  // Check if this section was recently updated
+  const isUpdated = isRecentlyUpdated(section.id);
+  const shouldShowUpdateIndicator = isUpdated && !isClicked;
+
   return (
-    <Card className="w-full mb-4">
+    <Card 
+      className={cn(
+        "w-full mb-4 transition-all duration-300 cursor-pointer",
+        shouldShowUpdateIndicator && "bg-blue-50 border-blue-200 shadow-lg shadow-blue-100/50 ring-1 ring-blue-200/30",
+        isClicked && "bg-blue-25"
+      )}
+      onClick={handleSectionClick}
+    >
       <CardHeader>
         <CardTitle className="flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <span>{section.title}</span>
+            <span className={cn(
+              "transition-colors duration-300",
+              shouldShowUpdateIndicator && "text-blue-700 font-medium"
+            )}>
+              {section.title}
+            </span>
+            {shouldShowUpdateIndicator && (
+              <div className="flex items-center gap-1 text-blue-600 text-sm animate-fade-in">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span className="text-xs font-medium">Updated</span>
+              </div>
+            )}
             {hasStructuredSchema && (
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setTab('structured')}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                    tab === 'structured' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                <Button
+                  onClick={() => setTab('report')}
+                  variant={tab === 'report' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="flex items-center gap-2"
                 >
-                  Structured
-                </button>
-                <button
-                  onClick={() => setTab('editor')}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                    tab === 'editor' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                  <Pencil className="h-4 w-4" />
+                  Report
+                </Button>
+                <Button
+                  onClick={() => setTab('template')}
+                  variant={tab === 'template' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="flex items-center gap-2"
                 >
-                  Editor
-                </button>
+                  <Puzzle className="h-4 w-4" />
+                  Template
+                </Button>
               </div>
             )}
           </div>
@@ -101,10 +144,10 @@ export const ReportSectionCard: React.FC<Props> = ({
 
       <CardContent className="p-0 h-full">
         {/* Tab Content */}
-        {hasStructuredSchema && tab === 'structured' ? (
+        {hasStructuredSchema && tab === 'report' ? (
           <DynamicStructuredBlock
             schema={currentSchema || sectionSchema!}
-            initialData={{}}
+            initialData={section.structured_data} // Pass structured_data for template mode
             onChange={(structuredData, generatedText) => {
               try {
                 setGeneratedContent(generatedText);
@@ -115,13 +158,25 @@ export const ReportSectionCard: React.FC<Props> = ({
             }}
             onSchemaChange={handleSchemaChange}
             onSaveAsTemplate={handleSaveAsTemplate}
+            mode="data"
+            updateSectionData={(sectionId, data) => updateSectionData(sectionId, data)}
+          />
+        ) : hasStructuredSchema && tab === 'template' ? (
+          <DynamicStructuredBlock
+            schema={currentSchema || sectionSchema!}
+            initialData={section.structured_data} // Pass structured_data for template mode
+            onChange={() => {}}
+            onSchemaChange={handleSchemaChange}
+            onSaveAsTemplate={handleSaveAsTemplate}
+            mode="template"
+            updateSectionData={(sectionId, data) => updateSectionData(sectionId, data)}
           />
         ) : (
           <div className="h-full">
             <TiptapEditor
               content={hasStructuredSchema ? generatedContent : section.content}
-              onChange={hasStructuredSchema ? () => {} : handleContentChange}
-              onBlur={hasStructuredSchema ? () => {} : handleContentBlur}
+              onChange={handleContentChange}
+              onBlur={handleContentBlur}
               editable={!hasStructuredSchema}
               withBorder={false}
             />

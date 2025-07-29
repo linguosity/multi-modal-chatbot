@@ -33,6 +33,25 @@
     --ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
+
+    /* Highlight system variables */
+    --hl-flash-bg: rgb(219 234 254); /* blue-100 */
+    --hl-flash-border: rgb(147 197 253); /* blue-300 */
+    --hl-fade-bg-start: rgb(239 246 255); /* blue-50 */
+    --hl-fade-bg-end: rgb(250 245 255); /* purple-50 */
+    --hl-fade-border: rgb(191 219 254); /* blue-200 */
+    --hl-duration: 200ms;
+    --hl-fade-duration: 300ms;
+
+    /* UI/UX Design Tokens */
+    --pad-card: 1rem;          /* Compressed from 1.5rem */
+    --gap-grid: 1rem;          /* Compressed from 1.5rem */
+    --clr-accent: #546FFF;     /* Single unified accent */
+    --ring-muted: 1px solid rgb(226 232 240 / 0.5);
+    --radius: 6px;
+    --text-base: 15px;         /* Consistent base text size */
+    --text-label: 13px;        /* Micro-labels */
+    --text-heading: 17px;      /* Headings */
   }
 
   .dark {
@@ -63,6 +82,17 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+
+    /* Dark mode highlight adjustments */
+    --hl-flash-bg: rgb(30 58 138); /* blue-800 with opacity */
+    --hl-flash-border: rgb(59 130 246); /* blue-500 */
+    --hl-fade-bg-start: rgb(30 41 59); /* slate-800 */
+    --hl-fade-bg-end: rgb(51 65 85); /* slate-700 */
+    --hl-fade-border: rgb(71 85 105); /* slate-600 */
+
+    /* Dark mode UI tokens */
+    --clr-accent: #6B7FFF;     /* Slightly lighter accent for dark mode */
+    --ring-muted: 1px solid rgb(71 85 105 / 0.5);
   }
 }
 
@@ -105,5 +135,75 @@
   }
   100% {
     animation-direction: reverse;
+  }
+}
+
+/* Field highlight animations */
+@keyframes flashFade {
+  0% { 
+    background-color: var(--hl-flash-bg);
+    border-color: var(--hl-flash-border);
+  }
+  20% { 
+    background-color: var(--hl-flash-bg);
+    border-color: var(--hl-flash-border);
+  }
+  100% { 
+    background: linear-gradient(to right, var(--hl-fade-bg-start), var(--hl-fade-bg-end));
+    border-color: var(--hl-fade-border);
+  }
+}
+
+.flash-fade {
+  animation: flashFade var(--hl-duration) ease-out forwards;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+/* Sparkle pulse animation with limited cycles */
+@keyframes sparkle-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+.sparkle-limited {
+  animation: sparkle-pulse 0.5s ease-in-out 3; /* Only 3 cycles */
+}
+
+/* Fade-in animation for update indicators */
+@keyframes fade-in {
+  0% { 
+    opacity: 0; 
+    transform: translateY(-2px);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+/* Respect motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .flash-fade,
+  .sparkle-limited,
+  .ai-highlight,
+  .animate-fade-in {
+    animation: none;
+  }
+  
+  .flash-fade {
+    background: var(--hl-fade-bg-start);
+    border-color: var(--hl-fade-border);
+    transition: none;
+  }
+  
+  .animate-fade-in {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

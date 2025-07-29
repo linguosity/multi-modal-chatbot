@@ -37,13 +37,6 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center space-x-3">
-          <Link href="/dashboard/reports">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Report
-            </Button>
-          </Link>
-          <SignOutButton />
         </div>
       </div>
 

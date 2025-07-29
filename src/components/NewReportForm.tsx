@@ -17,6 +17,8 @@ import type { z } from 'zod';
 type ReportType = z.infer<typeof ReportSchema>['type'];
 import { ReportTemplateSchema } from '@/lib/schemas/report-template'
 type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
+import { useSaveFeedback } from '@/lib/context/FeedbackContext'
+import { createDefaultTemplate } from '@/lib/structured-schemas'
 
 interface NewReportFormProps {
   onReportCreated: (reportId: string) => void;
@@ -27,12 +29,13 @@ export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, o
   const [type, setType] = useState<ReportType | ''>('')
   const [title, setTitle] = useState('')
   const [studentId, setStudentId] = useState('')
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>('default');
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showJson, setShowJson] = useState(false) // Keep for debugging if needed
+  const notifySave = useSaveFeedback()
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -43,9 +46,7 @@ export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, o
         }
         const data = await response.json();
         setTemplates(data);
-        if (data.length > 0) {
-          setSelectedTemplateId(data[0].id); // Select the first template as default
-        }
+        // Default template is already selected ('default')
       } catch (err: unknown) {
         if (err instanceof Error) {
           setError(err.message);
@@ -71,12 +72,33 @@ export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, o
     }
 
     try {
+      let requestBody;
+      
+      if (selectedTemplateId === 'default') {
+        // Use the default template structure
+        const defaultTemplate = createDefaultTemplate();
+        requestBody = { 
+          title, 
+          studentId, 
+          type, 
+          sections: defaultTemplate.sections 
+        };
+      } else {
+        // Use existing template
+        requestBody = { 
+          title, 
+          studentId, 
+          type, 
+          template_id: selectedTemplateId 
+        };
+      }
+
       const response = await fetch('/api/reports', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title, studentId, type, template_id: selectedTemplateId }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -85,6 +107,10 @@ export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, o
       }
 
       const newReport = await response.json()
+      
+      // Show success feedback
+      notifySave('Report', title)
+      
       onReportCreated(newReport.id); // Call the callback with the new report ID
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -104,6 +130,10 @@ export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, o
   if (error) {
     return <div className="p-4 text-red-500">Error: {error}</div>;
   }
+
+  // Debug logging
+  console.log('Templates loaded:', templates);
+  console.log('Selected template ID:', selectedTemplateId);
 
   return (
     <div className="p-4 space-y-4">
@@ -148,14 +178,17 @@ export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, o
         </div>
         <div>
           <Label htmlFor="template">Report Template</Label>
-          <Select onValueChange={(value: string) => setSelectedTemplateId(value)} value={selectedTemplateId}>
+          <Select onValueChange={(value: string) => setSelectedTemplateId(value)} value={selectedTemplateId} defaultValue="default">
             <SelectTrigger className="w-[240px]">
               <SelectValue placeholder="Select a template" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="default">
+                Default Template (Current Schemas)
+              </SelectItem>
               {templates.map(template => (
                 <SelectItem key={template.id} value={template.id || ''}>
-                  {template.name}
+                  {template.name} (Legacy)
                 </SelectItem>
               ))}
             </SelectContent>

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { ToastActionElement, ToastProps } from "@radix-ui/react-toast";
+import { useUserSettings } from "@/lib/context/UserSettingsContext";
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -107,6 +108,7 @@ const createToast = ({ ...props }: Toast) => {
 
 const useToast = () => {
   const [state, localDispatch] = React.useReducer(reducer, { toasts: [] });
+  const { settings } = useUserSettings();
 
   React.useEffect(() => {
     listeners.push(localDispatch);
@@ -120,7 +122,12 @@ const useToast = () => {
 
   return {
     ...state,
-    toast: createToast,
+    toast: (props: Toast) => {
+      if (settings.showToastNotifications) {
+        return createToast(props);
+      }
+      return { id: "", dismiss: () => {} }; // Return a no-op toast if disabled
+    },
     dismiss: (toastId?: string) => dispatch({ type: actionTypes.DISMISS_TOAST, toastId }),
   };
 };

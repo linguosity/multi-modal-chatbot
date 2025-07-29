@@ -3,6 +3,9 @@ import "./globals.css"
 import { createServerSupabase } from '@/lib/supabase/server';
 import React from 'react';
 import { UserSettingsProvider } from '@/lib/context/UserSettingsContext';
+import { RecentUpdatesProvider } from '@/lib/context/RecentUpdatesContext';
+import { ToastProvider } from '@/lib/context/ToastContext';
+import { FeedbackProvider } from '@/lib/context/FeedbackContext';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -24,7 +27,13 @@ export default async function RootLayout({
         
         <React.StrictMode>
           <UserSettingsProvider>
-            <main className="flex-1">{children}</main>
+            <RecentUpdatesProvider>
+              <ToastProvider>
+                <FeedbackProvider>
+                  <main className="flex-1">{children}</main>
+                </FeedbackProvider>
+              </ToastProvider>
+            </RecentUpdatesProvider>
           </UserSettingsProvider>
         </React.StrictMode>
       </body>

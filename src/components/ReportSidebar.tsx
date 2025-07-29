@@ -6,6 +6,8 @@ import { useReport } from '@/lib/context/ReportContext'
 import { ChevronDown, ChevronRight, Plus, FileText } from 'lucide-react'
 import { StudentBioCard } from './StudentBioCard'
 import { SectionToggle, ProgressIndicator } from './ui/ProgressIndicator'
+import { BadgeWrapper } from './ui/update-badge'
+import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 import { useState } from 'react'
 import { useSectionDnd, SectionId } from '@/lib/hooks/useSectionDnd'
 import { SectionTocItem, Section as TocSection } from './SectionTocItem'
@@ -24,7 +26,7 @@ const DEFAULT_GROUPS: SectionGroup[] = [
   },
   {
     title: "Assessment Findings", 
-    sectionTypes: ["assessment_tools", "assessment_results", "language_sample", "validity_statement"]
+    sectionTypes: ["assessment_results", "language_sample", "validity_statement"]
   },
   {
     title: "Summary, Eligibility & Recommendations",
@@ -52,6 +54,7 @@ function GroupSectionList({
 }) {
   const sectionIds = sections.map(s => s.id)
   const { sensors, handleDragEnd, strategy, collisionDetection } = useSectionDnd(sectionIds, onReorder)
+  const { isRecentlyUpdated, getFieldChanges, getRecentUpdate } = useRecentUpdates()
 
   // Convert ReportSection to TocSection format
   const createTocSection = (section: ReportSection): TocSection => {
@@ -78,12 +81,22 @@ function GroupSectionList({
               const isActive = currentSectionId === section.id
               const tocSection = createTocSection(section)
 
+              const isUpdated = isRecentlyUpdated(section.id)
+              const updateCount = getFieldChanges(section.id).length
+              const updatedFields = getFieldChanges(section.id)
+              
+              // Check if this section has AI-generated narrative
+              const recentUpdate = getRecentUpdate ? getRecentUpdate(section.id) : undefined
+              const hasAINarrative = recentUpdate?.type === 'ai_narrative_generated'
+
               return (
                 <div 
                   key={section.id} 
-                  className={`group flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors relative ${
+                  className={`group flex items-center gap-2 px-3 py-1.5 rounded-md transition-all duration-300 relative ${
                     isActive 
                       ? 'bg-brand-rust/10 text-brand-black font-medium' 
+                      : isUpdated
+                      ? 'bg-blue-50 border border-blue-200 text-blue-800 hover:bg-blue-100'
                       : 'hover:bg-brand-beige/20 text-gray-700'
                   }`}
                 >
@@ -94,14 +107,38 @@ function GroupSectionList({
                   
                   <div 
                     className="flex items-center gap-2 flex-1 cursor-pointer"
-                    onClick={() => onNavigate(section.id)}
+                    onClick={() => {
+                      onNavigate(section.id);
+                      // The visual indicator will be cleared when the user clicks on the section card
+                    }}
                   >
                     <div className="flex-shrink-0 ml-1">
                       {getSectionIcon(status)}
                     </div>
-                    <span className="truncate flex-1 text-sm">
-                      {section.title}
-                    </span>
+                    <BadgeWrapper
+                      badge={isUpdated ? {
+                        count: updateCount,
+                        type: hasAINarrative ? 'ai_narrative' : (status === 'complete' ? 'completed' : 'updated'),
+                        ariaLabel: hasAINarrative 
+                          ? `${section.title} (AI narrative generated)` 
+                          : `${section.title} (${updateCount} recent updates)`,
+                        updatedFields: updatedFields
+                      } : undefined}
+                    >
+                      <span 
+                        className={`truncate flex-1 text-sm transition-colors duration-300 ${
+                          isUpdated ? 'font-medium' : ''
+                        }`}
+                        aria-label={isUpdated ? `${section.title} (updated)` : section.title}
+                      >
+                        {section.title}
+                      </span>
+                      {isUpdated && (
+                        <div className="flex items-center gap-1 ml-2">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                        </div>
+                      )}
+                    </BadgeWrapper>
                   </div>
                   
                   <SectionToggle
@@ -126,6 +163,7 @@ export function ReportSidebar() {
   const pathname = usePathname()
   const { id: reportId } = useParams<{ id: string }>()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const { isRecentlyUpdated, getFieldChanges } = useRecentUpdates()
   
   // If report is null, show a loading state
   if (!report) {
@@ -164,7 +202,8 @@ export function ReportSidebar() {
   const getGroupStats = (groupSections: ReportSection[]) => {
     const completed = groupSections.filter(s => s.isCompleted).length
     const total = groupSections.length
-    return { completed, total }
+    const updatedCount = groupSections.filter(s => isRecentlyUpdated(s.id)).length
+    return { completed, total, updatedCount }
   }
 
   const toggleGroup = (groupTitle: string) => {
@@ -224,6 +263,7 @@ export function ReportSidebar() {
             if (groupSections.length === 0) return null
 
             const isCollapsed = collapsedGroups.has(group.title)
+            const groupStats = getGroupStats(groupSections)
 
             return (
               <div key={group.title} className="mb-2">
@@ -238,11 +278,21 @@ export function ReportSidebar() {
                     ) : (
                       <ChevronDown className="h-4 w-4" />
                     )}
-                    {group.title}
+                    <BadgeWrapper
+                      badge={groupStats.updatedCount > 0 ? {
+                        count: groupStats.updatedCount,
+                        type: 'updated',
+                        ariaLabel: `${group.title} (${groupStats.updatedCount} sections updated)`
+                      } : undefined}
+                    >
+                      <span aria-label={groupStats.updatedCount > 0 ? `${group.title} (updated)` : group.title}>
+                        {group.title}
+                      </span>
+                    </BadgeWrapper>
                   </div>
                   <ProgressIndicator
-                    completed={getGroupStats(groupSections).completed}
-                    total={getGroupStats(groupSections).total}
+                    completed={groupStats.completed}
+                    total={groupStats.total}
                     size="sm"
                     showText={false}
                   />

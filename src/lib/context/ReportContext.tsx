@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { createBrowserSupabase } from '@/lib/supabase/browser';
 import { useRouter, useParams } from 'next/navigation';
 import { Report } from '@/lib/schemas/report';
-import { createToast } from '@/lib/hooks/use-toast';
+import { useToast } from '@/lib/context/ToastContext';
 
 interface ReportContextType {
   report: Report | null;
@@ -12,6 +12,8 @@ interface ReportContextType {
   setShowJson: React.Dispatch<React.SetStateAction<boolean>>;
   loading: boolean;
   setReport: React.Dispatch<React.SetStateAction<Report | null>>; // Add setReport to context
+  updateSectionData: (sectionId: string, data: any) => void;
+  refreshReport: () => Promise<void>; // Add refresh function
 }
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
@@ -34,6 +36,15 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const reportId = params.id;
+  
+  // Use toast with error handling
+  let showToast: ((toast: any) => void) | null = null;
+  try {
+    const toastContext = useToast();
+    showToast = toastContext.showToast;
+  } catch (error) {
+    console.warn('Toast context not available:', error);
+  }
 
   const [report, setReport] = useState<Report | null>(initialReport || null);
   const [loading, setLoading] = useState(initialReport ? false : true);
@@ -108,22 +119,24 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
         error = retryError;
         
         // Show a toast about the missing metadata column
-        if (!retryError) {
-          createToast({
+        if (!retryError && showToast) {
+          showToast({
+            type: 'warning',
             title: "Partial Save",
-            description: "Report saved, but student bio data requires database update. Please contact admin.",
-            variant: "default"
+            description: "Report saved, but student bio data requires database update. Please contact admin."
           });
         }
       }
       
       if (error) {
         console.error('Error saving report:', error);
-        createToast({
-          title: "Save Failed",
-          description: "There was an error saving your changes.",
-          variant: "destructive"
-        });
+        if (showToast) {
+          showToast({
+            type: 'error',
+            title: "Save Failed",
+            description: "There was an error saving your changes."
+          });
+        }
       } else {
         // Subtle success indication - no toast for auto-saves
         console.log('✅ Report auto-saved successfully');
@@ -146,17 +159,54 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
     if (error) {
       console.error('Error deleting report:', error);
     } else {
-      createToast({
-        title: "Report Deleted!",
-        description: "The report has been successfully deleted.",
-      });
+      if (showToast) {
+        showToast({
+          type: 'success',
+          title: "Report Deleted!",
+          description: "The report has been successfully deleted.",
+        });
+      }
       router.push('/dashboard/reports');
     }
     setLoading(false);
   };
 
+  const updateSectionData = (sectionId: string, data: any) => {
+    if (!report) return;
+
+    const newSections = report.sections.map(section => 
+      section.id === sectionId ? { ...section, structured_data: data } : section
+    );
+
+    const newReport = { ...report, sections: newSections };
+
+    setReport(newReport);
+    handleSave(newReport);
+  };
+
+  const refreshReport = async () => {
+    if (!reportId || reportId === 'seed-report-demo') return;
+
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*')
+        .eq('id', reportId)
+        .single();
+
+      if (error) {
+        console.error('Error refreshing report:', error);
+      } else {
+        console.log('✅ Report refreshed from database');
+        setReport(data);
+      }
+    } catch (e) {
+      console.error('Exception refreshing report:', e);
+    }
+  };
+
   return (
-    <ReportContext.Provider value={{ report, handleSave, handleDelete, showJson, setShowJson, loading, setReport }}>
+    <ReportContext.Provider value={{ report, handleSave, handleDelete, showJson, setShowJson, loading, setReport, updateSectionData, refreshReport }}>
       {children}
     </ReportContext.Provider>
   );

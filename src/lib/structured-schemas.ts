@@ -169,31 +169,126 @@ export const ASSESSMENT_RESULTS_SECTION: SectionSchema = {
   title: 'Assessment Results',
   fields: [
     {
-      key: 'standardized_tests',
-      label: 'Standardized Tests',
-      type: 'array'
-    },
-    {
-      key: 'articulation',
-      label: 'Articulation/Phonology',
-      type: 'object',
+      key: 'assessment_items',
+      label: 'Assessment Items',
+      type: 'array',
       children: [
-        { key: 'error_patterns', label: 'Error patterns', type: 'string', placeholder: 'Describe error patterns...' },
-        { key: 'stimulability', label: 'Stimulability', type: 'string', placeholder: 'Stimulability results...' },
-        { key: 'intelligibility', label: 'Intelligibility', type: 'string', placeholder: 'Intelligibility assessment...' }
+        {
+          key: 'type',
+          label: 'Type',
+          type: 'select',
+          options: ['Standardized Test', 'Informal Assessment', 'Observation', 'Interview'],
+          required: true
+        },
+        {
+          key: 'title',
+          label: 'Title',
+          type: 'string',
+          placeholder: 'e.g., PLS-5, Classroom Observation, Parent Interview...',
+          required: true
+        },
+        {
+          key: 'completed',
+          label: 'Completed',
+          type: 'boolean',
+        },
+        {
+          key: 'author',
+          label: 'Author(s)',
+          type: 'string',
+          placeholder: 'Test author(s)...',
+        },
+        {
+          key: 'year_published',
+          label: 'Year Published',
+          type: 'number',
+          placeholder: 'Publication year...',
+        },
+        {
+          key: 'target_population',
+          label: 'Target Population',
+          type: 'string',
+          placeholder: 'Age range and population...',
+        },
+        {
+          key: 'domains_assessed',
+          label: 'Domains Assessed',
+          type: 'array',
+          options: ['Articulation', 'Receptive Language', 'Expressive Language', 'Pragmatic Language', 'Voice', 'Fluency'],
+        },
+        {
+          key: 'standard_score',
+          label: 'Standard Score',
+          type: 'number',
+          placeholder: 'Enter standard score...',
+        },
+        {
+          key: 'percentile',
+          label: 'Percentile Rank',
+          type: 'number',
+          placeholder: 'Enter percentile rank...',
+        },
+        {
+          key: 'confidence_interval',
+          label: 'Confidence Interval',
+          type: 'number',
+          placeholder: 'e.g., 90% CI: 85-95',
+        },
+        {
+          key: 'qualitative_description',
+          label: 'Qualitative Description',
+          type: 'string',
+          placeholder: 'e.g., Below Average, Average, Above Average...',
+        },
+        {
+          key: 'examples_of_items',
+          label: 'Examples of Items',
+          type: 'string',
+          placeholder: 'Describe specific test items or observations...',
+        },
+        {
+          key: 'notes',
+          label: 'Notes',
+          type: 'string',
+          placeholder: 'Any additional notes or observations...',
+        },
       ]
     },
     {
-      key: 'language',
-      label: 'Language Skills',
-      type: 'object',
-      children: [
-        { key: 'receptive', label: 'Receptive language', type: 'string', placeholder: 'Receptive language skills...' },
-        { key: 'expressive', label: 'Expressive language', type: 'string', placeholder: 'Expressive language skills...' },
-        { key: 'semantics', label: 'Semantics', type: 'string', placeholder: 'Semantic skills...' },
-        { key: 'syntax', label: 'Syntax', type: 'string', placeholder: 'Syntactic skills...' },
-        { key: 'pragmatics', label: 'Pragmatics', type: 'string', placeholder: 'Pragmatic skills...' }
-      ]
+      key: 'articulation_notes',
+      label: 'Articulation Notes',
+      type: 'string',
+      placeholder: 'Summarize articulation findings...'
+    },
+    {
+      key: 'receptive_language_notes',
+      label: 'Receptive Language Notes',
+      type: 'string',
+      placeholder: 'Summarize receptive language findings...'
+    },
+    {
+      key: 'expressive_language_notes',
+      label: 'Expressive Language Notes',
+      type: 'string',
+      placeholder: 'Summarize expressive language findings...'
+    },
+    {
+      key: 'pragmatic_language_notes',
+      label: 'Pragmatic Language Notes',
+      type: 'string',
+      placeholder: 'Summarize pragmatic language findings...'
+    },
+    {
+      key: 'voice_notes',
+      label: 'Voice Notes',
+      type: 'string',
+      placeholder: 'Summarize voice findings...'
+    },
+    {
+      key: 'fluency_notes',
+      label: 'Fluency Notes',
+      type: 'string',
+      placeholder: 'Summarize fluency findings...'
     }
   ]
 };
@@ -389,28 +484,7 @@ export const FAMILY_BACKGROUND_SECTION: SectionSchema = {
 };
 
 // Assessment Tools Section
-export const ASSESSMENT_TOOLS_SECTION: SectionSchema = {
-  key: 'assessment_tools',
-  title: 'Assessment Tools',
-  prose_template: `Standardized assessments: {standardized_tests}. Informal assessments: {informal_assessments}. Observation contexts: {observation_contexts}`,
-  fields: [
-    {
-      key: 'standardized_tests',
-      label: 'Standardized Assessments',
-      type: 'array'
-    },
-    {
-      key: 'informal_assessments',
-      label: 'Informal Assessments',
-      type: 'array'
-    },
-    {
-      key: 'observation_contexts',
-      label: 'Observation Contexts',
-      type: 'array'
-    }
-  ]
-};
+
 
 // Eligibility Checklist Section
 export const ELIGIBILITY_CHECKLIST_SECTION: SectionSchema = {
@@ -648,7 +722,30 @@ export const ASSESSMENT_RESULTS_SCHEMA: StructuredSchema = {
         { key: 'expressive_language', label: 'Expressive language', type: 'string' },
         { key: 'semantics', label: 'Semantics', type: 'string' },
         { key: 'syntax', label: 'Syntax', type: 'string' },
-        { key: 'pragmatics', label: 'Pragmatics', type: 'string' }
+        { key: 'pragmatic_language', label: 'Pragmatic language', type: 'string', placeholder: 'Pragmatic skills...' }
+      ]
+    },
+    {
+      key: 'voice',
+      label: 'Voice Skills',
+      type: 'object',
+      children: [
+        { key: 'vocal_quality', label: 'Vocal Quality', type: 'string', placeholder: 'Describe vocal quality (e.g., hoarse, breathy, clear)...', },
+        { key: 'pitch', label: 'Pitch', type: 'string', placeholder: 'Describe pitch (e.g., appropriate, too high, too low)...', },
+        { key: 'loudness', label: 'Loudness', type: 'string', placeholder: 'Describe loudness (e.g., appropriate, too loud, too soft)...', },
+        { key: 'resonance', label: 'Resonance', type: 'string', placeholder: 'Describe resonance (e.g., hypernasal, hyponasal, oral)...', },
+      ]
+    },
+    {
+      key: 'fluency',
+      label: 'Fluency Skills',
+      type: 'object',
+      children: [
+        { key: 'stuttering_type', label: 'Type of Disfluency', type: 'string', placeholder: 'e.g., repetitions, prolongations, blocks...', },
+        { key: 'frequency', label: 'Frequency', type: 'string', placeholder: 'Describe frequency of disfluencies...', },
+        { key: 'duration', label: 'Duration', type: 'string', placeholder: 'Describe duration of disfluencies...', },
+        { key: 'secondary_behaviors', label: 'Secondary Behaviors', type: 'string', placeholder: 'e.g., eye blinks, head nods, tension...', },
+        { key: 'rate_of_speech', label: 'Rate of Speech', type: 'string', placeholder: 'e.g., appropriate, too fast, too slow...', },
       ]
     }
   ]
@@ -797,6 +894,172 @@ export function getAvailableStates(): string[] {
   return Object.keys(stateEligibilities).sort()
 }
 
+// Create a default template structure using current structured schemas
+export function createDefaultTemplate(): { name: string; sections: any[] } {
+  console.log('🏗️ Creating default template with current schemas...');
+  return {
+    name: "Default Template",
+    sections: [
+      {
+        id: crypto.randomUUID(),
+        title: "Student Information",
+        sectionType: "heading",
+        content: "",
+        order: 1,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate professional student information section for speech-language evaluation report.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Reason for Referral",
+        sectionType: "reason_for_referral",
+        content: "",
+        order: 2,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate reason for referral section based on provided information.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Health & Developmental History",
+        sectionType: "health_developmental_history",
+        content: "",
+        order: 3,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate health and developmental history section.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Family Background",
+        sectionType: "family_background",
+        content: "",
+        order: 4,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate family background section including language and cultural factors.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Parent Concern",
+        sectionType: "parent_concern",
+        content: "",
+        order: 5,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate parent/guardian concerns section.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Assessment Tools",
+        sectionType: "assessment_tools",
+        content: "",
+        order: 6,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "List and describe assessment tools used in evaluation.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Assessment Results",
+        sectionType: "assessment_results",
+        content: "",
+        order: 7,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate comprehensive assessment results with scores and clinical interpretation.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Validity Statement",
+        sectionType: "validity_statement",
+        content: "",
+        order: 8,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate validity statement addressing test conditions and reliability.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Eligibility Checklist",
+        sectionType: "eligibility_checklist",
+        content: "",
+        order: 9,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate eligibility determination based on assessment results.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Conclusion",
+        sectionType: "conclusion",
+        content: "",
+        order: 10,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate conclusion with diagnosis, severity, and prognosis.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Recommendations",
+        sectionType: "recommendations",
+        content: "",
+        order: 11,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate specific recommendations for services and interventions.",
+        lastUpdated: new Date().toISOString()
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Accommodations",
+        sectionType: "accommodations",
+        content: "",
+        order: 12,
+        isRequired: true,
+        isGenerated: false,
+        isCompleted: false,
+        structured_data: {},
+        generationPrompt: "Generate accommodations and modifications recommendations.",
+        lastUpdated: new Date().toISOString()
+      }
+    ]
+  };
+}
+
 // Get new section schema for section type
 export function getSectionSchemaForType(sectionType: string, userState?: string): SectionSchema | null {
   switch (sectionType) {
@@ -817,8 +1080,7 @@ export function getSectionSchemaForType(sectionType: string, userState?: string)
       return HEALTH_DEVELOPMENTAL_HISTORY_SECTION;
     case 'family_background':
       return FAMILY_BACKGROUND_SECTION;
-    case 'assessment_tools':
-      return ASSESSMENT_TOOLS_SECTION;
+
     case 'eligibility_checklist':
       return userState ? generateStateEligibilitySchema(userState) : ELIGIBILITY_CHECKLIST_SECTION;
     case 'conclusion':

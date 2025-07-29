@@ -2,16 +2,20 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 
+type Importance = 'info' | 'notice' | 'critical'
+
 interface RecentUpdate {
   sectionId: string
   timestamp: number
   changes: string[] // Array of field paths that were updated
-  type: 'ai_update' | 'user_edit'
+  type: 'ai_update' | 'user_edit' | 'ai_narrative_generated'
+  importance?: Importance
+  beforeState?: any // For undo functionality
 }
 
 interface RecentUpdatesContextType {
   recentUpdates: RecentUpdate[]
-  addRecentUpdate: (sectionId: string, changes: string[], type?: 'ai_update' | 'user_edit') => void
+  addRecentUpdate: (sectionId: string, changes: string[], type?: 'ai_update' | 'user_edit' | 'ai_narrative_generated', importance?: Importance, beforeState?: any) => void
   clearRecentUpdate: (sectionId: string) => void
   clearFieldUpdate: (sectionId: string, fieldPath: string) => void
   isRecentlyUpdated: (sectionId: string) => boolean
@@ -50,7 +54,9 @@ export function RecentUpdatesProvider({ children }: { children: React.ReactNode 
     }
   }, [recentUpdates])
 
-  const addRecentUpdate = useCallback((sectionId: string, changes: string[], type: 'ai_update' | 'user_edit' = 'ai_update') => {
+
+
+  const addRecentUpdate = useCallback((sectionId: string, changes: string[], type: 'ai_update' | 'user_edit' = 'ai_update', importance: Importance = 'notice', beforeState?: any) => {
     console.log(`📍 Adding recent update for section ${sectionId}:`, changes)
     
     setRecentUpdates(prev => {
@@ -62,7 +68,9 @@ export function RecentUpdatesProvider({ children }: { children: React.ReactNode 
         sectionId,
         timestamp: Date.now(),
         changes,
-        type
+        type,
+        importance,
+        beforeState
       }
       
       const updated = [...filtered, newUpdate]
@@ -73,24 +81,61 @@ export function RecentUpdatesProvider({ children }: { children: React.ReactNode 
 
   const clearRecentUpdate = useCallback((sectionId: string) => {
     console.log(`🧹 Clearing recent update for section ${sectionId}`)
-    setRecentUpdates(prev => prev.filter(update => update.sectionId !== sectionId))
-  }, [])
+    console.log(`📊 Before clear - Total updates: ${recentUpdates.length}`)
+    setRecentUpdates(prev => {
+      const filtered = prev.filter(update => update.sectionId !== sectionId)
+      console.log(`📊 After clear - Remaining updates: ${filtered.length}`)
+      return filtered
+    })
+  }, [recentUpdates])
 
   const isRecentlyUpdated = useCallback((sectionId: string) => {
     const update = recentUpdates.find(update => update.sectionId === sectionId)
     if (!update) return false
     
-    // Consider updates "recent" for 30 seconds
-    const isRecent = Date.now() - update.timestamp < 30000
+    // Different expiry times based on importance
+    const expiryTime = {
+      'info': 5000,      // 5 seconds for low-priority (auto-saves, typos)
+      'notice': 30000,   // 30 seconds for normal updates
+      'critical': 120000 // 2 minutes for critical updates (AI overwrites)
+    }[update.importance || 'notice']
     
-    // Auto-clear old updates
-    if (!isRecent) {
+    const isRecent = Date.now() - update.timestamp < expiryTime
+    
+    // Don't auto-clear during render - let components handle expiry
+    return isRecent
+  }, [recentUpdates])
+
+  // Separate function to clean up expired updates (called from useEffect)
+  const cleanupExpiredUpdates = useCallback(() => {
+    const now = Date.now()
+    const expiredSections: string[] = []
+    
+    recentUpdates.forEach(update => {
+      const expiryTime = {
+        'info': 5000,
+        'notice': 30000,
+        'critical': 120000
+      }[update.importance || 'notice']
+      
+      if (now - update.timestamp >= expiryTime) {
+        expiredSections.push(update.sectionId)
+      }
+    })
+    
+    expiredSections.forEach(sectionId => {
       clearRecentUpdate(sectionId)
-      return false
-    }
-    
-    return true
+    })
   }, [recentUpdates, clearRecentUpdate])
+
+  // Periodically clean up expired updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      cleanupExpiredUpdates()
+    }, 5000) // Check every 5 seconds
+
+    return () => clearInterval(interval)
+  }, [cleanupExpiredUpdates])
 
   const getRecentUpdate = useCallback((sectionId: string) => {
     return recentUpdates.find(update => update.sectionId === sectionId)

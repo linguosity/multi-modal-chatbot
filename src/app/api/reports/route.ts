@@ -37,72 +37,82 @@ export async function POST(request: Request) {
   }
 
   const json = await request.json()
-  const { title, studentId, type, template_id } = json
-  console.log({ title, studentId, type, template_id }, 'POST /api/reports received body.');
+  const { title, studentId, type, template_id, sections: providedSections } = json
+  console.log({ title, studentId, type, template_id, hasProvidedSections: !!providedSections }, 'POST /api/reports received body.');
 
   // Basic validation
-  if (!title || !studentId || !type || !template_id) {
-    console.warn('Missing required fields for report creation.', { title, studentId, type, template_id });
+  if (!title || !studentId || !type || (!template_id && !providedSections)) {
+    console.warn('Missing required fields for report creation.', { title, studentId, type, template_id, hasProvidedSections: !!providedSections });
     return new NextResponse(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
   }
 
-  // Fetch the template to get the structure
-  const { data: templateData, error: templateError } = await supabase
-    .from('report_templates')
-    .select('template_structure, name')
-    .eq('id', template_id)
-    .single();
-
   let sections;
-  if (templateError || !templateData) {
-    console.error({ templateError }, `Template with id ${template_id} not found.`);
-    // Fallback to default sections if template not found
-    sections = Object.values(DEFAULT_SECTIONS);
-  } else {
-    console.log('✅ Found template:', templateData.name);
-    console.log('📋 Template structure:', templateData.template_structure);
-    
-    // Convert template structure (groups) to flat sections array
-    sections = [];
-    if (templateData.template_structure && Array.isArray(templateData.template_structure)) {
-      // Fetch section types to get the full section data
-      const { data: sectionTypes } = await supabase
-        .from('report_section_types')
-        .select('*');
+  
+  if (providedSections) {
+    // Use provided sections (from default template)
+    console.log('✅ Using provided sections from default template');
+    sections = providedSections;
+  } else if (template_id) {
+    // Fetch the template to get the structure
+    const { data: templateData, error: templateError } = await supabase
+      .from('report_templates')
+      .select('template_structure, name')
+      .eq('id', template_id)
+      .single();
+
+    if (templateError || !templateData) {
+      console.error({ templateError }, `Template with id ${template_id} not found.`);
+      // Fallback to default sections if template not found
+      sections = Object.values(DEFAULT_SECTIONS);
+    } else {
+      console.log('✅ Found template:', templateData.name);
+      console.log('📋 Template structure:', templateData.template_structure);
       
-      const sectionTypeMap = {};
-      if (sectionTypes) {
-        sectionTypes.forEach(st => {
-          sectionTypeMap[st.id] = st;
+      // Convert template structure (groups) to flat sections array
+      sections = [];
+      if (templateData.template_structure && Array.isArray(templateData.template_structure)) {
+        // Fetch section types to get the full section data
+        const { data: sectionTypes } = await supabase
+          .from('report_section_types')
+          .select('*');
+        
+        const sectionTypeMap = {};
+        if (sectionTypes) {
+          sectionTypes.forEach(st => {
+            sectionTypeMap[st.id] = st;
+          });
+        }
+        
+        // Convert groups to flat sections array
+        templateData.template_structure.forEach((group, groupIndex) => {
+          if (group.sectionTypeIds && Array.isArray(group.sectionTypeIds)) {
+            group.sectionTypeIds.forEach((sectionTypeId, sectionIndex) => {
+              const sectionType = sectionTypeMap[sectionTypeId];
+              if (sectionType) {
+                sections.push({
+                  id: sectionTypeId,
+                  sectionType: sectionType.name,
+                  title: sectionType.default_title,
+                  content: '', // Empty content for new reports
+                  order: (groupIndex * 100) + sectionIndex, // Maintain order
+                  isRequired: true,
+                  isGenerated: false
+                });
+              }
+            });
+          }
         });
       }
       
-      // Convert groups to flat sections array
-      templateData.template_structure.forEach((group, groupIndex) => {
-        if (group.sectionTypeIds && Array.isArray(group.sectionTypeIds)) {
-          group.sectionTypeIds.forEach((sectionTypeId, sectionIndex) => {
-            const sectionType = sectionTypeMap[sectionTypeId];
-            if (sectionType) {
-              sections.push({
-                id: sectionTypeId,
-                sectionType: sectionType.name,
-                title: sectionType.default_title,
-                content: '', // Empty content for new reports
-                order: (groupIndex * 100) + sectionIndex, // Maintain order
-                isRequired: true,
-                isGenerated: false
-              });
-            }
-          });
-        }
-      });
+      // Fallback to default if conversion failed
+      if (sections.length === 0) {
+        console.warn('⚠️ Template structure conversion failed, using default sections');
+        sections = Object.values(DEFAULT_SECTIONS);
+      }
     }
-    
-    // Fallback to default if conversion failed
-    if (sections.length === 0) {
-      console.warn('⚠️ Template structure conversion failed, using default sections');
-      sections = Object.values(DEFAULT_SECTIONS);
-    }
+  } else {
+    // Fallback to default sections
+    sections = Object.values(DEFAULT_SECTIONS);
   }
 
   const newReportData = {
@@ -110,7 +120,7 @@ export async function POST(request: Request) {
     studentId: studentId,
     title,
     type,
-    templateId: template_id,
+    templateId: template_id || 'default',
     status: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -134,7 +144,7 @@ export async function POST(request: Request) {
     .insert({
       id: validation.data.id,
       user_id: user.id,
-      template_id: validation.data.templateId,
+      template_id: validation.data.templateId === 'default' ? null : validation.data.templateId,
       title: validation.data.title,
       type: validation.data.type,
       status: validation.data.status,

@@ -42,26 +42,90 @@ async function handleMultiModalAssessment(
   while (iteration < maxIterations) {
     iteration++;
     
-    const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022", // Latest Claude 3.5 Sonnet
-      max_tokens: 8192, // Increased for longer content
-      system: systemMessage,
-      tools: tools,
-      messages: conversationMessages
-    });
-
-    const toolUse = response.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
-    );
-
-    if (!toolUse) break; // No more tools to use
-
-    // Process the tool call
+    console.log(`🔄 Iteration ${iteration}: ${iteration === 1 ? 'Forcing analyze_assessment_content tool' : 'Auto tool selection'}`);
+    
+    let response: Anthropic.Message;
+    let toolUse: Anthropic.ToolUseBlock | undefined;
     let toolResult: { success: boolean; message: string; data?: any }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (toolUse.name === 'analyze_assessment_content') {
-      analysisResult = toolUse.input;
-      toolResult = { success: true, message: "Analysis complete", data: analysisResult };
-    } else if (toolUse.name === 'update_report_section') {
+    
+    try {
+      console.log('⏱️ Starting Anthropic API call...');
+      const startTime = Date.now();
+      
+      // Retry logic for overloaded errors
+      let retryCount = 0;
+      const maxRetries = 3;
+      const baseDelay = 2000; // 2 seconds
+      
+      while (retryCount <= maxRetries) {
+        try {
+          response = await anthropic.messages.create({
+            model: "claude-3-7-sonnet-20250219", // Claude 3.7 Sonnet with PDF support
+            max_tokens: 16384, // Increased for PDF analysis (doubled from 8192)
+            system: systemMessage,
+            tools: tools,
+            messages: conversationMessages,
+            // Force Claude to use analyze_assessment_content on first iteration
+            ...(iteration === 1 ? { tool_choice: { type: "tool", name: "analyze_assessment_content" } } : {})
+          });
+          
+          // Success - break out of retry loop
+          break;
+          
+        } catch (apiError: any) {
+          const isOverloaded = apiError?.status === 529 || 
+                              apiError?.error?.type === 'overloaded_error' ||
+                              apiError?.message?.includes('Overloaded');
+          
+          if (isOverloaded && retryCount < maxRetries) {
+            retryCount++;
+            const delay = baseDelay * Math.pow(2, retryCount - 1); // Exponential backoff
+            console.log(`⚠️ Anthropic API overloaded (attempt ${retryCount}/${maxRetries + 1}), retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          
+          // If not overloaded or max retries reached, re-throw the error
+          throw apiError;
+        }
+      }
+      
+      const duration = Date.now() - startTime;
+      console.log(`⏱️ API call completed in ${duration}ms${retryCount > 0 ? ` (after ${retryCount} retries)` : ''}`);
+
+      console.log(`📊 Response stop_reason: ${response.stop_reason}`);
+      console.log(`🔧 Response content blocks: ${response.content.map(c => c.type).join(', ')}`);
+
+      // Check for max_tokens issue
+      if (response.stop_reason === 'max_tokens') {
+        console.log('⚠️ Response was truncated due to max_tokens limit');
+      }
+
+      toolUse = response.content.find(
+        (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+      );
+
+      if (!toolUse) {
+        console.log('❌ No tool use found, breaking loop');
+        break; // No more tools to use
+      }
+
+      // Check if tool input is empty due to truncation
+      if (!toolUse.input || Object.keys(toolUse.input).length === 0) {
+        console.log('❌ Tool input is empty, likely due to max_tokens truncation');
+        break;
+      }
+      
+      console.log(`🛠️ Tool used: ${toolUse.name}`);
+      console.log(`📝 Tool input preview: ${JSON.stringify(toolUse.input).substring(0, 200)}...`);
+
+      // Process the tool call
+      if (toolUse.name === 'analyze_assessment_content') {
+        console.log('🔍 Processing analyze_assessment_content tool...');
+        analysisResult = toolUse.input;
+        console.log(`📊 Analysis result keys: ${Object.keys(analysisResult || {}).join(', ')}`);
+        toolResult = { success: true, message: "Analysis complete", data: analysisResult };
+      } else if (toolUse.name === 'update_report_section') {
       const { section_id, content } = toolUse.input as { 
         section_id: string; 
         content: string; 
@@ -84,17 +148,63 @@ async function handleMultiModalAssessment(
       }
     } else if (toolUse.name === 'update_report_data') {
       // New structured data processing
-      const { updates, processing_summary } = toolUse.input as {
-        updates: Array<{
-          section_id: string;
-          field_path: string;
-          value: any;
-          merge_strategy: 'replace' | 'append' | 'merge';
-          confidence?: number;
-          source_reference?: string;
-        }>;
-        processing_summary?: string;
-      };
+      console.log('🔍 Raw tool input:', JSON.stringify(toolUse.input, null, 2));
+      
+      let updates: Array<{
+        section_id: string;
+        field_path: string;
+        value: any;
+        merge_strategy: 'replace' | 'append' | 'merge';
+        confidence?: number;
+        source_reference?: string;
+      }> = [];
+      
+      let processing_summary: string | undefined;
+      
+      try {
+        // Handle case where Claude returns updates as a JSON string
+        const rawInput = toolUse.input as any;
+        
+        if (typeof rawInput.updates === 'string') {
+          console.log('🔧 Parsing updates from JSON string...');
+          // The model sometimes returns a string that is not perfectly formatted JSON.
+          // This regex will find the array within the string.
+          const jsonMatch = rawInput.updates.match(/(\[[\s\S]*\])/);
+          if (jsonMatch && jsonMatch[1]) {
+            try {
+              updates = JSON.parse(jsonMatch[1]);
+            } catch (e) {
+              console.error('❌ Failed to parse extracted JSON array:', e);
+              throw new Error('Failed to parse the "updates" array from the model response.');
+            }
+          } else {
+            throw new Error('Could not find a valid JSON array within the "updates" string.');
+          }
+        } else if (Array.isArray(rawInput.updates)) {
+          console.log('🔧 Using updates array directly...');
+          updates = rawInput.updates;
+        } else {
+          console.error('❌ Invalid updates format:', typeof rawInput.updates);
+          toolResult = { success: false, message: 'Invalid updates format - expected array or JSON string' };
+          continue;
+        }
+        
+        processing_summary = rawInput.processing_summary;
+        
+        // Validate updates structure
+        if (!Array.isArray(updates)) {
+          console.error('❌ Updates is not an array after parsing:', typeof updates);
+          toolResult = { success: false, message: 'Updates must be an array' };
+          continue;
+        }
+        
+        console.log('✅ Successfully parsed updates:', updates.length, 'items');
+        
+      } catch (parseError) {
+        console.error('❌ Failed to parse tool input:', parseError);
+        toolResult = { success: false, message: `Failed to parse tool input: ${parseError instanceof Error ? parseError.message : 'Unknown error'}` };
+        continue;
+      }
 
       const fieldResolver = new StructuredFieldPathResolver();
       const processedUpdates: string[] = [];
@@ -104,6 +214,24 @@ async function handleMultiModalAssessment(
       
       for (const update of updates) {
         try {
+          // Validate update structure
+          if (!update || typeof update !== 'object') {
+            console.error('❌ Invalid update object:', update);
+            errors.push('Invalid update object structure');
+            continue;
+          }
+          
+          if (!update.section_id || !update.field_path || !update.merge_strategy) {
+            console.error('❌ Missing required fields in update:', {
+              section_id: update.section_id,
+              field_path: update.field_path,
+              merge_strategy: update.merge_strategy,
+              value: typeof update.value
+            });
+            errors.push(`Missing required fields: section_id=${update.section_id}, field_path=${update.field_path}, merge_strategy=${update.merge_strategy}`);
+            continue;
+          }
+          
           console.log(`📝 Processing update: ${update.section_id}.${update.field_path} = ${JSON.stringify(update.value)} (${update.merge_strategy})`);
           
           const sectionIndex = (report.sections as Section[]).findIndex((sec: Section) => sec.id === update.section_id);
@@ -214,6 +342,30 @@ async function handleMultiModalAssessment(
     } else {
       toolResult = { success: false, message: `Unknown tool: ${toolUse.name}` };
     }
+    } catch (error: any) {
+      console.error(`❌ Anthropic API error on iteration ${iteration}:`, error);
+      
+      // Check if it's an overloaded error that exhausted retries
+      const isOverloaded = error?.status === 529 || 
+                          error?.error?.type === 'overloaded_error' ||
+                          error?.message?.includes('Overloaded');
+      
+      if (isOverloaded) {
+        console.log('🔄 Anthropic API is currently overloaded. The system will continue processing with available data.');
+        // Don't break the loop immediately for overloaded errors - we might have partial results
+      } else {
+        console.log('💥 Non-recoverable API error, stopping processing.');
+        break; // Exit the loop on non-recoverable API errors
+      }
+      
+      break; // Exit the loop on any API error for now
+    }
+
+    // Only continue if we have valid response and tool use
+    if (!response || !toolUse || !toolResult) {
+      console.log('❌ Missing response, toolUse, or toolResult, breaking loop');
+      break;
+    }
 
     // Continue conversation with tool result
     conversationMessages.push({
@@ -254,6 +406,11 @@ async function handleMultiModalAssessment(
     console.log('ℹ️ No sections were modified, skipping database update');
   }
 
+  // Determine if processing was limited by API issues
+  const hadApiIssues = !analysisResult && processedFiles.length > 0;
+  const baseMessage = `Successfully processed ${processedFiles.length} files and updated ${updatedSections.length} sections`;
+  const apiIssueMessage = hadApiIssues ? ' (Note: AI analysis was limited due to temporary API overload - please try again in a few minutes for full processing)' : '';
+  
   const response = {
     success: true,
     updatedSections,
@@ -264,7 +421,8 @@ async function handleMultiModalAssessment(
       size: f.size,
       processingMethod: f.processingMethod
     })),
-    message: `Successfully processed ${processedFiles.length} files and updated ${updatedSections.length} sections`
+    message: baseMessage + apiIssueMessage,
+    apiIssues: hadApiIssues
   };
   
   console.log('🚀 Sending response to client:', JSON.stringify(response, null, 2));
@@ -519,43 +677,65 @@ export async function POST(request: Request) {
       2
     );
 
-    systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer with advanced structured data processing capabilities.
+    systemMessageContent = `You are an expert Speech-Language Pathologist conducting comprehensive assessment analysis with clinical expertise.
 
-TASK: Analyze the provided assessment content and update specific fields in the structured JSON data model.
+CLINICAL ANALYSIS FRAMEWORK:
+As an SLP, you follow this natural assessment reasoning process:
+
+1. QUANTITATIVE DATA EXTRACTION (Priority 1):
+   - Standard scores, percentiles, age equivalents from formal tests
+   - Raw scores and scaled scores where available
+   - Confidence intervals and standard error measurements
+   - Subtest breakdowns for comprehensive assessments
+
+2. QUALITATIVE BEHAVIORAL OBSERVATIONS (Priority 2):
+   - Student cooperation and attention during testing
+   - Response strategies (self-correction, requesting repetition)
+   - Error patterns and consistency across tasks
+   - Fatigue effects and optimal performance conditions
+
+3. DOMAIN-SPECIFIC CLINICAL PATTERNS (Priority 3):
+   - Receptive vs. Expressive language discrepancies
+   - Phonological vs. Articulation error patterns
+   - Pragmatic strengths in structured vs. unstructured contexts
+   - Voice quality, fluency, and prosodic features
+
+4. FUNCTIONAL IMPACT ASSESSMENT (Priority 4):
+   - Academic performance implications
+   - Social communication effectiveness
+   - Home vs. school performance differences
+   - Compensatory strategies already in use
 
 CURRENT REPORT STRUCTURE:
 ${reportStructure}
 
-PROCESSING APPROACH:
-1. First, use 'analyze_assessment_content' to identify which specific fields should be updated
-2. Then, use 'update_report_data' to make precise field-level updates
-3. Focus on extracting structured data points rather than generating prose
-4. Maintain data types and follow schema constraints
+CLINICAL EXTRACTION STRATEGY:
+- STANDARDIZED TESTS → Extract all scores + clinical interpretation + error analysis
+- INFORMAL ASSESSMENTS → Focus on functional patterns + contextual performance
+- OBSERVATIONS → Document behaviors + environmental factors + social interactions
+- INTERVIEWS → Capture concerns + developmental history + current impact
+- WORK SAMPLES → Analyze error patterns + strategy use + progress indicators
 
-FIELD PATH NOTATION:
-- Use dot notation for nested fields: "assessment_results.standardized_tests.0.test_name"
-- Array indices: "recommendations.service_recommendations.frequency"
-- Object properties: "student_cooperation.cooperative"
+STRUCTURED DATA PROCESSING:
+1. Start with 'analyze_assessment_content' to identify clinical priorities
+2. Use 'update_report_data' for comprehensive field updates following clinical reasoning
+3. Populate assessment_items with complete test data (scores, dates, interpretations)
+4. Generate domain-specific clinical summaries (not just data dumps)
+5. Create assessment_tools_list from populated assessment_items
 
-MERGE STRATEGIES:
-- "replace": Completely overwrite the existing value
-- "append": Add to existing arrays or concatenate strings
-- "merge": Combine objects while preserving existing properties
+FIELD NOTATION & MERGE STRATEGIES:
+- Dot notation: "assessment_results.assessment_items.0.standard_score"
+- Replace: Complete overwrite (for scores, dates, definitive data)
+- Append: Add to arrays or extend text (for observations, recommendations)
+- Merge: Combine objects preserving existing data (for complex structures)
 
-DATA EXTRACTION PRIORITIES:
-1. Test scores and standardized assessment results
-2. Demographic and background information
-3. Clinical observations and findings
-4. Recommendations and service needs
-5. Eligibility and diagnostic information
+CLINICAL VALIDATION:
+- Ensure score ranges are realistic (SS: 40-160, %ile: 1-99)
+- Verify age-appropriate test selections
+- Check for logical consistency across domains
+- Maintain professional terminology and objectivity
 
-VALIDATION REQUIREMENTS:
-- Respect field types (string, number, boolean, array, object)
-- Follow enum constraints where defined
-- Maintain required field requirements
-- Preserve data relationships and dependencies
-
-You MUST start with 'analyze_assessment_content' to plan your updates, then proceed with 'update_report_data'.`;
+Begin with clinical analysis, then proceed with structured data updates.`;
     targetTool = 'analyze_assessment_content';
   } else if (generation_type === 'multi_modal_assessment') {
     // Legacy multi-modal assessment processing (HTML-based)
@@ -563,18 +743,41 @@ You MUST start with 'analyze_assessment_content' to plan your updates, then proc
       `- ${s.id}: ${s.title} (${s.ai_directive || 'Standard section'})`
     ).join('\n');
 
-    systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer with advanced assessment analysis capabilities.
+    systemMessageContent = `You are an expert Speech-Language Pathologist analyzing comprehensive assessment materials with clinical expertise.
 
-TASK: Analyze the provided multi-modal assessment content (text, PDF documents, images, and audio transcripts) and intelligently populate relevant report sections.
+CLINICAL DOCUMENT ANALYSIS FRAMEWORK:
+You're reviewing assessment materials as an experienced SLP would - looking for specific clinical indicators and following established evaluation protocols.
 
-AVAILABLE SECTIONS:
+DOCUMENT TYPE RECOGNITION & PRIORITIES:
+- FORMAL ASSESSMENT REPORTS → Extract scores, interpretations, recommendations (HIGH PRIORITY)
+- TEST PROTOCOLS/FORMS → Raw data, observations, error patterns (HIGH PRIORITY)  
+- IEP DOCUMENTS → Current services, goals, progress data (MEDIUM PRIORITY)
+- PARENT/TEACHER INTERVIEWS → Functional concerns, developmental history (MEDIUM PRIORITY)
+- WORK SAMPLES → Error analysis, strategy use, progress indicators (LOW PRIORITY)
+
+AVAILABLE REPORT SECTIONS:
 ${availableSections}
 
+CLINICAL CONTENT ANALYSIS STRATEGY:
+1. IDENTIFY ASSESSMENT TOOLS: Look for test names, forms, protocols
+2. EXTRACT QUANTITATIVE DATA: Scores, percentiles, age equivalents, dates
+3. CAPTURE QUALITATIVE OBSERVATIONS: Behaviors, cooperation, error patterns
+4. NOTE CLINICAL INTERPRETATIONS: Professional judgments, diagnostic impressions
+5. IDENTIFY RECOMMENDATIONS: Service needs, goals, accommodations
+6. GATHER BACKGROUND INFO: Developmental history, previous services, concerns
+
+SECTION POPULATION LOGIC:
+- reason_for_referral → Referral source, presenting concerns, initial observations
+- parent_concern → Family reports, home observations, developmental concerns
+- health_developmental_history → Medical history, milestones, previous services
+- assessment_results → All test data, scores, clinical findings, interpretations
+- validity_statement → Test conditions, cooperation, reliability factors
+- conclusion → Summary of findings, diagnostic impressions, severity levels
+- recommendations → Service recommendations, goals, accommodations, follow-up
+
 PROCESSING APPROACH:
-1. First, analyze all provided content using the 'analyze_assessment_content' tool to identify relevant sections. The content may include:
-   - PDF documents (assessment forms, IEPs, previous reports, test protocols)
-   - Images (assessment forms, handwritten notes, test results)
-   - Audio transcripts (parent interviews, student sessions)
+1. Analyze content using 'analyze_assessment_content' to map clinical findings to sections
+2. Use 'update_report_section' to populate each relevant section with professional content
    - Text notes (clinical observations, informal assessments)
 
 2. Then, for each identified section, use 'update_report_section' to generate appropriate content based on the analyzed information.
@@ -669,6 +872,8 @@ Generate rich text content based on the provided context. You MUST call the 'upd
     // Add processed file content
     if (processedFiles.length > 0) {
       const fileContent = filesToClaudeContent(processedFiles);
+      console.log(`📁 Processing ${processedFiles.length} files:`, processedFiles.map(f => ({ name: f.name, type: f.type, method: f.processingMethod, contentLength: f.content.length })));
+      console.log(`📋 Generated ${fileContent.length} content blocks:`, fileContent.map(c => ({ type: c.type, hasSource: !!c.source, title: c.title })));
       messagesContent.push(...fileContent);
     }
 
@@ -683,9 +888,10 @@ Generate rich text content based on the provided context. You MUST call the 'upd
       },
     ];
 
-    console.log("Sending messages to Anthropic:", JSON.stringify(messages, null, 2));
-    console.log("System message:", systemMessageContent);
-    console.log("Tools:", JSON.stringify(tools, null, 2));
+    console.log("📤 Sending messages to Anthropic:");
+    console.log("📄 File content blocks:", messagesContent.filter(c => c.type === 'document').map(c => ({ type: c.type, title: c.title || 'untitled', size: c.source?.data?.length || 0 })));
+    console.log("💬 System message length:", systemMessageContent.length);
+    console.log("🔧 Tools count:", tools.length);
 
     if (generation_type === 'structured_data_processing' || generation_type === 'multi_modal_assessment') {
       // Multi-tool conversation loop for assessment processing
@@ -694,7 +900,7 @@ Generate rich text content based on the provided context. You MUST call the 'upd
       // Single tool call for traditional generation
       console.log('Creating Anthropic message with the following parameters:', { model: "claude-3-5-sonnet-20241022", max_tokens: 8192, system: systemMessageContent, tools, messages, tool_choice: { type: "tool", name: targetTool } });
       const response = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-20241022", // Latest Claude 3.5 Sonnet
+        model: "claude-3-7-sonnet-20250219", // Claude 3.7 Sonnet with PDF support
         max_tokens: 8192, // Increased for longer content
         system: systemMessageContent,
         tools: tools,

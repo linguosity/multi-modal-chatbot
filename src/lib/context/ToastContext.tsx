@@ -1,24 +1,27 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import { ToastContainer, Toast } from '@/components/ui/toast'
+import { ToastProvider as UIToastProvider, useToast as useUIToast, Toast } from '@/components/ui/toast'
 
 interface ToastContextType {
   showToast: (toast: Omit<Toast, 'id'>) => void
   showAIUpdateToast: (updatedSections: string[], changes?: string[]) => void
+  showProcessingSummaryToast: (processingData: {
+    summary?: string
+    updatedSections?: string[]
+    processedFiles?: Array<{ name: string; type: string; size: number }>
+    fieldUpdates?: string[]
+  }) => void
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([])
+function ToastContextProvider({ children }: { children: React.ReactNode }) {
+  const { toast } = useUIToast()
 
-  const showToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9)
-    const newToast: Toast = { ...toast, id }
-    
-    setToasts(prev => [...prev, newToast])
-  }, [])
+  const showToast = useCallback((toastData: Omit<Toast, 'id'>) => {
+    toast(toastData)
+  }, [toast])
 
   const showAIUpdateToast = useCallback((updatedSections: string[], changes: string[] = []) => {
     const sectionText = updatedSections.length === 1 
@@ -37,15 +40,47 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     })
   }, [showToast])
 
-  const closeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id))
-  }, [])
+  const showProcessingSummaryToast = useCallback((processingData: {
+    summary?: string
+    updatedSections?: string[]
+    processedFiles?: Array<{ name: string; type: string; size: number }>
+    fieldUpdates?: string[]
+  }) => {
+    const fileCount = processingData.processedFiles?.length || 0
+    const sectionCount = processingData.updatedSections?.length || 0
+    
+    const title = fileCount > 0 
+      ? `Processed ${fileCount} file${fileCount > 1 ? 's' : ''}`
+      : 'AI Processing Complete'
+    
+    const description = sectionCount > 0 
+      ? `Updated ${sectionCount} section${sectionCount > 1 ? 's' : ''} with extracted data`
+      : 'Analysis completed successfully'
+
+    showToast({
+      type: 'ai_processing',
+      title,
+      description,
+      processingData,
+      persistent: true, // Don't auto-dismiss
+      duration: 0 // Disable auto-dismiss
+    })
+  }, [showToast])
 
   return (
-    <ToastContext.Provider value={{ showToast, showAIUpdateToast }}>
+    <ToastContext.Provider value={{ showToast, showAIUpdateToast, showProcessingSummaryToast }}>
       {children}
-      <ToastContainer toasts={toasts} onClose={closeToast} />
     </ToastContext.Provider>
+  )
+}
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <UIToastProvider>
+      <ToastContextProvider>
+        {children}
+      </ToastContextProvider>
+    </UIToastProvider>
   )
 }
 

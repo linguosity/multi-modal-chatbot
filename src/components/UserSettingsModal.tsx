@@ -4,7 +4,8 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { X, Settings } from 'lucide-react'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
-import { getAvailableStates } from '@/lib/structured-schemas'
+import { getAvailableStates } from '@/lib/structured-schemas';
+import { Switch } from '@/components/ui/switch';
 
 interface UserSettingsModalProps {
   isOpen: boolean
@@ -116,6 +117,22 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
               </p>
             </div>
           )}
+
+          {/* Toast Notifications Setting */}
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Enable API Toast Notifications
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Show a notification when an API call succeeds or fails.
+              </p>
+            </div>
+            <Switch
+              checked={localSettings.showToastNotifications}
+              onCheckedChange={(checked) => setLocalSettings({ ...localSettings, showToastNotifications: checked })}
+            />
+          </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-8">

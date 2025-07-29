@@ -1,10 +1,10 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useReport } from '@/lib/context/ReportContext'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Settings, Edit3, Save, Download, FolderOpen, Upload, Trash2, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Settings, Save, Download, FolderOpen, Upload, Trash2, Sparkles, FileText } from 'lucide-react'
 import { SplitButton } from '@/components/ui/split-button'
 import { getSectionSchemaForType } from '@/lib/structured-schemas'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
@@ -16,19 +16,22 @@ import { motion } from 'framer-motion'
 import { SettingsButton } from '@/components/UserSettingsModal'
 import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 import { useToast } from '@/lib/context/ToastContext'
+import { SaveStatus } from '@/components/SaveStatus'
+import { NarrativeView } from '@/components/NarrativeView'
 
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
   const router = useRouter()
-  const { report, handleSave, handleDelete } = useReport()
+  const { report, handleSave, handleDelete, updateSectionData, refreshReport } = useReport()
   const { settings } = useUserSettings()
   const [mode, setMode] = useState<'data' | 'template'>('data')
   const [showJsonDebug] = useState(false)
   const [sectionContent, setSectionContent] = useState('')
   const [currentSchema, setCurrentSchema] = useState<any>(null)
   const [showAIAssistant, setShowAIAssistant] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const { addRecentUpdate } = useRecentUpdates()
-  const { showAIUpdateToast } = useToast()
+  const { showAIUpdateToast, showProcessingSummaryToast } = useToast()
 
   if (!report) {
     return (
@@ -67,12 +70,29 @@ export default function SectionPage() {
     }
   }, [sectionSchema, currentSchema])
 
+  // Memoize initial data to prevent infinite re-renders
+  const memoizedInitialData = useMemo(() => {
+    console.log(`📊 Passing structured_data to ${section.title}:`, section.structured_data);
+    return section.structured_data || {};
+  }, [section.structured_data, section.title])
+
   // Initialize section content from report
   useEffect(() => {
     if (section) {
       setSectionContent(section.content || '')
     }
   }, [section])
+
+  // Update section content when report data changes (after AI processing)
+  useEffect(() => {
+    if (report && section) {
+      const updatedSection = report.sections.find(s => s.id === sectionId)
+      if (updatedSection && updatedSection.content !== sectionContent) {
+        console.log('📝 Updating section content from refreshed report data')
+        setSectionContent(updatedSection.content || '')
+      }
+    }
+  }, [report, section, sectionId, sectionContent])
 
   // Handle content changes
   const handleContentChange = useCallback((newContent: string) => {
@@ -95,13 +115,32 @@ export default function SectionPage() {
     await handleSave(updatedReport)
   }, [report, sectionId, sectionContent, handleSave])
 
-  // Setup autosave
-  const { isSaving, lastSaved, forceSave } = useAutosave({
+  // Setup autosave with better UX timing
+  const { isSaving, lastSaved, forceSave, hasUnsavedChanges } = useAutosave({
     data: sectionContent,
     onSave: saveSection,
-    debounceMs: 2000,
+    debounceMs: 10000, // 10 seconds - much more reasonable
     enabled: !!section
   })
+
+
+
+  // Keyboard shortcuts for saving
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S or Cmd+S to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        if (hasUnsavedChanges) {
+          forceSave()
+          // The SaveStatus component will show the saving feedback
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [forceSave, hasUnsavedChanges])
 
   const [isNavigating, setIsNavigating] = useState(false)
 
@@ -128,30 +167,22 @@ export default function SectionPage() {
             >
               {section.title}
             </motion.h1>
-            <div className="text-xs text-gray-500 mt-1 h-4">
-              {lastSaved && (
-                <>Last saved • {new Date(lastSaved).toLocaleTimeString()}</>
-              )}
+            <div className="mt-1 h-4">
+              <SaveStatus
+                isSaving={isSaving}
+                lastSaved={lastSaved}
+                hasUnsavedChanges={hasUnsavedChanges}
+                onForceSave={forceSave}
+              />
             </div>
           </div>
 
           <div className="flex items-end gap-4">
-            {/* Tabs positioned to the right of header */}
+            {/* Template Mode Toggle - Only show when needed */}
             {hasStructuredSchema && (
               <div className="flex gap-0 relative -mb-px z-10">
                 <button
-                  onClick={() => setMode('data')}
-                  className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
-                    mode === 'data' 
-                      ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
-                      : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
-                  }`}
-                >
-                  <Edit3 className="h-3 w-3" />
-                  Data Entry
-                </button>
-                <button
-                  onClick={() => setMode('template')}
+                  onClick={() => setMode(mode === 'template' ? 'data' : 'template')}
                   className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
                     mode === 'template' 
                       ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
@@ -159,17 +190,22 @@ export default function SectionPage() {
                   }`}
                 >
                   <Settings className="h-3 w-3" />
-                  Edit Template
+                  {mode === 'template' ? 'Exit Template Mode' : 'Edit Template'}
                 </button>
               </div>
             )}
           
             <div className="flex items-end gap-3">
-            <div className="flex items-center gap-2 text-sm min-w-[80px] h-6">
+            <div className="flex items-center gap-2 text-sm min-w-[120px] h-6">
               {isSaving ? (
                 <>
                   <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
                   <span className="text-blue-600">Saving...</span>
+                </>
+              ) : isRefreshing ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-green-600 border-t-transparent rounded-full"></div>
+                  <span className="text-green-600">Updating...</span>
                 </>
               ) : null}
             </div>
@@ -256,25 +292,69 @@ export default function SectionPage() {
                           const allChanges: string[] = [];
                           
                           // Track updates for visual indicators
-                          json.updatedSections.forEach((sectionId: string) => {
+                          json.updatedSections.forEach((updatedSectionId: string) => {
                             // Extract field changes from the response if available
                             const changes = json.analysisResult?.content_analysis?.identified_updates
-                              ?.filter((update: any) => update.section_id === sectionId)
+                              ?.filter((update: any) => update.section_id === updatedSectionId)
                               ?.map((update: any) => update.field_path) || ['content'];
                             
-                            console.log(`📍 Tracking update for section ${sectionId}:`, changes);
-                            addRecentUpdate(sectionId, changes, 'ai_update');
+                            console.log(`📍 Tracking update for section ${updatedSectionId}:`, changes);
+                            addRecentUpdate(updatedSectionId, changes, 'ai_update');
                             allChanges.push(...changes);
                           });
                           
-                          // Show toast notification
+                          // Show processing summary toast (persistent)
+                          // Extract processing summary from various possible locations
+                          let processingSummary = null;
+                          
+                          // Try to get from analysisResult (analyze_assessment_content tool)
+                          if (json.analysisResult?.content_analysis?.processing_notes) {
+                            processingSummary = json.analysisResult.content_analysis.processing_notes;
+                          }
+                          
+                          // Try to get from tool data (update_report_data tool)
+                          if (!processingSummary && json.analysisResult?.data?.processing_summary) {
+                            processingSummary = json.analysisResult.data.processing_summary;
+                          }
+                          
+                          // Try to get from message (fallback)
+                          if (!processingSummary && json.message) {
+                            processingSummary = json.message;
+                          }
+                          
+                          if (processingSummary) {
+                            showProcessingSummaryToast({
+                              summary: processingSummary,
+                              updatedSections: json.updatedSections,
+                              processedFiles: json.processedFiles || [],
+                              fieldUpdates: allChanges
+                            });
+                          }
+                          
+                          // Show quick update toast (auto-dismiss)
                           showAIUpdateToast(json.updatedSections, allChanges);
                           
-                          // Refresh the report to get updated content
-                          console.log('🔄 Refreshing page to show updates...');
-                          setTimeout(() => {
-                            window.location.reload();
-                          }, 1000); // Small delay to show the toast
+                          // Refresh the report data from database
+                          console.log('🔄 Refreshing report data to show updates...');
+                          setIsRefreshing(true);
+                          try {
+                            await refreshReport();
+                          } finally {
+                            setIsRefreshing(false);
+                          }
+                          
+                          // If current section was updated, show visual feedback
+                          if (json.updatedSections.includes(section.id)) {
+                            console.log('✨ Current section was updated, showing visual feedback');
+                            // Add a subtle animation or highlight effect
+                            const element = document.querySelector('[data-section-content]');
+                            if (element) {
+                              element.classList.add('animate-pulse');
+                              setTimeout(() => {
+                                element.classList.remove('animate-pulse');
+                              }, 2000);
+                            }
+                          }
                         } else {
                           console.log('ℹ️ Processing completed but no sections were updated:', json.message)
                           // Show info message
@@ -383,16 +463,14 @@ export default function SectionPage() {
           }}
           className="max-w-4xl mx-auto"
         >
-          {/* Content card that connects with tabs */}
-          <section className={`relative bg-white p-6 mx-6 mb-6 ${hasStructuredSchema ? 'z-10 pt-4 -translate-y-px' : 'mt-6'}`}>
-              {/* Main Content */}
+          {/* Main Content Section */}
+          <section className={`relative mx-6 ${hasStructuredSchema ? 'z-10 -translate-y-px' : 'mt-6'}`}>
+            {/* Data Entry Area */}
+            <div className="bg-white p-6 pb-8 rounded-t-lg" data-section-content>
               {hasStructuredSchema && currentSchema ? (
                 <DynamicStructuredBlock
                   schema={currentSchema}
-                  initialData={(() => {
-                    console.log(`📊 Passing structured_data to ${section.title}:`, section.structured_data);
-                    return section.structured_data || {};
-                  })()}
+                  initialData={memoizedInitialData}
                   mode={mode}
                   sectionId={section.id}
                   onChange={(_, generatedText) => {
@@ -406,6 +484,7 @@ export default function SectionPage() {
                     console.log('Save as template:', schema)
                     // TODO: Implement save as template
                   }}
+                  updateSectionData={updateSectionData}
                 />
               ) : (
                 <div className="prose max-w-none">
@@ -418,28 +497,81 @@ export default function SectionPage() {
                   />
                 </div>
               )}
-              
-              {/* JSON Debug View */}
-              {showJsonDebug && (
-                <div className="mt-8 border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 font-mono text-sm">
-                    Section JSON Data
+            </div>
+          </section>
+        </motion.div>
+
+        {/* Narrative View Section - Full Width Background */}
+        {hasStructuredSchema && currentSchema && mode !== 'template' && (
+          <>
+            {/* Subtle 3-Point Gradient Transition - Full Width */}
+            <div className="relative h-16 bg-gradient-to-b from-white via-blue-50/30 to-blue-50/50 w-full">
+              {/* Elegant Divider with Gradient Background */}
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full max-w-4xl mx-auto px-6">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200/60"></div>
+                    </div>
+                    <div className="relative flex justify-center">
+                      <div className="bg-gradient-to-r from-blue-50/80 via-white to-blue-50/80 px-6 py-2 rounded-full border border-gray-200/40 backdrop-blur-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-1 h-1 bg-blue-400/60 rounded-full animate-pulse"></div>
+                          <FileText className="h-4 w-4 text-blue-500/70" />
+                          <span className="text-xs font-medium text-blue-600/80 uppercase tracking-wider">
+                            AI-Generated Narrative
+                          </span>
+                          <FileText className="h-4 w-4 text-blue-500/70" />
+                          <div className="w-1 h-1 bg-blue-400/60 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <pre className="p-4 overflow-auto bg-gray-50 text-xs max-h-96">
-                    {JSON.stringify({
-                      id: section.id,
-                      title: section.title,
-                      sectionType: section.sectionType,
-                      content: sectionContent,
-                      lastUpdated: new Date().toISOString(),
-                      schema: sectionSchema
-                    }, null, 2)}
-                  </pre>
                 </div>
-              )}
-            </section>
-          </motion.div>
-        </div>
+              </div>
+            </div>
+
+            {/* Narrative Content with Full Width Gradient Background */}
+            <div className="bg-gradient-to-b from-blue-50/50 via-blue-50/20 to-white w-full pb-6">
+              <div className="max-w-4xl mx-auto px-6">
+                <div className="pt-4">
+                  <NarrativeView
+                    reportId={report.id}
+                    sectionId={section.id}
+                    sectionTitle={section.title}
+                    structuredData={section.structured_data || {}}
+                    onRegenerateNarrative={async () => {
+                      // Trigger a refresh of the narrative
+                      console.log('Regenerating narrative for section:', section.id)
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* JSON Debug View */}
+        {showJsonDebug && (
+          <div className="max-w-4xl mx-auto px-6 mt-6">
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 font-mono text-sm">
+                Section JSON Data
+              </div>
+              <pre className="p-4 overflow-auto bg-gray-50 text-xs max-h-96">
+                {JSON.stringify({
+                  id: section.id,
+                  title: section.title,
+                  sectionType: section.sectionType,
+                  content: sectionContent,
+                  lastUpdated: new Date().toISOString(),
+                  schema: sectionSchema
+                }, null, 2)}
+              </pre>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Footer Navigation */}
       <div className="border-t border-gray-200 bg-white px-6 py-4">
@@ -456,12 +588,12 @@ export default function SectionPage() {
               className="flex items-center gap-2"
             >
               <ChevronLeft className="h-4 w-4" />
-              {prevSection ? prevSection.title : 'Previous'}
+              {prevSection?.title || 'Previous'}
             </Button>
           </motion.div>
           
           <div className="text-sm text-gray-500">
-            Section {currentIndex + 1} of {report.sections.length}
+            Section {currentIndex + 1} of {report?.sections.length || 0}
           </div>
           
           <motion.div
@@ -474,7 +606,7 @@ export default function SectionPage() {
               disabled={!nextSection || isNavigating}
               className="flex items-center gap-2"
             >
-              {nextSection ? nextSection.title : 'Next'}
+              {nextSection?.title || 'Next'}
               <ChevronRight className="h-4 w-4" />
             </Button>
           </motion.div>

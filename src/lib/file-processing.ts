@@ -89,6 +89,7 @@ export function estimatePDFPageCount(file: File): number {
 
 /**
  * Validates PDF-specific constraints
+ * Supported models include Claude Opus 4, Sonnet 4, Sonnet 3.7, Sonnet 3.5 and Haiku 3.5 via the API or Google Vertex AI.
  */
 export function validatePDF(file: File): FileValidationResult {
   const basicValidation = validateFile(file);
@@ -241,8 +242,8 @@ export async function processMultipleFiles(files: File[]): Promise<ProcessedFile
 /**
  * Converts processed files to Claude message content format
  */
-export function filesToClaudeContent(processedFiles: ProcessedFile[]): Array<{ type: string; source?: any; text?: string }> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const content: Array<{ type: string; source?: any; text?: string }> = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+export function filesToClaudeContent(processedFiles: ProcessedFile[]): Array<{ type: string; source?: any; text?: string; title?: string }> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const content: Array<{ type: string; source?: any; text?: string; title?: string }> = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   for (const file of processedFiles) {
     if (file.processingMethod === 'claude-vision') {
@@ -256,11 +257,15 @@ export function filesToClaudeContent(processedFiles: ProcessedFile[]): Array<{ t
         }
       });
     } else if (file.processingMethod === 'claude-pdf') {
-      // For now, use text content with base64 data until document type is confirmed
-      const pageInfo = file.pageCount ? ` (~${file.pageCount} pages)` : '';
+      // Use proper document block for PDF support
       content.push({
-        type: "text",
-        text: `PDF Document: ${file.name}${pageInfo}\n\nBase64 Content: ${file.content.substring(0, 100)}...`
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: file.type,
+          data: file.content
+        },
+        title: file.name // Optional: helps Claude understand context
       });
     } else if (file.processingMethod === 'whisper-transcription') {
       // Audio transcript
