@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import "./globals.css"
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import React from 'react';
 import { UserSettingsProvider } from '@/lib/context/UserSettingsContext';
 import { RecentUpdatesProvider } from '@/lib/context/RecentUpdatesContext';
@@ -18,7 +18,7 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   console.log('Rendering RootLayout');
-  const supabase = await createServerSupabase();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   return (

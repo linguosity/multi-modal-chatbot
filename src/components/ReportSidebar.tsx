@@ -118,7 +118,7 @@ function GroupSectionList({
                     <BadgeWrapper
                       badge={isUpdated ? {
                         count: updateCount,
-                        type: hasAINarrative ? 'ai_narrative' : (status === 'complete' ? 'completed' : 'updated'),
+                        type: status === 'complete' ? 'completed' : 'updated',
                         ariaLabel: hasAINarrative 
                           ? `${section.title} (AI narrative generated)` 
                           : `${section.title} (${updateCount} recent updates)`,

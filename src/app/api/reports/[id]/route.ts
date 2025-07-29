@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase/server-component-client'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { ReportSchema } from '@/lib/schemas/report'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {

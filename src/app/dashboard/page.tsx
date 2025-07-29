@@ -1,5 +1,5 @@
 import { SignOutButton } from "@/components/ui/SignOutButton";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MigrationPanel } from "@/components/MigrationPanel";
 import { ReportTimeline } from "@/components/ReportTimeline";
 import { redirect } from "next/navigation";
@@ -9,7 +9,7 @@ import Link from "next/link";
 
 export default async function DashboardPage() {
   console.log('Rendering DashboardPage');
-  const supabase = await createServerSupabase();
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user) {

@@ -1,30 +1,26 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies as getCookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+import type { CookieOptions } from '@supabase/ssr';
+import type { Database } from '@/types/supabase';
 
-export async function createServerSupabase() {
-  const cookieStore = await cookies()
+export async function createSupabaseServerClient() {
+  const store = await getCookies();          // ✅ await here
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,   // 1
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, // 2
+    {                                        // 3: options object opens
       cookies: {
-        get: (name) => cookieStore.get(name)?.value ?? null,
-        set: (name, value, opts) => {
-          try {
-            cookieStore.set({ name, value, ...opts })
-          } catch (error) {
-            console.warn({ error }, 'Error setting cookie in Server Component')
-          }
+        get(name: string) {
+          return store.get(name)?.value ?? null;
         },
-        remove: (name, opts) => {
-          try {
-            cookieStore.delete({ name, ...opts })
-          } catch (error) {
-            console.warn({ error }, 'Error removing cookie in Server Component')
-          }
+        set(name: string, value: string, options?: CookieOptions) {
+          try { store.set({ name, value, ...options }); } catch {}
         },
-      },
-    },
-  )
-}
+        remove(name: string, options?: CookieOptions) {
+          try { store.delete({ name, ...options }); } catch {}
+        }
+      }
+    }                                        // ← options object closes
+  );                                         // ← createServerClient call closes
+}                                            // ← function closes (file ends)

@@ -18,6 +18,7 @@ import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 import { useToast } from '@/lib/context/ToastContext'
 import { SaveStatus } from '@/components/SaveStatus'
 import { NarrativeView } from '@/components/NarrativeView'
+import Link from 'next/link'
 
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
@@ -212,6 +213,18 @@ export default function SectionPage() {
             
             {/* Consolidated Action Bar */}
             <div className="flex items-center gap-2">
+              {/* View Report Button */}
+              <Link href={`/dashboard/reports/${reportId}/view`} passHref>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  <FileText className="h-4 w-4" />
+                  View Report
+                </Button>
+              </Link>
+
               {/* AI Assistant Button */}
               <div className="relative">
                 <Button

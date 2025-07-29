@@ -6,6 +6,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { User, LayoutDashboard, FilePlus } from 'lucide-react';
+import ReportDependentSidebarLinks from '@/components/ReportDependentSidebarLinks';
 import { Drawer } from '@/components/ui/Drawer';
 import { ColorSettings } from '@/components/ColorSettings';
 import { SignOutButton } from '@/components/ui/SignOutButton';
@@ -56,6 +57,7 @@ export default function DashboardLayout({
                     New Report
                   </span>
                 </Link>
+                <ReportDependentSidebarLinks />
               </div>
 
               </div>
