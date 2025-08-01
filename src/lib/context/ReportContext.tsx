@@ -1,20 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { createBrowserSupabase } from '@/lib/supabase/browser';
 import { useRouter, useParams } from 'next/navigation';
-import { Report } from '@/lib/schemas/report';
+import { Report } from '@/types/report-types';
 import { useToast } from '@/lib/context/ToastContext';
-
-interface ReportContextType {
-  report: Report | null;
-  handleSave: (reportToSave: Report) => Promise<void>;
-  handleDelete: () => Promise<void>;
-  showJson: boolean;
-  setShowJson: React.Dispatch<React.SetStateAction<boolean>>;
-  loading: boolean;
-  setReport: React.Dispatch<React.SetStateAction<Report | null>>; // Add setReport to context
-  updateSectionData: (sectionId: string, data: any) => void;
-  refreshReport: () => Promise<void>; // Add refresh function
-}
+import { ReportContextType } from '@/types/report-context-types';
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
 
@@ -171,11 +160,11 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
     setLoading(false);
   };
 
-  const updateSectionData = (sectionId: string, data: any) => {
+  const updateSectionData = (sectionId: string, newStructuredData: any, newContent: string) => {
     if (!report) return;
 
     const newSections = report.sections.map(section => 
-      section.id === sectionId ? { ...section, structured_data: data } : section
+      section.id === sectionId ? { ...section, structured_data: newStructuredData, content: newContent } : section
     );
 
     const newReport = { ...report, sections: newSections };

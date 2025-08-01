@@ -5,7 +5,7 @@ import { ToastProvider as UIToastProvider, useToast as useUIToast, Toast } from 
 
 interface ToastContextType {
   showToast: (toast: Omit<Toast, 'id'>) => void
-  showAIUpdateToast: (updatedSections: string[], changes?: string[]) => void
+  showAIUpdateToast: (updatedSections: string[], changes?: string[], customMessage?: string) => void
   showProcessingSummaryToast: (processingData: {
     summary?: string
     updatedSections?: string[]
@@ -23,7 +23,17 @@ function ToastContextProvider({ children }: { children: React.ReactNode }) {
     toast(toastData)
   }, [toast])
 
-  const showAIUpdateToast = useCallback((updatedSections: string[], changes: string[] = []) => {
+  const showAIUpdateToast = useCallback((updatedSections: string[], changes: string[] = [], customMessage?: string) => {
+    // If custom message provided, show simple toast
+    if (customMessage) {
+      showToast({
+        type: 'success',
+        description: customMessage,
+        duration: 3000 // Shorter duration for simple saves
+      })
+      return
+    }
+
     const sectionText = updatedSections.length === 1 
       ? updatedSections[0] 
       : `${updatedSections.length} sections`

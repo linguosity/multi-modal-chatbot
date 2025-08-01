@@ -104,17 +104,14 @@ export default function DynamicStructuredBlock({
   // Memoize the merged data to prevent unnecessary re-renders
   const mergedInitialData = useMemo(() => {
     return mergeDataWithSchema(initialData, schema.fields);
-  }, [JSON.stringify(initialData), JSON.stringify(schema.fields)]);
+  }, [initialData, schema.fields]);
 
   useEffect(() => {
-    // Only update if the data has actually changed
-    const currentDataString = JSON.stringify(data);
-    const newDataString = JSON.stringify(mergedInitialData);
-    
-    if (currentDataString !== newDataString) {
+    // Only update if the data has actually changed (shallow comparison for performance)
+    if (data !== mergedInitialData) {
       setData(mergedInitialData);
     }
-  }, [mergedInitialData, data]);
+  }, [mergedInitialData]);
 
 
 

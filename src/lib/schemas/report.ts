@@ -142,6 +142,16 @@ export const ReportSchema = z.object({
   // Additional metadata
   metadata: z.object({
     studentBio: StudentBioSchema.optional(),
+    uploadedFiles: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      type: z.string(), // 'pdf', 'image', 'audio', 'text'
+      size: z.number().optional(),
+      uploadDate: z.string(),
+      description: z.string().optional(),
+      processingMethod: z.string().optional(),
+      sectionIds: z.array(z.string()).optional(), // Which sections this file contributed to
+    })).optional(),
   }).optional(),
   tags: z.array(z.string()).optional(),
   finalizedDate: z.string().optional(),

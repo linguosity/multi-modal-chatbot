@@ -81,13 +81,13 @@ export function RecentUpdatesProvider({ children }: { children: React.ReactNode 
 
   const clearRecentUpdate = useCallback((sectionId: string) => {
     console.log(`🧹 Clearing recent update for section ${sectionId}`)
-    console.log(`📊 Before clear - Total updates: ${recentUpdates.length}`)
     setRecentUpdates(prev => {
+      console.log(`📊 Before clear - Total updates: ${prev.length}`)
       const filtered = prev.filter(update => update.sectionId !== sectionId)
       console.log(`📊 After clear - Remaining updates: ${filtered.length}`)
       return filtered
     })
-  }, [recentUpdates])
+  }, [])
 
   const isRecentlyUpdated = useCallback((sectionId: string) => {
     const update = recentUpdates.find(update => update.sectionId === sectionId)
@@ -163,12 +163,13 @@ export function RecentUpdatesProvider({ children }: { children: React.ReactNode 
     // Check if update is still recent (30 seconds)
     const isRecent = Date.now() - update.timestamp < 30000
     if (!isRecent) {
-      clearRecentUpdate(sectionId)
+      // Don't clear during render - this could cause infinite loops
+      // Let the cleanup interval handle expired updates
       return false
     }
     
     return update.changes.includes(fieldPath)
-  }, [recentUpdates, clearRecentUpdate])
+  }, [recentUpdates])
 
   const getFieldChanges = useCallback((sectionId: string) => {
     const update = recentUpdates.find(update => update.sectionId === sectionId)

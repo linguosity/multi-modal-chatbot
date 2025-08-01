@@ -12,6 +12,6 @@ export default async function HomePage() {
     redirect("/dashboard");
   }
 
-  // If not authenticated, redirect to landing page
-  redirect("/landing");
+  // If not authenticated, redirect to auth page
+  redirect("/auth");
 }

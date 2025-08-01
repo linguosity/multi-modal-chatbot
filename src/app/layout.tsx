@@ -6,6 +6,7 @@ import { UserSettingsProvider } from '@/lib/context/UserSettingsContext';
 import { RecentUpdatesProvider } from '@/lib/context/RecentUpdatesContext';
 import { ToastProvider } from '@/lib/context/ToastContext';
 import { FeedbackProvider } from '@/lib/context/FeedbackContext';
+import { ProgressToastProvider } from '@/lib/context/ProgressToastContext';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -17,7 +18,6 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  console.log('Rendering RootLayout');
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -25,17 +25,17 @@ export default async function RootLayout({
     <html lang="en" className="h-full scroll-smooth">
       <body className="h-full m-0 flex flex-col bg-background text-foreground">
         
-        <React.StrictMode>
-          <UserSettingsProvider>
-            <RecentUpdatesProvider>
-              <ToastProvider>
-                <FeedbackProvider>
+        <UserSettingsProvider>
+          <RecentUpdatesProvider>
+            <ToastProvider>
+              <FeedbackProvider>
+                <ProgressToastProvider>
                   <main className="flex-1">{children}</main>
-                </FeedbackProvider>
-              </ToastProvider>
-            </RecentUpdatesProvider>
-          </UserSettingsProvider>
-        </React.StrictMode>
+                </ProgressToastProvider>
+              </FeedbackProvider>
+            </ToastProvider>
+          </RecentUpdatesProvider>
+        </UserSettingsProvider>
       </body>
     </html>
   )

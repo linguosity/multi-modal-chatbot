@@ -1,4 +1,5 @@
 import { renderDataPoints } from './renderDataPoints';
+import { hasCircularReference } from '@/lib/safe-logger';
 
 type Input = {
   html: string;
@@ -15,6 +16,19 @@ const tokenMapFromMeta = (meta: any = {}) => ({
 });
 
 export function hydrateSection({ html, data, reportMeta }: Input) {
+  console.log("🔍 hydrateSection: Starting hydration");
+  
+  // Check for circular references in inputs
+  if (hasCircularReference(data)) {
+    console.error("❌ Circular reference detected in section data");
+    return html || '[Error: Circular reference in section data]';
+  }
+  
+  if (hasCircularReference(reportMeta)) {
+    console.error("❌ Circular reference detected in report metadata");
+    return html || '[Error: Circular reference in report metadata]';
+  }
+  
   let out = html;
 
   // 1) Replace simple tokens like [Student Name]
@@ -33,12 +47,26 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
     }
   );
 
-  // 3) If your section uses DataPointSchema “points”, render them
+  // 3) If your section uses DataPointSchema "points", render them
   if (Array.isArray(data?.points)) {
-    const pointsHtml = renderDataPoints(data.points);
-    out = out.replace('[[POINTS]]', pointsHtml); // token you place in templates
+    console.log("🔍 hydrateSection: Rendering data points");
+    
+    // Check for circular references in points data
+    if (hasCircularReference(data.points)) {
+      console.error("❌ Circular reference detected in data points");
+      out = out.replace('[[POINTS]]', '[Error: Circular reference in data points]');
+    } else {
+      try {
+        const pointsHtml = renderDataPoints(data.points);
+        out = out.replace('[[POINTS]]', pointsHtml); // token you place in templates
+      } catch (error) {
+        console.error("❌ Error rendering data points:", error);
+        out = out.replace('[[POINTS]]', '[Error rendering data points]');
+      }
+    }
   }
 
+  console.log("✅ hydrateSection: Hydration completed");
   return out;
 }
 

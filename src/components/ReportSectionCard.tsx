@@ -151,7 +151,11 @@ export const ReportSectionCard: React.FC<Props> = ({
             onChange={(structuredData, generatedText) => {
               try {
                 setGeneratedContent(generatedText);
-                console.log('Structured data:', structuredData);
+                try {
+                  console.log('Structured data:', JSON.stringify(structuredData, null, 2));
+                } catch (e) {
+                  console.log('Structured data: [Circular Reference Detected]');
+                }
               } catch (error) {
                 console.error('Error handling structured content change:', error);
               }

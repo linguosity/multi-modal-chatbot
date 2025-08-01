@@ -58,8 +58,8 @@ export function ReportTimeline() {
   }
 
   const getLastActivity = (report: Report): string => {
-    if (report.updated_at) {
-      const date = new Date(report.updated_at)
+    if (report.updatedAt) {
+      const date = new Date(report.updatedAt)
       const now = new Date()
       const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
       
@@ -161,7 +161,7 @@ export function ReportTimeline() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-900">Recent Activity</h2>
         <Link href="/dashboard/reports">
-          <Button variant="outline" size="sm">
+          <Button variant="secondary" size="sm">
             View All Reports
             <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
@@ -278,7 +278,7 @@ export function ReportTimeline() {
 
                 {/* Action buttons */}
                 <div className="flex items-center space-x-2 mt-3">
-                  <Button size="sm" variant="outline">
+                  <Button size="sm" variant="secondary">
                     Continue Working
                   </Button>
                   <Button size="sm" variant="ghost">

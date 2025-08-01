@@ -46,7 +46,10 @@ export default function TiptapEditor({
 
   useEffect(() => {
     if (editor && editor.getHTML() !== content) {
-      editor.commands.setContent(content, false)
+      // Only update content if editor is not focused (to prevent cursor jumping)
+      if (!editor.isFocused) {
+        editor.commands.setContent(content, false)
+      }
     }
   }, [content, editor])
 

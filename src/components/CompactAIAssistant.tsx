@@ -44,7 +44,12 @@ export const CompactAIAssistant: React.FC<Props> = ({
 
     setLoading(true)
     try {
-      await onGenerateContent(selectedSections, input, files)
+      const fileContents = await Promise.all(files.map(async (file) => {
+        const content = await file.arrayBuffer();
+        return { name: file.name, type: file.type, content };
+      }));
+
+      await onGenerateContent(selectedSections, input, fileContents)
       // Reset form
       setInput('')
       setFiles([])

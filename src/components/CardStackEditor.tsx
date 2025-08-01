@@ -61,8 +61,14 @@ export default function CardStackEditor({ data, schema, onChange }: CardStackEdi
   }
 
   const updateValue = (cardKey: string, newValue: any) => {
-    // Deep clone and update the data
-    const newData = JSON.parse(JSON.stringify(data))
+    // Safe deep clone to avoid circular reference issues
+    let newData;
+    try {
+      newData = JSON.parse(JSON.stringify(data));
+    } catch (e) {
+      console.warn('Circular reference detected in CardStackEditor, using structuredClone fallback');
+      newData = structuredClone ? structuredClone(data) : { ...data };
+    }
     let current = newData
     
     // Navigate to the correct nested location

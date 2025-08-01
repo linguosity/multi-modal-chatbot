@@ -69,7 +69,15 @@ export class StructuredFieldPathResolver implements FieldPathResolver {
     if (!path) throw new Error('Field path cannot be empty');
     
     const parts = this.parseFieldPath(path);
-    const result = this.deepClone(data) || {};
+    let result;
+    
+    try {
+      result = this.deepClone(data) || {};
+    } catch (error) {
+      console.warn('Failed to clone data due to circular references, using empty object');
+      result = {};
+    }
+    
     let current = result;
     
     // Navigate to the parent of the target field
@@ -315,20 +323,38 @@ export class StructuredFieldPathResolver implements FieldPathResolver {
   }
 
   /**
-   * Deep clones an object to avoid mutations
+   * Deep clones an object to avoid mutations, handling circular references
    */
-  private deepClone(obj: any): any {
+  private deepClone(obj: any, visited = new WeakMap()): any {
     if (obj === null || typeof obj !== 'object') return obj;
     if (obj instanceof Date) return new Date(obj.getTime());
-    if (Array.isArray(obj)) return obj.map(item => this.deepClone(item));
     
-    const cloned: any = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        cloned[key] = this.deepClone(obj[key]);
-      }
+    // Check for circular references
+    if (visited.has(obj)) {
+      return '[Circular Reference]';
     }
-    return cloned;
+    
+    visited.set(obj, true);
+    
+    try {
+      if (Array.isArray(obj)) {
+        const result = obj.map(item => this.deepClone(item, visited));
+        visited.delete(obj);
+        return result;
+      }
+      
+      const cloned: any = {};
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          cloned[key] = this.deepClone(obj[key], visited);
+        }
+      }
+      visited.delete(obj);
+      return cloned;
+    } catch (error) {
+      visited.delete(obj);
+      return '[Clone Error]';
+    }
   }
 }
 

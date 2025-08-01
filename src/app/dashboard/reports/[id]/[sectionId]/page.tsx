@@ -16,8 +16,10 @@ import { motion } from 'framer-motion'
 import { SettingsButton } from '@/components/UserSettingsModal'
 import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 import { useToast } from '@/lib/context/ToastContext'
-import { SaveStatus } from '@/components/SaveStatus'
+import { useProgressToasts } from '@/lib/context/ProgressToastContext'
+
 import { NarrativeView } from '@/components/NarrativeView'
+import SourcesGrid from '@/components/SourcesGrid'
 import Link from 'next/link'
 
 export default function SectionPage() {
@@ -25,43 +27,24 @@ export default function SectionPage() {
   const router = useRouter()
   const { report, handleSave, handleDelete, updateSectionData, refreshReport } = useReport()
   const { settings } = useUserSettings()
-  const [mode, setMode] = useState<'data' | 'template'>('data')
+  const [mode, setMode] = useState<'data' | 'template' | 'sources'>('data')
   const [showJsonDebug] = useState(false)
   const [sectionContent, setSectionContent] = useState('')
   const [currentSchema, setCurrentSchema] = useState<any>(null)
   const [showAIAssistant, setShowAIAssistant] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isNavigating, setIsNavigating] = useState(false)
   const { addRecentUpdate } = useRecentUpdates()
   const { showAIUpdateToast, showProcessingSummaryToast } = useToast()
+  const { processLogLine } = useProgressToasts()
 
-  if (!report) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Report not found</h2>
-          <p className="text-gray-600">The requested report could not be loaded.</p>
-        </div>
-      </div>
-    )
-  }
+  // Get section and related data
+  const section = report?.sections.find(s => s.id === sectionId)
+  const currentIndex = report?.sections.findIndex(s => s.id === sectionId) ?? -1
+  const prevSection = currentIndex > 0 ? report?.sections[currentIndex - 1] : null
+  const nextSection = currentIndex < (report?.sections.length ?? 0) - 1 ? report?.sections[currentIndex + 1] : null
 
-  const section = report.sections.find(s => s.id === sectionId)
-  if (!section) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Section not found</h2>
-          <p className="text-gray-600">The requested section could not be found.</p>
-        </div>
-      </div>
-    )
-  }
-
-  const currentIndex = report.sections.findIndex(s => s.id === sectionId)
-  const prevSection = currentIndex > 0 ? report.sections[currentIndex - 1] : null
-  const nextSection = currentIndex < report.sections.length - 1 ? report.sections[currentIndex + 1] : null
-
-  const sectionSchema = getSectionSchemaForType(section.sectionType, settings.preferredState)
+  const sectionSchema = section ? getSectionSchemaForType(section.sectionType, settings.preferredState) : null
   const hasStructuredSchema = !!sectionSchema
 
   // Initialize schema state
@@ -73,9 +56,15 @@ export default function SectionPage() {
 
   // Memoize initial data to prevent infinite re-renders
   const memoizedInitialData = useMemo(() => {
-    console.log(`📊 Passing structured_data to ${section.title}:`, section.structured_data);
+    if (!section) return {};
+    // Safe logging to avoid circular reference issues
+    try {
+      console.log(`📊 Passing structured_data to ${section.title}:`, JSON.stringify(section.structured_data, null, 2));
+    } catch (e) {
+      console.log(`📊 Passing structured_data to ${section.title}: [Circular Reference Detected]`);
+    }
     return section.structured_data || {};
-  }, [section.structured_data, section.title])
+  }, [section?.structured_data, section?.title])
 
   // Initialize section content from report
   useEffect(() => {
@@ -101,7 +90,7 @@ export default function SectionPage() {
   }, [])
 
   // Save function for autosave
-  const saveSection = useCallback(async () => {
+  const saveSection = useCallback(async (showToast = false) => {
     if (!report) return
     
     const updatedReport = {
@@ -114,17 +103,20 @@ export default function SectionPage() {
     }
     
     await handleSave(updatedReport)
-  }, [report, sectionId, sectionContent, handleSave])
+    
+    // Show toast notification for manual saves
+    if (showToast) {
+      showAIUpdateToast([], [], 'Report saved successfully')
+    }
+  }, [report, sectionId, sectionContent, handleSave, showAIUpdateToast])
 
-  // Setup autosave with better UX timing
+  // Setup autosave with better UX timing - only for emergency backup
   const { isSaving, lastSaved, forceSave, hasUnsavedChanges } = useAutosave({
     data: sectionContent,
-    onSave: saveSection,
-    debounceMs: 10000, // 10 seconds - much more reasonable
+    onSave: async (data) => await saveSection(false), // No toast for auto-saves
+    debounceMs: 180000, // 3 minutes - emergency backup only
     enabled: !!section
   })
-
-
 
   // Keyboard shortcuts for saving
   useEffect(() => {
@@ -133,17 +125,14 @@ export default function SectionPage() {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
         if (hasUnsavedChanges) {
-          forceSave()
-          // The SaveStatus component will show the saving feedback
+          saveSection(true) // Show toast for keyboard saves
         }
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [forceSave, hasUnsavedChanges])
-
-  const [isNavigating, setIsNavigating] = useState(false)
+  }, [saveSection, hasUnsavedChanges])
 
   const navigateToSection = (targetSectionId: string) => {
     setIsNavigating(true)
@@ -151,6 +140,175 @@ export default function SectionPage() {
     setTimeout(() => {
       router.push(`/dashboard/reports/${reportId}/${targetSectionId}`)
     }, 50)
+  }
+
+  const handleGenerateContent = async (sectionIds: string[], input: string, files?: File[]) => {
+    if (!sectionIds.includes(section.id)) return
+    
+    try {
+      // Determine generation type based on section schema and input
+      let generationType = 'prose'; // Default
+      
+      if (files && files.length > 0) {
+        // Check if section has structured schema for structured processing
+        const sectionSchema = getSectionSchemaForType(section.sectionType || '');
+        if (sectionSchema && sectionSchema.fields && sectionSchema.fields.length > 0) {
+          generationType = 'structured_data_processing';
+        } else {
+          generationType = 'multi_modal_assessment';
+        }
+      } else if (currentSchema && currentSchema.fields && currentSchema.fields.length > 0) {
+        // For text-only input, use structured processing if schema exists
+        generationType = 'structured_data_processing';
+      }
+
+      // Create request body
+      let body: any = {
+        reportId: report.id,
+        sectionId: section.id,
+        generation_type: generationType,
+        unstructuredInput: input || `Generate content for ${section.title} section.`
+      }
+      
+      // Handle file uploads if present
+      if (files && files.length > 0) {
+        const formData = new FormData()
+        formData.append('reportId', report.id)
+        // Don't append sectionId for multi-modal assessment - let AI determine sections
+        formData.append('generation_type', generationType)
+        formData.append('unstructuredInput', input || `Generate content based on uploaded assessment materials.`)
+        
+        files.forEach((file, index) => {
+          formData.append(`file_${index}`, file)
+        })
+        
+        body = formData
+      }
+      
+      // Make API request with streaming support
+      const res = await fetch('/api/ai/generate-section', {
+        method: 'POST',
+        ...(files && files.length > 0 ? {} : { headers: { 'Content-Type': 'application/json' } }),
+        body: files && files.length > 0 ? body : JSON.stringify(body)
+      })
+      
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'AI generation failed')
+      
+      // Handle different response formats
+      if (generationType === 'structured_data_processing' || generationType === 'multi_modal_assessment') {
+        // Structured data or multi-modal assessment response
+        try {
+          console.log('🎯 AI Processing Response:', JSON.stringify(json, null, 2));
+        } catch (e) {
+          console.log('🎯 AI Processing Response: [Circular Reference Detected]');
+        }
+        
+        if (json.updatedSections && json.updatedSections.length > 0) {
+          // Collect all field changes for toast
+          const allChanges: string[] = [];
+          
+          // Track updates for visual indicators
+          json.updatedSections.forEach((updatedSectionId: string) => {
+            // Extract field changes from the response if available
+            const changes = json.analysisResult?.content_analysis?.identified_updates
+              ?.filter((update: any) => update.section_id === updatedSectionId)
+              ?.map((update: any) => update.field_path) || ['content'];
+            
+            console.log(`📍 Tracking update for section ${updatedSectionId}:`, changes);
+            addRecentUpdate(updatedSectionId, changes, 'ai_update');
+            allChanges.push(...changes);
+          });
+          
+          // Show processing summary toast (persistent)
+          // Extract processing summary from various possible locations
+          let processingSummary = null;
+          
+          // Try to get from analysisResult (analyze_assessment_content tool)
+          if (json.analysisResult?.content_analysis?.processing_notes) {
+            processingSummary = json.analysisResult.content_analysis.processing_notes;
+          }
+          
+          // Try to get from tool data (update_report_data tool)
+          if (!processingSummary && json.analysisResult?.data?.processing_summary) {
+            processingSummary = json.analysisResult.data.processing_summary;
+          }
+          
+          // Try to get from message (fallback)
+          if (!processingSummary && json.message) {
+            processingSummary = json.message;
+          }
+          
+          if (processingSummary) {
+            showProcessingSummaryToast({
+              summary: processingSummary,
+              updatedSections: json.updatedSections,
+              processedFiles: json.processedFiles || [],
+              fieldUpdates: allChanges
+            });
+          }
+          
+          // Show quick update toast (auto-dismiss)
+          showAIUpdateToast(json.updatedSections, allChanges);
+          
+          // Refresh the report data from database
+          console.log('🔄 Refreshing report data to show updates...');
+          setIsRefreshing(true);
+          try {
+            await refreshReport();
+          } finally {
+            setIsRefreshing(false);
+          }
+          
+          // If current section was updated, show visual feedback
+          if (json.updatedSections.includes(section.id)) {
+            console.log('✨ Current section was updated, showing visual feedback');
+            // Add a subtle animation or highlight effect
+            const element = document.querySelector('[data-section-content]');
+            if (element) {
+              element.classList.add('animate-pulse');
+              setTimeout(() => {
+                element.classList.remove('animate-pulse');
+              }, 2000);
+            }
+          }
+        } else {
+          console.log('ℹ️ Processing completed but no sections were updated:', json.message)
+          // Show info message
+          showAIUpdateToast([], []);
+        }
+      } else {
+        // Single section response (legacy prose generation)
+        console.log('📝 Legacy prose generation completed');
+        handleContentChange(json.updatedSection.content)
+        forceSave()
+      }
+    } catch (error) {
+      console.error('AI generation failed:', error)
+    }
+  }
+
+  // Early returns after all hooks
+  if (!report) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Report not found</h2>
+          <p className="text-gray-600">The requested report could not be loaded.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!section) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Section not found</h2>
+          <p className="text-gray-600">The requested section could not be found.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -168,42 +326,56 @@ export default function SectionPage() {
             >
               {section.title}
             </motion.h1>
-            <div className="mt-1 h-4">
-              <SaveStatus
-                isSaving={isSaving}
-                lastSaved={lastSaved}
-                hasUnsavedChanges={hasUnsavedChanges}
-                onForceSave={forceSave}
-              />
-            </div>
+
           </div>
 
           <div className="flex items-end gap-4">
-            {/* Template Mode Toggle - Only show when needed */}
-            {hasStructuredSchema && (
-              <div className="flex gap-0 relative -mb-px z-10">
+            {/* Mode Toggle Tabs */}
+            <div className="flex gap-0 relative -mb-px z-10">
+              {/* Data Tab */}
+              <button
+                onClick={() => setMode('data')}
+                className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
+                  mode === 'data' 
+                    ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
+                    : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
+                }`}
+              >
+                Data Entry
+              </button>
+              
+              {/* Template Tab - Only show when structured schema exists */}
+              {hasStructuredSchema && (
                 <button
-                  onClick={() => setMode(mode === 'template' ? 'data' : 'template')}
-                  className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
+                  onClick={() => setMode('template')}
+                  className={`px-4 py-2 text-sm border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
                     mode === 'template' 
                       ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
                       : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
-                  }`}
+                  } ${mode === 'data' ? '-ml-px' : ''}`}
                 >
                   <Settings className="h-3 w-3" />
-                  {mode === 'template' ? 'Exit Template Mode' : 'Edit Template'}
+                  Edit Template
                 </button>
-              </div>
-            )}
+              )}
+              
+              {/* Sources Tab */}
+              <button
+                onClick={() => setMode('sources')}
+                className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
+                  mode === 'sources' 
+                    ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
+                    : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
+                } -ml-px`}
+              >
+                <FileText className="h-3 w-3" />
+                Sources
+              </button>
+            </div>
           
             <div className="flex items-end gap-3">
             <div className="flex items-center gap-2 text-sm min-w-[120px] h-6">
-              {isSaving ? (
-                <>
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                  <span className="text-blue-600">Saving...</span>
-                </>
-              ) : isRefreshing ? (
+              {isRefreshing ? (
                 <>
                   <div className="animate-spin h-4 w-4 border-2 border-green-600 border-t-transparent rounded-full"></div>
                   <span className="text-green-600">Updating...</span>
@@ -242,154 +414,17 @@ export default function SectionPage() {
                   reportId={report.id}
                   isOpen={showAIAssistant}
                   onToggle={() => setShowAIAssistant(!showAIAssistant)}
-                  onGenerateContent={async (sectionIds, input, files) => {
-                    if (!sectionIds.includes(section.id)) return
-                    
-                    try {
-                      // Determine generation type based on section schema and input
-                      let generationType = 'prose'; // Default
-                      
-                      if (files && files.length > 0) {
-                        // Check if section has structured schema for structured processing
-                        const sectionSchema = getSectionSchemaForType(section.sectionType || '');
-                        if (sectionSchema && sectionSchema.fields && sectionSchema.fields.length > 0) {
-                          generationType = 'structured_data_processing';
-                        } else {
-                          generationType = 'multi_modal_assessment';
-                        }
-                      } else if (currentSchema && currentSchema.fields && currentSchema.fields.length > 0) {
-                        // For text-only input, use structured processing if schema exists
-                        generationType = 'structured_data_processing';
-                      }
-
-                      // Create request body
-                      let body: any = {
-                        reportId: report.id,
-                        sectionId: section.id,
-                        generation_type: generationType,
-                        unstructuredInput: input || `Generate content for ${section.title} section.`
-                      }
-                      
-                      // Handle file uploads if present
-                      if (files && files.length > 0) {
-                        const formData = new FormData()
-                        formData.append('reportId', report.id)
-                        // Don't append sectionId for multi-modal assessment - let AI determine sections
-                        formData.append('generation_type', generationType)
-                        formData.append('unstructuredInput', input || `Generate content based on uploaded assessment materials.`)
-                        
-                        files.forEach((file, index) => {
-                          formData.append(`file_${index}`, file)
-                        })
-                        
-                        body = formData
-                      }
-                      
-                      // Make API request
-                      const res = await fetch('/api/ai/generate-section', {
-                        method: 'POST',
-                        ...(files && files.length > 0 ? {} : { headers: { 'Content-Type': 'application/json' } }),
-                        body: files && files.length > 0 ? body : JSON.stringify(body)
-                      })
-                      
-                      const json = await res.json()
-                      if (!res.ok) throw new Error(json.error || 'AI generation failed')
-                      
-                      // Handle different response formats
-                      if (generationType === 'structured_data_processing' || generationType === 'multi_modal_assessment') {
-                        // Structured data or multi-modal assessment response
-                        console.log('🎯 AI Processing Response:', json);
-                        
-                        if (json.updatedSections && json.updatedSections.length > 0) {
-                          // Collect all field changes for toast
-                          const allChanges: string[] = [];
-                          
-                          // Track updates for visual indicators
-                          json.updatedSections.forEach((updatedSectionId: string) => {
-                            // Extract field changes from the response if available
-                            const changes = json.analysisResult?.content_analysis?.identified_updates
-                              ?.filter((update: any) => update.section_id === updatedSectionId)
-                              ?.map((update: any) => update.field_path) || ['content'];
-                            
-                            console.log(`📍 Tracking update for section ${updatedSectionId}:`, changes);
-                            addRecentUpdate(updatedSectionId, changes, 'ai_update');
-                            allChanges.push(...changes);
-                          });
-                          
-                          // Show processing summary toast (persistent)
-                          // Extract processing summary from various possible locations
-                          let processingSummary = null;
-                          
-                          // Try to get from analysisResult (analyze_assessment_content tool)
-                          if (json.analysisResult?.content_analysis?.processing_notes) {
-                            processingSummary = json.analysisResult.content_analysis.processing_notes;
-                          }
-                          
-                          // Try to get from tool data (update_report_data tool)
-                          if (!processingSummary && json.analysisResult?.data?.processing_summary) {
-                            processingSummary = json.analysisResult.data.processing_summary;
-                          }
-                          
-                          // Try to get from message (fallback)
-                          if (!processingSummary && json.message) {
-                            processingSummary = json.message;
-                          }
-                          
-                          if (processingSummary) {
-                            showProcessingSummaryToast({
-                              summary: processingSummary,
-                              updatedSections: json.updatedSections,
-                              processedFiles: json.processedFiles || [],
-                              fieldUpdates: allChanges
-                            });
-                          }
-                          
-                          // Show quick update toast (auto-dismiss)
-                          showAIUpdateToast(json.updatedSections, allChanges);
-                          
-                          // Refresh the report data from database
-                          console.log('🔄 Refreshing report data to show updates...');
-                          setIsRefreshing(true);
-                          try {
-                            await refreshReport();
-                          } finally {
-                            setIsRefreshing(false);
-                          }
-                          
-                          // If current section was updated, show visual feedback
-                          if (json.updatedSections.includes(section.id)) {
-                            console.log('✨ Current section was updated, showing visual feedback');
-                            // Add a subtle animation or highlight effect
-                            const element = document.querySelector('[data-section-content]');
-                            if (element) {
-                              element.classList.add('animate-pulse');
-                              setTimeout(() => {
-                                element.classList.remove('animate-pulse');
-                              }, 2000);
-                            }
-                          }
-                        } else {
-                          console.log('ℹ️ Processing completed but no sections were updated:', json.message)
-                          // Show info message
-                          showAIUpdateToast([], []);
-                        }
-                      } else {
-                        // Single section response (legacy prose generation)
-                        console.log('📝 Legacy prose generation completed');
-                        handleContentChange(json.updatedSection.content)
-                        forceSave()
-                      }
-                    } catch (error) {
-                      console.error('AI generation failed:', error)
-                    }
-                  }}
+                  onGenerateContent={(sectionIds, input, files) => handleGenerateContent(sectionIds, input, files)}
                 />
               </div>
               
               <SplitButton
-                onClick={forceSave}
+                onClick={() => saveSection(true)} // Show toast for manual saves
                 variant="primary"
                 size="sm"
+                isSaving={isSaving}
+                lastSaved={lastSaved}
+                hasUnsavedChanges={hasUnsavedChanges}
                 dropdownItems={[
                   {
                     label: "Save as Template",
@@ -478,36 +513,72 @@ export default function SectionPage() {
         >
           {/* Main Content Section */}
           <section className={`relative mx-6 ${hasStructuredSchema ? 'z-10 -translate-y-px' : 'mt-6'}`}>
-            {/* Data Entry Area */}
-            <div className="bg-white p-6 pb-8 rounded-t-lg" data-section-content>
-              {hasStructuredSchema && currentSchema ? (
-                <DynamicStructuredBlock
-                  schema={currentSchema}
-                  initialData={memoizedInitialData}
-                  mode={mode}
-                  sectionId={section.id}
-                  onChange={(_, generatedText) => {
-                    handleContentChange(generatedText)
-                  }}
-                  onSchemaChange={(newSchema) => {
-                    console.log('Schema changed:', newSchema)
-                    setCurrentSchema(newSchema) // Actually update the schema state!
-                  }}
-                  onSaveAsTemplate={(schema) => {
-                    console.log('Save as template:', schema)
-                    // TODO: Implement save as template
-                  }}
-                  updateSectionData={updateSectionData}
+            {/* Content Area */}
+            <div className="bg-white rounded-t-lg" data-section-content>
+              {mode === 'sources' ? (
+                <SourcesGrid 
+                  sources={report.metadata?.uploadedFiles?.map(file => ({
+                    id: file.id,
+                    type: file.type as 'text' | 'pdf' | 'image' | 'audio',
+                    fileName: file.name,
+                    uploadDate: file.uploadDate,
+                    size: file.size,
+                    description: file.description
+                  })) || []}
+                  reportId={reportId}
+                  sectionId={sectionId}
                 />
               ) : (
-                <div className="prose max-w-none">
-                  <TiptapEditor
-                    content={sectionContent}
-                    onChange={handleContentChange}
-                    onBlur={forceSave}
-                    editable={true}
-                    withBorder={false}
-                  />
+                <div className="p-6 pb-8">
+                  {hasStructuredSchema && currentSchema && mode === 'template' ? (
+                    <DynamicStructuredBlock
+                      schema={currentSchema}
+                      initialData={memoizedInitialData}
+                      mode={mode}
+                      sectionId={section.id}
+                      onChange={(_, generatedText) => {
+                        handleContentChange(generatedText)
+                      }}
+                      onSchemaChange={(newSchema) => {
+                        console.log('Schema changed:', newSchema)
+                        setCurrentSchema(newSchema) // Actually update the schema state!
+                      }}
+                      onSaveAsTemplate={(schema) => {
+                        console.log('Save as template:', schema)
+                        // TODO: Implement save as template
+                      }}
+                      updateSectionData={updateSectionData}
+                    />
+                  ) : hasStructuredSchema && currentSchema && mode === 'data' ? (
+                    <DynamicStructuredBlock
+                      schema={currentSchema}
+                      initialData={memoizedInitialData}
+                      mode={mode}
+                      sectionId={section.id}
+                      onChange={(_, generatedText) => {
+                        handleContentChange(generatedText)
+                      }}
+                      onSchemaChange={(newSchema) => {
+                        console.log('Schema changed:', newSchema)
+                        setCurrentSchema(newSchema) // Actually update the schema state!
+                      }}
+                      onSaveAsTemplate={(schema) => {
+                        console.log('Save as template:', schema)
+                        // TODO: Implement save as template
+                      }}
+                      updateSectionData={updateSectionData}
+                    />
+                  ) : (
+                    <div className="prose max-w-none">
+                      <TiptapEditor
+                        content={sectionContent}
+                        onChange={handleContentChange}
+                        onBlur={() => saveSection(false)} // Save on blur, no toast
+                        editable={true}
+                        withBorder={false}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -515,7 +586,7 @@ export default function SectionPage() {
         </motion.div>
 
         {/* Narrative View Section - Full Width Background */}
-        {hasStructuredSchema && currentSchema && mode !== 'template' && (
+        {hasStructuredSchema && currentSchema && mode === 'data' && (
           <>
             {/* Subtle 3-Point Gradient Transition - Full Width */}
             <div className="relative h-16 bg-gradient-to-b from-white via-blue-50/30 to-blue-50/50 w-full">
