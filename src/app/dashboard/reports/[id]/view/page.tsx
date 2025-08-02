@@ -1,3 +1,4 @@
+import { RetryButton } from '@/components/RetryButton';
 // src/app/dashboard/reports/[id]/view/page.tsx
 import { getReportForView } from '@/lib/server/getReportForView';
 import ReportView from './ReportView';
@@ -64,12 +65,7 @@ export default async function Page({
           <p className="text-sm text-gray-500">
             Report ID: {id}
           </p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Retry
-          </button>
+          <RetryButton />
         </div>
       );
     }
@@ -141,7 +137,7 @@ export default async function Page({
     console.log("🔍 Debug - Report metadata:", report.metadata);
     console.log("🔍 Debug - Total sections:", safeSections.length);
     
-    return <ReportView report={safeReport} />;
+    return <ReportView />;
     
   } catch (error) {
     console.error("❌ Error in report view page:", error);

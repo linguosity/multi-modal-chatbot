@@ -35,43 +35,61 @@ export function StudentBioCard() {
   // Initialize editData from report metadata or localStorage when report loads
   useEffect(() => {
     if (report) {
-      // Try to get from report metadata first
+      const studentInfoSection = report.sections.find(
+        (section) => section.title === 'Student Information'
+      );
+
+      let bioData: StudentBioData = {
+        firstName: 'Student',
+        lastName: 'Name',
+        dateOfBirth: '',
+        age: '',
+        studentId: '',
+        grade: '',
+        primaryLanguages: 'English',
+        eligibilityStatus: 'Pending'
+      };
+
+      // Prioritize studentBio from metadata
       if (report.metadata?.studentBio) {
-        const bio = report.metadata.studentBio
-        setEditData({
-          firstName: bio.firstName || 'Student',
-          lastName: bio.lastName || 'Name',
-          dateOfBirth: bio.dateOfBirth || '',
-          age: bio.age || '',
-          studentId: bio.studentId || '',
-          grade: bio.grade || '',
-          primaryLanguages: bio.primaryLanguages || 'English',
-          eligibilityStatus: bio.eligibilityStatus || 'Pending'
-        })
-      } else {
-        // Fallback to localStorage if metadata not available
-        const storageKey = `studentBio_${report.id}`
-        const savedBio = localStorage.getItem(storageKey)
+        const bio = report.metadata.studentBio;
+        bioData = { ...bioData, ...bio };
+      } 
+      // Then, check the student information section
+      else if (studentInfoSection?.structured_data) {
+        const structuredData = studentInfoSection.structured_data;
+        bioData = {
+          ...bioData,
+          firstName: structuredData.first_name || bioData.firstName,
+          lastName: structuredData.last_name || bioData.lastName,
+          dateOfBirth: structuredData.date_of_birth || bioData.dateOfBirth,
+          age: structuredData.age || bioData.age,
+          studentId: structuredData.student_id || bioData.studentId,
+          grade: structuredData.grade || bioData.grade,
+          primaryLanguages:
+            structuredData.primary_languages ||
+            structuredData.home_languages ||
+            bioData.primaryLanguages,
+          eligibilityStatus:
+            structuredData.eligibility_status || bioData.eligibilityStatus,
+        };
+      }
+      // Finally, fall back to localStorage
+      else {
+        const storageKey = `studentBio_${report.id}`;
+        const savedBio = localStorage.getItem(storageKey);
         if (savedBio) {
           try {
-            const bio = JSON.parse(savedBio)
-            setEditData({
-              firstName: bio.firstName || 'Student',
-              lastName: bio.lastName || 'Name',
-              dateOfBirth: bio.dateOfBirth || '',
-              age: bio.age || '',
-              studentId: bio.studentId || '',
-              grade: bio.grade || '',
-              primaryLanguages: bio.primaryLanguages || 'English',
-              eligibilityStatus: bio.eligibilityStatus || 'Pending'
-            })
+            const bio = JSON.parse(savedBio);
+            bioData = { ...bioData, ...bio };
           } catch (e) {
-            console.error('Failed to parse saved student bio:', e)
+            console.error('Failed to parse saved student bio:', e);
           }
         }
       }
+      setEditData(bioData);
     }
-  }, [report])
+  }, [report]);
   
   const cardRef = useRef<HTMLDivElement>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -101,20 +119,46 @@ export function StudentBioCard() {
   }
 
   const handleSaveBio = async () => {
-    if (!report) return
-    
+    if (!report) return;
+
     // Always save to localStorage as backup
-    const storageKey = `studentBio_${report.id}`
-    localStorage.setItem(storageKey, JSON.stringify(editData))
-    
-    // Update the report with student bio data
+    const storageKey = `studentBio_${report.id}`;
+    localStorage.setItem(storageKey, JSON.stringify(editData));
+
+    // Find the index of the student information section
+    const studentInfoSectionIndex = report.sections.findIndex(
+      (section) => section.title === 'Student Information'
+    );
+
+    const updatedSections = [...report.sections];
+
+    if (studentInfoSectionIndex !== -1) {
+      // Update the structured_data of the existing section
+      updatedSections[studentInfoSectionIndex] = {
+        ...updatedSections[studentInfoSectionIndex],
+        structured_data: {
+          ...updatedSections[studentInfoSectionIndex].structured_data,
+          first_name: editData.firstName,
+          last_name: editData.lastName,
+          date_of_birth: editData.dateOfBirth,
+          age: editData.age,
+          student_id: editData.studentId,
+          grade: editData.grade,
+          primary_languages: editData.primaryLanguages,
+          eligibility_status: editData.eligibilityStatus,
+        },
+      };
+    }
+
+    // Update the report with student bio data in metadata and sections
     const updatedReport = {
       ...report,
       metadata: {
         ...report.metadata,
-        studentBio: editData
-      }
-    }
+        studentBio: editData,
+      },
+      sections: updatedSections,
+    };
     
     try {
       await handleSave(updatedReport)
@@ -205,15 +249,15 @@ export function StudentBioCard() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-blue-900 text-base truncate">
-              {report?.metadata?.studentBio?.firstName || 'Student'} {report?.metadata?.studentBio?.lastName || 'Name'}
+              {editData.lastName || 'Name'}, {editData.firstName || 'Student'}
             </div>
             <div className="text-sm text-blue-700 mt-1">
-              {report?.metadata?.studentBio?.studentId && (
+              {editData.studentId && (
                 <span className="font-mono bg-blue-100 px-2 py-0.5 rounded text-xs mr-2">
-                  ID: {report.metadata.studentBio.studentId}
+                  ID: {editData.studentId}
                 </span>
               )}
-              {report?.metadata?.studentBio?.grade ? `Grade ${report.metadata.studentBio.grade}` : 'Grade --'} • {report?.metadata?.studentBio?.age ? `Age ${report.metadata.studentBio.age}` : 'Age --'}
+              {editData.grade ? `Grade ${editData.grade}` : 'Grade --'} • {editData.age ? `Age ${editData.age}` : 'Age --'}
             </div>
           </div>
           <Edit3 className="h-3 w-3 text-blue-600 opacity-60" />
@@ -374,11 +418,11 @@ export function StudentBioCard() {
               ) : (
                 <div className="text-sm text-gray-900">
                   <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                    report?.metadata?.studentBio?.eligibilityStatus === 'Eligible' ? 'bg-green-100 text-green-800' :
-                    report?.metadata?.studentBio?.eligibilityStatus === 'Not Eligible' ? 'bg-red-100 text-red-800' :
+                    editData.eligibilityStatus === 'Eligible' ? 'bg-green-100 text-green-800' :
+                    editData.eligibilityStatus === 'Not Eligible' ? 'bg-red-100 text-red-800' :
                     'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {report?.metadata?.studentBio?.eligibilityStatus || 'Pending'}
+                    {editData.eligibilityStatus || 'Pending'}
                   </span>
                 </div>
               )}

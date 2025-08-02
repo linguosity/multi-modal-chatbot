@@ -8,4 +8,8 @@ export interface ReportContextType {
   updateSectionData: (sectionId: string, newStructuredData: any, newContent: string) => void;
   refreshReport: () => Promise<void>;
   setReport: (report: Report) => void;
+  showJson: boolean;
+  setShowJson: (show: boolean) => void;
+  showJson: boolean;
+  setShowJson: (show: boolean) => void;
 }

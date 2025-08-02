@@ -4,6 +4,28 @@ import { hydrateSection } from '@/lib/render/hydrateSection';
 import { hasCircularReference, safeLog, safeClone } from '@/lib/safe-logger';
 import type { Report, Section } from '@/types/report-types';
 
+// Helper function to extract clean data from infinitely nested structured_data
+function extractCleanStructuredData(corruptedData: any): Record<string, any> {
+  if (!corruptedData || typeof corruptedData !== 'object') {
+    return {};
+  }
+  
+  const cleanData: Record<string, any> = {};
+  
+  // Extract top-level properties that aren't 'structured_data'
+  for (const [key, value] of Object.entries(corruptedData)) {
+    if (key !== 'structured_data' && value !== null && value !== undefined && value !== '') {
+      // Only include non-empty values and avoid nested objects that might be corrupted
+      if (typeof value !== 'object' || Array.isArray(value)) {
+        cleanData[key] = value;
+      }
+    }
+  }
+  
+  console.log('🧹 Extracted clean data keys:', Object.keys(cleanData));
+  return cleanData;
+}
+
 // Helper function to create a basic HTML display from structured data
 function createBasicStructuredDataDisplay(data: Record<string, any>, sectionTitle: string): string {
   const entries = Object.entries(data).filter(([key, value]) => 
@@ -44,7 +66,7 @@ export async function getReportForView(reportId: string): Promise<Report | null>
 
   const { data: reportData, error } = await supabase
     .from('reports')
-    .select(`id, title, type, metadata, sections`)
+    .select(`*, report_sections(*)`)
     .eq('id', reportId)
     .single();
 
@@ -60,7 +82,16 @@ export async function getReportForView(reportId: string): Promise<Report | null>
 
   const report: Report = {
     ...reportData,
-    sections: (reportData.sections as unknown as Section[]) || [],
+    sections: (reportData.report_sections as unknown as Section[]) || [],
+    created_at: reportData.created_at,
+    evaluator_id: reportData.evaluator_id,
+    finalized_date: reportData.finalized_date,
+    print_version: reportData.print_version,
+    related_assessment_ids: reportData.related_assessment_ids,
+    related_eligibility_ids: reportData.related_eligibility_ids,
+    status: reportData.status,
+    template_id: reportData.template_id,
+    user_id: reportData.user_id,
   };
 
   if (error) {
@@ -126,13 +157,17 @@ export async function getReportForView(reportId: string): Promise<Report | null>
             const keys = Object.keys(safeStructuredData);
             const hasNumericKeys = keys.some(key => /^\d+$/.test(key));
             const hasMoreThan100Keys = keys.length > 100;
+            const hasNestedStructuredData = safeStructuredData.structured_data !== undefined;
             
             if (hasNumericKeys && hasMoreThan100Keys) {
-              console.warn(`⚠️ Section ${index} structured_data appears corrupted (${keys.length} numeric keys), using empty object`);
-              safeStructuredData = {};
+              console.warn(`⚠️ Section ${index} structured_data appears corrupted (${keys.length} numeric keys), attempting cleanup`);
+              safeStructuredData = extractCleanStructuredData(s.structured_data);
+            } else if (hasNestedStructuredData) {
+              console.warn(`⚠️ Section ${index} has nested structured_data, attempting cleanup`);
+              safeStructuredData = extractCleanStructuredData(s.structured_data);
             } else if (hasCircularReference(safeStructuredData)) {
-              console.warn(`⚠️ Section ${index} still has circular references after cloning, using empty object`);
-              safeStructuredData = {};
+              console.warn(`⚠️ Section ${index} still has circular references after cloning, attempting cleanup`);
+              safeStructuredData = extractCleanStructuredData(s.structured_data);
             } else {
               console.log(`🔍 Section ${index} structured_data keys after clone:`, Object.keys(safeStructuredData));
             }
@@ -180,7 +215,6 @@ export async function getReportForView(reportId: string): Promise<Report | null>
           order: s.order,
           content: s.content,
           structured_data: safeStructuredData, // Use the safe copy
-          hydratedHtml
         };
         
         return hydratedSection;

@@ -163,7 +163,7 @@ export const ReportSectionCard: React.FC<Props> = ({
             onSchemaChange={handleSchemaChange}
             onSaveAsTemplate={handleSaveAsTemplate}
             mode="data"
-            updateSectionData={(sectionId, data) => updateSectionData(sectionId, data)}
+            updateSectionData={(sectionId, data) => updateSectionData(sectionId, data, generatedContent)}
           />
         ) : hasStructuredSchema && tab === 'template' ? (
           <DynamicStructuredBlock
@@ -173,7 +173,7 @@ export const ReportSectionCard: React.FC<Props> = ({
             onSchemaChange={handleSchemaChange}
             onSaveAsTemplate={handleSaveAsTemplate}
             mode="template"
-            updateSectionData={(sectionId, data) => updateSectionData(sectionId, data)}
+            updateSectionData={(sectionId, data) => updateSectionData(sectionId, data, generatedContent)}
           />
         ) : (
           <div className="h-full">

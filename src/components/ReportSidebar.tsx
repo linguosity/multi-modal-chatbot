@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter, usePathname } from 'next/navigation'
-import { ReportSection } from '@/lib/schemas/report'
+import { ReportSection } from '@/lib/schemas/report';
 import { useReport } from '@/lib/context/ReportContext'
 import { ChevronDown, ChevronRight, Plus, FileText } from 'lucide-react'
 import { StudentBioCard } from './StudentBioCard'
@@ -63,7 +63,7 @@ function GroupSectionList({
       id: section.id,
       title: section.title,
       required: section.isRequired,
-      complete: status === 'complete'
+      complete: section.isCompleted || false
     }
   }
 

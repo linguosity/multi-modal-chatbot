@@ -1,5 +1,6 @@
 'use client';
-import React from 'react';
+import React, { Fragment } from 'react';
+import { useReport } from '@/lib/context/ReportContext';
 import { renderStructuredData, formatDate } from '@/lib/report-renderer';
 
 interface StudentInfo {
@@ -23,7 +24,7 @@ interface ReportViewProps {
       title: string;
       sectionType: string;
       hydratedHtml: string;
-      structured_data?: any;
+      structured_data?: Record<string, any>;
     }>;
     metadata?: {
       studentBio?: StudentInfo;
@@ -40,7 +41,21 @@ function StudentInfoTable({ studentInfo, evaluationDate, evaluator }: {
   evaluator?: string;
 }) {
   const rows = [
-    { label: 'Student Name', value: `${studentInfo.firstName || ''} ${studentInfo.lastName || ''}`.trim() || 'N/A' },
+    {
+      label: 'Student Name',
+      value: (() => {
+        const lastName = studentInfo.lastName || '';
+        const firstName = studentInfo.firstName || '';
+        if (lastName && firstName) {
+          return `${lastName}, ${firstName}`;
+        } else if (lastName) {
+          return lastName;
+        } else if (firstName) {
+          return firstName;
+        }
+        return 'N/A';
+      })()
+    },
     { label: 'Date of Birth', value: studentInfo.dateOfBirth || 'N/A' },
     { label: 'Age', value: studentInfo.age || 'N/A' },
     { label: 'Grade', value: studentInfo.grade || 'N/A' },
@@ -62,18 +77,18 @@ function StudentInfoTable({ studentInfo, evaluationDate, evaluator }: {
         <tbody>
           <tr>
             {firstRow.map((row, index) => (
-              <React.Fragment key={index}>
+              <Fragment key={index}>
                 <th>{row.label}</th>
                 <td>{row.value}</td>
-              </React.Fragment>
+              </Fragment>
             ))}
           </tr>
           <tr>
             {secondRow.map((row, index) => (
-              <React.Fragment key={index}>
+              <Fragment key={index}>
                 <th>{row.label}</th>
                 <td>{row.value}</td>
-              </React.Fragment>
+              </Fragment>
             ))}
           </tr>
           {remainingRows.map((row, index) => (
@@ -90,13 +105,94 @@ function StudentInfoTable({ studentInfo, evaluationDate, evaluator }: {
 
 
 
-export default function ReportView({ report }: ReportViewProps) {
-  const studentInfo = report.metadata?.studentBio || {};
-  const evaluationDate = formatDate(report.createdAt);
+export default function ReportView() { // Removed props
+  const { report } = useReport(); // Use the hook to get the report
+
+  if (!report) {
+    return <div>Loading report...</div>; // Or some other loading state
+  }
+
+  // Extract student info with same priority as StudentBioCard
+  const studentInfoSection = report.sections.find(section => 
+    section.title === 'Student Information'
+  );
+  
+  console.log('🔍 ReportView - Found student info section:', !!studentInfoSection);
+  console.log('🔍 ReportView - Student info section data:', studentInfoSection);
+  console.log('🔍 ReportView - Report metadata:', report.metadata);
+  console.log('🔍 ReportView - All sections:', report.sections.map(s => ({ title: s.title, section_type: s.section_type })));
+  
+  // Use same priority logic as StudentBioCard
+  let studentInfo: StudentInfo = {
+    firstName: '',
+    lastName: '',
+    dateOfBirth: '',
+    age: '',
+    grade: '',
+    studentId: '',
+    primaryLanguages: '',
+    eligibilityStatus: ''
+  };
+
+  // First priority: metadata.studentBio
+  if (report.metadata?.studentBio) {
+    const bio = report.metadata.studentBio;
+    studentInfo = {
+      firstName: bio.firstName || '',
+      lastName: bio.lastName || '',
+      dateOfBirth: bio.dateOfBirth || '',
+      age: bio.age || '',
+      grade: bio.grade || '',
+      studentId: bio.studentId || '',
+      primaryLanguages: bio.primaryLanguages || '',
+      eligibilityStatus: bio.eligibilityStatus || ''
+    };
+    console.log('🔍 ReportView - Using metadata.studentBio:', studentInfo);
+  }
+  // Second priority: section structured_data
+  else if (studentInfoSection?.structured_data) {
+    const rawStudentData = studentInfoSection.structured_data as Record<string, any>;
+    const safeStudentData = typeof rawStudentData === 'object' && rawStudentData !== null ? rawStudentData : {};
+    
+    studentInfo = {
+      firstName: safeStudentData.first_name || '',
+      lastName: safeStudentData.last_name || '',
+      dateOfBirth: safeStudentData.date_of_birth || '',
+      age: safeStudentData.age || '',
+      grade: safeStudentData.grade || '',
+      studentId: safeStudentData.student_id || '',
+      primaryLanguages: safeStudentData.primary_languages || safeStudentData.home_languages || '',
+      eligibilityStatus: safeStudentData.eligibility_status || ''
+    };
+    console.log('🔍 ReportView - Using section structured_data:', studentInfo);
+  }
+  
+  // Get evaluation date and evaluator info
+  let evaluationDate = '';
+  let evaluator = '';
+  
+  if (studentInfoSection?.structured_data) {
+    const rawStudentData = studentInfoSection.structured_data as Record<string, any>;
+    const safeStudentData = typeof rawStudentData === 'object' && rawStudentData !== null ? rawStudentData : {};
+    
+    evaluationDate = formatDate(safeStudentData.evaluation_dates || safeStudentData.report_date || report.created_at);
+    evaluator = safeStudentData.evaluator_name ? 
+      `${safeStudentData.evaluator_name}${safeStudentData.evaluator_credentials ? ', ' + safeStudentData.evaluator_credentials : ''}` : 
+      report.evaluator_id || '';
+  } else {
+    // Fallback to report-level data
+    evaluationDate = formatDate(report.created_at);
+    evaluator = report.evaluator_id || '';
+  }
+  
+  // Debug: Log what we extracted
+  console.log('🔍 ReportView - Final student info:', studentInfo);
+  console.log('🔍 ReportView - Evaluation date:', evaluationDate);
+  console.log('🔍 ReportView - Evaluator:', evaluator);
   
   return (
     <div className="report-container">
-      <style jsx global>{`
+            <style jsx global>{`
         /* Professional Report Styling */
         .report-container {
           font-family: 'Inter', 'Times New Roman', serif;
@@ -415,14 +511,14 @@ export default function ReportView({ report }: ReportViewProps) {
       <StudentInfoTable 
         studentInfo={studentInfo} 
         evaluationDate={evaluationDate}
-        evaluator={report.evaluatorId}
+        evaluator={evaluator}
       />
 
       {/* Report Sections */}
       {report.sections
-        .filter(section => section.sectionType !== 'heading') // Skip heading as we have our own header
+        .filter(section => section.title !== 'Student Information') // Skip the dedicated student info section
         .map((section, index) => (
-        <React.Fragment key={section.id}>
+        <Fragment key={index}>
           {index > 0 && <hr className="section-divider" />}
           <section className="report-section">
             <h2 className="section-header">{section.title}</h2>
@@ -430,10 +526,12 @@ export default function ReportView({ report }: ReportViewProps) {
             {/* Render HTML content from server */}
             <div
               className="tiptap"
-              dangerouslySetInnerHTML={{ __html: section.hydratedHtml }}
+              dangerouslySetInnerHTML={{
+                __html: section.hydratedHtml || (section.structured_data ? renderStructuredData(section.structured_data, section.sectionType) : '')
+              }}
             />
           </section>
-        </React.Fragment>
+        </Fragment>
       ))}
     </div>
   );

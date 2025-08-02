@@ -189,6 +189,27 @@ export function renderStructuredData(data: any, sectionType: string): string {
       return renderRecommendations(data);
       
     default:
+      // Generic rendering for other structured data
+      if (typeof data === 'object' && data !== null) {
+        let html = '';
+        for (const key in data) {
+          if (Object.prototype.hasOwnProperty.call(data, key)) {
+            const value = data[key];
+            const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            if (typeof value === 'boolean') {
+              html += `<p><strong>${formattedKey}:</strong> ${value ? 'Yes' : 'No'}</p>`;
+            } else if (Array.isArray(value)) {
+              html += `<p><strong>${formattedKey}:</strong> ${value.join(', ')}</p>`;
+            } else if (typeof value === 'object' && value !== null) {
+              // Handle nested objects by converting them to a string representation
+              html += `<p><strong>${formattedKey}:</strong> ${JSON.stringify(value)}</p>`;
+            } else if (value !== undefined && value !== null && value !== '') {
+              html += `<p><strong>${formattedKey}:</strong> ${value}</p>`;
+            }
+          }
+        }
+        return html;
+      }
       return '';
   }
 
