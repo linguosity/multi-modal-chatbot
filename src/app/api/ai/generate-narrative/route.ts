@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     console.log('✅ Data validation passed')
 
     console.log('🔌 Creating Supabase client...')
-    const supabase = await createServerSupabase()
+    const supabase = await createRouteSupabase()
     console.log('✅ Supabase client created')
 
     // Get the full report context for better narrative generation
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       .filter((s: any) => s.structured_data && Object.keys(s.structured_data).length > 0)
       .map((s: any) => ({
         sectionTitle: s.title,
-        sectionType: s.section_type,
+        sectionType: s.sectionType || s.section_type, // Handle both camelCase and snake_case
         data: s.structured_data
       }))
 

@@ -1,5 +1,6 @@
 
 import { Database, Json } from './supabase';
+import { StudentBio } from '@/lib/schemas/report';
 
 export type Section = {
   id: string;
@@ -9,7 +10,11 @@ export type Section = {
   order: number;
   content: string | null;
   structured_data: Json | null;
+  hydratedHtml?: string;
+  studentBio?: StudentBio;
   isCompleted?: boolean;
+  isRequired?: boolean;
+  isGenerated?: boolean;
 };
 
 export type Report = Omit<Database['public']['Tables']['reports']['Row'], 'sections'> & {

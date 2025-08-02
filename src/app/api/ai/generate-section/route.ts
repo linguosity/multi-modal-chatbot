@@ -44,9 +44,9 @@ async function handleMultiModalAssessment(
     
     console.log(`🔄 Iteration ${iteration}: ${iteration === 1 ? 'Forcing analyze_assessment_content tool' : 'Auto tool selection'}`);
     
-    let response: Anthropic.Message;
+    let response: Anthropic.Message | null = null;
     let toolUse: Anthropic.ToolUseBlock | undefined;
-    let toolResult: { success: boolean; message: string; data?: any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let toolResult: { success: boolean; message: string; data?: any } | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     try {
       console.log('⏱️ Starting Anthropic API call...');

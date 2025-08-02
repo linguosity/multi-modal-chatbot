@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase/server'
+import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
 import { ReportSchema } from '@/lib/schemas/report'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { id } = params
-  const supabase = await createServerSupabase()
+  const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -29,7 +29,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   const { id } = params
-  const supabase = await createServerSupabase()
+  const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -66,7 +66,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const { id } = params
-  const supabase = await createServerSupabase()
+  const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()
 

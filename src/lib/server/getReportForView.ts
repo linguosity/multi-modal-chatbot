@@ -66,7 +66,7 @@ export async function getReportForView(reportId: string): Promise<Report | null>
 
   const { data: reportData, error } = await supabase
     .from('reports')
-    .select(`*, report_sections(*)`)
+    .select('*')
     .eq('id', reportId)
     .single();
 
@@ -80,18 +80,23 @@ export async function getReportForView(reportId: string): Promise<Report | null>
     return null;
   }
 
+  // Transform the database response to match our frontend types
   const report: Report = {
     ...reportData,
-    sections: (reportData.report_sections as unknown as Section[]) || [],
-    created_at: reportData.created_at,
-    evaluator_id: reportData.evaluator_id,
-    finalized_date: reportData.finalized_date,
-    print_version: reportData.print_version,
-    related_assessment_ids: reportData.related_assessment_ids,
-    related_eligibility_ids: reportData.related_eligibility_ids,
-    status: reportData.status,
-    template_id: reportData.template_id,
-    user_id: reportData.user_id,
+    sections: Array.isArray(reportData.sections) ? reportData.sections.map((s: any) => ({
+      id: s.id,
+      report_id: s.report_id || reportData.id,
+      sectionType: s.sectionType || s.section_type, // Handle both camelCase and snake_case
+      title: s.title,
+      order: s.order || 0,
+      content: s.content,
+      structured_data: s.structured_data,
+      hydratedHtml: s.hydratedHtml,
+      studentBio: s.studentBio,
+      isCompleted: s.isCompleted || false,
+      isRequired: s.isRequired || false,
+      isGenerated: s.isGenerated || false,
+    })) : [],
   };
 
   if (error) {
@@ -142,7 +147,7 @@ export async function getReportForView(reportId: string): Promise<Report | null>
 
   try {
     // Hydrate each section's HTML using structured_data + metadata (server-side)
-    const hydratedSections = (report.sections || []).map((s: Section, index: number) => {
+    const hydratedSections = await Promise.all((report.sections || []).map(async (s: Section, index: number) => {
       console.log(`🔍 Hydrating section ${index}: ${s.title}`);
       
       try {
@@ -157,7 +162,7 @@ export async function getReportForView(reportId: string): Promise<Report | null>
             const keys = Object.keys(safeStructuredData);
             const hasNumericKeys = keys.some(key => /^\d+$/.test(key));
             const hasMoreThan100Keys = keys.length > 100;
-            const hasNestedStructuredData = safeStructuredData.structured_data !== undefined;
+            const hasNestedStructuredData = (safeStructuredData as any).structured_data !== undefined;
             
             if (hasNumericKeys && hasMoreThan100Keys) {
               console.warn(`⚠️ Section ${index} structured_data appears corrupted (${keys.length} numeric keys), attempting cleanup`);
@@ -193,7 +198,20 @@ export async function getReportForView(reportId: string): Promise<Report | null>
         
         let hydratedHtml;
         try {
-          hydratedHtml = hydrateSection(hydrationInput);
+          // For sections with structured data that have specific renderers, prefer structured rendering
+          const hasStructuredRenderer = (
+            (s.sectionType === 'assessment_results' && (safeStructuredData as any).assessment_items && Array.isArray((safeStructuredData as any).assessment_items)) ||
+            (s.sectionType === 'validity_statement' && Object.keys(safeStructuredData).length > 0) ||
+            (s.sectionType === 'recommendations' && Object.keys(safeStructuredData).length > 0)
+          );
+          
+          if (hasStructuredRenderer) {
+            console.log(`🔍 Section ${index} (${s.sectionType}) has structured data, using structured rendering`);
+            const { renderStructuredData } = await import('@/lib/report-renderer');
+            hydratedHtml = renderStructuredData(safeStructuredData, s.sectionType);
+          } else {
+            hydratedHtml = hydrateSection(hydrationInput);
+          }
           
           // If the hydrated HTML is empty but we have structured data, create a basic display
           if ((!hydratedHtml || hydratedHtml.trim() === '') && Object.keys(safeStructuredData).length > 0) {
@@ -209,28 +227,21 @@ export async function getReportForView(reportId: string): Promise<Report | null>
         }
         
         const hydratedSection = {
-          id: s.id,
-          title: s.title,
-          sectionType: s.section_type,
-          order: s.order,
-          content: s.content,
+          ...s, // Keep all existing fields
           structured_data: safeStructuredData, // Use the safe copy
+          hydratedHtml,
         };
         
         return hydratedSection;
       } catch (hydrationError) {
         console.error(`❌ Error hydrating section ${index}:`, hydrationError);
         return {
-          id: s.id,
-          title: s.title,
-          sectionType: s.section_type,
-          order: s.order,
-          content: s.content,
+          ...s, // Keep all existing fields
           structured_data: {}, // Empty object as fallback
-          hydratedHtml: s.content || `<p><em>Error during hydration of section: ${s.title}</em></p>`
+          hydratedHtml: s.content || `<p><em>Error during hydration of section: ${s.title}</em></p>`,
         };
       }
-    });
+    }));
 
     const finalReport = { ...report, sections: hydratedSections };
     

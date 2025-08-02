@@ -5,6 +5,7 @@
 
 export interface AssessmentItem {
   tool_name?: string;
+  title?: string; // Alternative field name used in structured schemas
   standard_score?: number;
   percentile?: number;
   qualitative_description?: string;
@@ -53,7 +54,7 @@ export function renderAssessmentTable(items: AssessmentItem[]): string {
 
   const rows = items.map(item => `
     <tr>
-      <td class="test-name">${item.tool_name || 'N/A'}</td>
+      <td class="test-name">${item.tool_name || item.title || 'N/A'}</td>
       <td class="${getScoreClass(item.standard_score || 0)}">${item.standard_score || 'N/A'}</td>
       <td class="${getScoreClass(item.percentile || 0)}">${item.percentile || 'N/A'}</td>
       <td>${item.qualitative_description || 'N/A'}</td>
