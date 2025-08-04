@@ -10,11 +10,8 @@ export function ensureSection(
   id: string,
   lookup: Record<string, SectionNode>
 ): SectionNode {
-  console.log(`🔍 ensureSection: Looking up section ID "${id}"`);
-  
   const found = lookup[id];
   if (found) {
-    console.log(`✅ ensureSection: Found section "${found.default_title}"`);
     return found;
   }
   
@@ -27,7 +24,6 @@ export function ensureSection(
     ai_directive: 'Generate content for this section based on the provided context.'
   };
   
-  console.log(`⚠️ ensureSection: Created fallback section "${fallback.default_title}" for ID "${id}"`);
   return fallback;
 }
 
@@ -36,13 +32,7 @@ export function templateToTree(
   template: ReportTemplate,
   sectionLookup: Record<string, SectionNode>
 ): TreeItem[] {
-  console.log('🌳 templateToTree: Converting template to tree structure');
-  console.log('📋 Template groups:', template.groups.length);
-  console.log('🔍 Available sections in lookup:', Object.keys(sectionLookup).length);
-  
   const treeItems = template.groups.map(group => {
-    console.log(`📁 Processing group: "${group.title}" with ${group.sectionTypeIds.length} sections`);
-    
     const groupNode: TreeItem = {
       id: group.id,
       name: group.title,
@@ -62,11 +52,9 @@ export function templateToTree(
       })
     };
     
-    console.log(`✅ Created group "${group.title}" with ${groupNode.children?.length} children`);
     return groupNode;
   });
   
-  console.log('🎯 templateToTree: Conversion complete, created', treeItems.length, 'groups');
   return treeItems;
 }
 
@@ -80,8 +68,6 @@ interface ApiSection {
 
 // Create section lookup from API data
 export function createSectionLookup(apiSections: ApiSection[]): Record<string, SectionNode> {
-  console.log('🗂️ createSectionLookup: Processing', apiSections.length, 'sections from API');
-  
   const lookup: Record<string, SectionNode> = {};
   
   apiSections.forEach((section: ApiSection) => {
@@ -94,10 +80,8 @@ export function createSectionLookup(apiSections: ApiSection[]): Record<string, S
     };
     
     lookup[section.id] = sectionNode;
-    console.log(`📝 Added section "${sectionNode.default_title}" with ID "${section.id}"`);
   });
   
-  console.log('✅ createSectionLookup: Created lookup with', Object.keys(lookup).length, 'sections');
   return lookup;
 }
 
@@ -106,8 +90,6 @@ export function findSectionByName(
   searchNames: string[],
   sectionLookup: Record<string, SectionNode>
 ): SectionNode | null {
-  console.log(`🔎 findSectionByName: Searching for [${searchNames.join(', ')}]`);
-  
   const sections = Object.values(sectionLookup);
   const found = sections.find(section => 
     searchNames.some(name => 
@@ -115,12 +97,6 @@ export function findSectionByName(
       section.default_title?.toLowerCase().includes(name.toLowerCase())
     )
   );
-  
-  if (found) {
-    console.log(`✅ findSectionByName: Found "${found.default_title}" for search [${searchNames.join(', ')}]`);
-  } else {
-    console.log(`❌ findSectionByName: No match found for [${searchNames.join(', ')}]`);
-  }
   
   return found || null;
 }

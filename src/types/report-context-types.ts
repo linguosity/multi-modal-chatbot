@@ -10,6 +10,4 @@ export interface ReportContextType {
   setReport: (report: Report) => void;
   showJson: boolean;
   setShowJson: (show: boolean) => void;
-  showJson: boolean;
-  setShowJson: (show: boolean) => void;
 }

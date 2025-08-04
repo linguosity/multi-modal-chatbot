@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import UploadModal from './UploadModal'
 import DynamicSchemaEditor from './DynamicSchemaEditor'
-import { CustomModal } from './ui/custom-modal'
+import { BaseModal } from './ui/base-modal'
+import { Button } from './ui/button'
 import { Plus, Trash2 } from 'lucide-react'
 import { FieldHighlight } from './ui/FieldHighlight'
 import { AssessmentItemEditor } from './AssessmentItemEditor'
@@ -402,52 +403,57 @@ export default function DynamicStructuredBlock({
                 )}
               </div>
 
-              <CustomModal
+              <BaseModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 title={editingItem?.title || 'Add/Edit Assessment Item'}
+                size="xl"
+                footer={
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setIsModalOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        if (editingItemIndex !== null) {
+                          const newArray = [...(Array.isArray(value) ? value : [])];
+                          newArray[editingItemIndex] = editingItem;
+                          updateFieldValue(newArray);
+                        } else {
+                          updateFieldValue([...(Array.isArray(value) ? value : []), editingItem]);
+                        }
+                        setIsModalOpen(false);
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </>
+                }
               >
-                {editingItem && (
-                  <AssessmentItemEditor
-                    item={editingItem}
-                    onChange={setEditingItem}
-                    onRemove={() => {
-                      if (editingItemIndex !== null) {
-                        const newArray = (Array.isArray(value) ? value : []).filter((_: any, i: number) => i !== editingItemIndex);
-                        updateFieldValue(newArray);
-                      }
-                      setIsModalOpen(false);
-                    }}
-                    sectionId={sectionId!}
-                    itemIndex={editingItemIndex !== null ? editingItemIndex : (Array.isArray(value) ? value.length : 0)}
-                    schemaFields={field.children!}
-                    isNewItem={editingItemIndex === null}
-                  />
-                )}
-                <div className="flex justify-end gap-2 mt-4">
-                  <button
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (editingItemIndex !== null) {
-                        const newArray = [...(Array.isArray(value) ? value : [])];
-                        newArray[editingItemIndex] = editingItem;
-                        updateFieldValue(newArray);
-                      } else {
-                        updateFieldValue([...(Array.isArray(value) ? value : []), editingItem]);
-                      }
-                      setIsModalOpen(false);
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                  >
-                    Save
-                  </button>
+                <div className="p-6">
+                  {editingItem && (
+                    <AssessmentItemEditor
+                      item={editingItem}
+                      onChange={setEditingItem}
+                      onRemove={() => {
+                        if (editingItemIndex !== null) {
+                          const newArray = (Array.isArray(value) ? value : []).filter((_: any, i: number) => i !== editingItemIndex);
+                          updateFieldValue(newArray);
+                        }
+                        setIsModalOpen(false);
+                      }}
+                      sectionId={sectionId!}
+                      itemIndex={editingItemIndex !== null ? editingItemIndex : (Array.isArray(value) ? value.length : 0)}
+                      schemaFields={field.children!}
+                      isNewItem={editingItemIndex === null}
+                    />
+                  )}
                 </div>
-              </CustomModal>
+              </BaseModal>
             </div>
           ));
         }
@@ -615,17 +621,16 @@ export default function DynamicStructuredBlock({
       )}
 
       {/* Upload Modal */}
-      {showUploadModal && (
-        <UploadModal
-          onClose={() => setShowUploadModal(false)}
-          onDataReceived={(receivedData) => {
-            // Update structured data from uploaded content
-            updateData({ ...data, ...receivedData })
-            setShowUploadModal(false)
-          }}
-          sectionType={schema.key}
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onDataReceived={(receivedData) => {
+          // Update structured data from uploaded content
+          updateData({ ...data, ...receivedData })
+          setShowUploadModal(false)
+        }}
+        sectionType={schema.key}
         />
-      )}
     </div>
   )
 }

@@ -60,6 +60,7 @@ export const ReportSectionSchema = z.object({
   isGenerated: z.boolean().default(false),
   isCompleted: z.boolean().default(false), // Track section completion
   generationPrompt: z.string().optional(),
+  ai_directive: z.string().optional(), // AI directive for generation
   lastUpdated: z.string().optional(),
   dataSource: z.string().optional(), // Reference to data that can populate this section
   icon: z.string().optional(),

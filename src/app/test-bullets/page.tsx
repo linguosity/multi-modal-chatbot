@@ -1,4 +1,4 @@
-import { BulletToNarrativeDemo } from '@/components/BulletToNarrativeDemo'
+import { BulletToNarrativeDemo } from '@/components/dev/BulletToNarrativeDemo'
 
 export default function TestBulletsPage() {
   return (

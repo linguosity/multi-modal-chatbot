@@ -22,7 +22,6 @@ function extractCleanStructuredData(corruptedData: any): Record<string, any> {
     }
   }
   
-  console.log('🧹 Extracted clean data keys:', Object.keys(cleanData));
   return cleanData;
 }
 
@@ -60,8 +59,6 @@ function createBasicStructuredDataDisplay(data: Record<string, any>, sectionTitl
 }
 
 export async function getReportForView(reportId: string): Promise<Report | null> {
-  console.log("🔍 getReportForView: Starting fetch for report ID:", reportId);
-  
   const supabase = await createSupabaseServerClient();
 
   const { data: reportData, error } = await supabase
@@ -187,7 +184,7 @@ export async function getReportForView(reportId: string): Promise<Report | null>
         const hydrationInput = {
           html: s.content || '',
           data: safeStructuredData,
-          reportMeta: report.metadata ?? {},
+          reportMeta: report.metadata as Record<string, any> | undefined,
         };
         
         console.log(`🔍 Section ${index} hydration input:`, {

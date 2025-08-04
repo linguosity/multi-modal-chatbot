@@ -1,119 +1,144 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { X, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
+import { BaseModal } from '@/components/ui/base-modal'
+import { FormField, SelectField } from '@/components/ui/form-field'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
-import { getAvailableStates } from '@/lib/structured-schemas';
-import { Switch } from '@/components/ui/switch';
+import { getAvailableStates } from '@/lib/structured-schemas'
+import { useFormState, useModal } from '@/lib/hooks'
+import { AutoSaveIndicator } from '@/components/ui/auto-save-indicator'
+import { Switch } from '@/components/ui/switch'
 
 interface UserSettingsModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
+interface SettingsFormData {
+  preferredState: string
+  evaluatorName: string
+  evaluatorCredentials: string
+  schoolName: string
+  showToastNotifications: boolean
+}
+
 export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   const { settings, updateSettings } = useUserSettings()
-  const [localSettings, setLocalSettings] = useState(settings)
   const availableStates = getAvailableStates()
+  
+  const formState = useFormState<SettingsFormData>({
+    preferredState: settings.preferredState,
+    evaluatorName: settings.evaluatorName,
+    evaluatorCredentials: settings.evaluatorCredentials,
+    schoolName: settings.schoolName,
+    showToastNotifications: settings.showToastNotifications
+  })
 
-  if (!isOpen) return null
+  // Reset form when modal opens or settings change
+  useEffect(() => {
+    if (isOpen) {
+      formState.updateData({
+        preferredState: settings.preferredState,
+        evaluatorName: settings.evaluatorName,
+        evaluatorCredentials: settings.evaluatorCredentials,
+        schoolName: settings.schoolName,
+        showToastNotifications: settings.showToastNotifications
+      })
+    }
+  }, [isOpen, settings.preferredState, settings.evaluatorName, settings.evaluatorCredentials, settings.schoolName, settings.showToastNotifications])
 
   const handleSave = () => {
-    updateSettings(localSettings)
+    updateSettings(formState.data)
     onClose()
   }
 
   const handleCancel = () => {
-    setLocalSettings(settings) // Reset to original settings
+    formState.reset()
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-[600px] max-h-[80vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="User Settings"
+      size="lg"
+      className="w-[600px]"
+    >
+      <div className="p-6">
+        {/* Auto-save indicator */}
+        <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold">User Settings</h2>
+            <span className="text-sm text-gray-600">Configure your preferences</span>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          {formState.isDirty && (
+            <AutoSaveIndicator status="pending" />
+          )}
         </div>
 
         <div className="space-y-6">
           {/* State Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Preferred State
-            </label>
-            <select
-              value={localSettings.preferredState}
-              onChange={(e) => setLocalSettings({ ...localSettings, preferredState: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {availableStates.map(state => (
-                <option key={state} value={state}>{state}</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              This will determine which state's eligibility criteria are used in reports
-            </p>
-          </div>
+          <SelectField
+            label="Preferred State"
+            name="preferredState"
+            value={formState.data.preferredState}
+            onChange={(value) => formState.updateField('preferredState', value)}
+            required
+            helpText="This will determine which state's eligibility criteria are used in reports"
+            options={availableStates.map(state => ({
+              value: state,
+              label: state
+            }))}
+            data-testid="preferred-state-select"
+          />
 
           {/* Evaluator Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Evaluator Name
-              </label>
-              <input
-                type="text"
-                value={localSettings.evaluatorName}
-                onChange={(e) => setLocalSettings({ ...localSettings, evaluatorName: e.target.value })}
-                placeholder="Your full name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Credentials
-              </label>
-              <input
-                type="text"
-                value={localSettings.evaluatorCredentials}
-                onChange={(e) => setLocalSettings({ ...localSettings, evaluatorCredentials: e.target.value })}
-                placeholder="M.S., CCC-SLP, etc."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              School/Organization
-            </label>
-            <input
+            <FormField
+              label="Evaluator Name"
+              name="evaluatorName"
               type="text"
-              value={localSettings.schoolName}
-              onChange={(e) => setLocalSettings({ ...localSettings, schoolName: e.target.value })}
-              placeholder="School or organization name"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={formState.data.evaluatorName}
+              onChange={(value) => formState.updateField('evaluatorName', value)}
+              placeholder="Your full name"
+              helpText="This will appear on all reports you create"
+              data-testid="evaluator-name-input"
+            />
+            
+            <FormField
+              label="Credentials"
+              name="evaluatorCredentials"
+              type="text"
+              value={formState.data.evaluatorCredentials}
+              onChange={(value) => formState.updateField('evaluatorCredentials', value)}
+              placeholder="M.S., CCC-SLP, etc."
+              helpText="Professional credentials and certifications"
+              data-testid="evaluator-credentials-input"
             />
           </div>
 
+          <FormField
+            label="School/Organization"
+            name="schoolName"
+            type="text"
+            value={formState.data.schoolName}
+            onChange={(value) => formState.updateField('schoolName', value)}
+            placeholder="School or organization name"
+            helpText="Institution where evaluations are conducted"
+            data-testid="school-name-input"
+          />
+
           {/* State Information Preview */}
-          {localSettings.preferredState && (
+          {formState.data.preferredState && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="font-medium text-blue-900 mb-2">
-                {localSettings.preferredState} Eligibility Preview
+                {formState.data.preferredState} Eligibility Preview
               </h3>
               <p className="text-sm text-blue-800">
-                Eligibility criteria and language will be automatically updated to match {localSettings.preferredState} requirements when you create new reports or add eligibility sections.
+                Eligibility criteria and language will be automatically updated to match {formState.data.preferredState} requirements when you create new reports or add eligibility sections.
               </p>
             </div>
           )}
@@ -129,46 +154,45 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
               </p>
             </div>
             <Switch
-              checked={localSettings.showToastNotifications}
-              onCheckedChange={(checked) => setLocalSettings({ ...localSettings, showToastNotifications: checked })}
+              checked={formState.data.showToastNotifications}
+              onCheckedChange={(checked) => formState.updateField('showToastNotifications', checked)}
             />
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
+        <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
           <Button
             onClick={handleCancel}
-            variant="default"
-            className="bg-gray-500 hover:bg-gray-600"
+            variant="outline"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSave}
-            className="bg-blue-600 hover:bg-blue-700"
+            disabled={!formState.isDirty}
           >
             Save Settings
           </Button>
         </div>
       </div>
-    </div>
+    </BaseModal>
   )
 }
 
 // Settings trigger button component
 export function SettingsButton() {
-  const [isOpen, setIsOpen] = useState(false)
+  const modal = useModal()
 
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={modal.open}
         className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
       >
         <Settings className="h-4 w-4" />
         Settings
       </button>
-      <UserSettingsModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
+      <UserSettingsModal isOpen={modal.isOpen} onClose={modal.close} />
     </>
   )
 }

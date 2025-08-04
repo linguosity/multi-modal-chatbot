@@ -2,9 +2,10 @@ import { SignOutButton } from "@/components/ui/SignOutButton";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MigrationPanel } from "@/components/MigrationPanel";
 import { ReportTimeline } from "@/components/ReportTimeline";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Plus, BarChart3, Users, Clock } from "lucide-react";
+import { Plus, BarChart3, Users, Clock, Home } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -28,6 +29,20 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb 
+        items={[
+          {
+            id: 'dashboard',
+            label: 'Dashboard',
+            current: true,
+            iconKey: 'home'
+          }
+        ]}
+        showHome={false}
+        variant="clinical"
+      />
+
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>

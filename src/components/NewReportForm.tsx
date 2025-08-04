@@ -1,17 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { FormField, SelectField } from '@/components/ui/form-field'
 import { ReportSchema } from '@/lib/schemas/report'
 import type { z } from 'zod';
 type ReportType = z.infer<typeof ReportSchema>['type'];
@@ -19,78 +10,81 @@ import { ReportTemplateSchema } from '@/lib/schemas/report-template'
 type ReportTemplate = z.infer<typeof ReportTemplateSchema>;
 import { useSaveFeedback } from '@/lib/context/FeedbackContext'
 import { createDefaultTemplate } from '@/lib/structured-schemas'
+import { useFormState, useAsyncOperation } from '@/lib/hooks'
 
 interface NewReportFormProps {
   onReportCreated: (reportId: string) => void;
   onCancel: () => void;
 }
 
+interface FormData {
+  type: ReportType | ''
+  title: string
+  studentId: string
+  selectedTemplateId: string
+}
+
 export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, onCancel }) => {
-  const [type, setType] = useState<ReportType | ''>('')
-  const [title, setTitle] = useState('')
-  const [studentId, setStudentId] = useState('')
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>('default');
-  const [templates, setTemplates] = useState<ReportTemplate[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [showJson, setShowJson] = useState(false) // Keep for debugging if needed
+  const formState = useFormState<FormData>({
+    type: '',
+    title: '',
+    studentId: '',
+    selectedTemplateId: 'default'
+  })
+  
+  const templateOperation = useAsyncOperation()
+  const createOperation = useAsyncOperation()
   const notifySave = useSaveFeedback()
+  
+  // Separate state for templates since it's not part of form data
+  const [templates, setTemplates] = useState<ReportTemplate[]>([])
 
   useEffect(() => {
     const fetchTemplates = async () => {
-      try {
-        const response = await fetch('/api/report-templates');
-        if (!response.ok) {
-          throw new Error(`Error fetching templates: ${response.statusText}`);
-        }
-        const data = await response.json();
-        setTemplates(data);
-        // Default template is already selected ('default')
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError('An unknown error occurred');
-        }
-      } finally {
-        setLoadingTemplates(false);
+      const response = await fetch('/api/report-templates')
+      if (!response.ok) {
+        throw new Error(`Error fetching templates: ${response.statusText}`)
       }
-    };
-    fetchTemplates();
-  }, []);
+      return response.json()
+    }
+    
+    templateOperation.execute(fetchTemplates).then(result => {
+      if (result) {
+        setTemplates(Array.isArray(result) ? result : [])
+      }
+    })
+  }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
-
-    if (!selectedTemplateId) {
-      setError('Please select a report template.');
-      setLoading(false);
-      return;
+    
+    const { data } = formState
+    
+    if (!data.selectedTemplateId) {
+      formState.setError('Please select a report template.')
+      return
     }
 
-    try {
-      let requestBody;
+    const createReport = async () => {
+      let requestBody
       
-      if (selectedTemplateId === 'default') {
+      if (data.selectedTemplateId === 'default') {
         // Use the default template structure
-        const defaultTemplate = createDefaultTemplate();
+        const defaultTemplate = createDefaultTemplate()
         requestBody = { 
-          title, 
-          studentId, 
-          type, 
+          title: data.title, 
+          studentId: data.studentId, 
+          type: data.type, 
           sections: defaultTemplate.sections 
-        };
+        }
       } else {
         // Use existing template
         requestBody = { 
-          title, 
-          studentId, 
-          type, 
-          template_id: selectedTemplateId 
-        };
+          title: data.title, 
+          studentId: data.studentId, 
+          type: data.type, 
+          template_id: data.selectedTemplateId 
+        }
       }
 
       const response = await fetch('/api/reports', {
@@ -106,109 +100,109 @@ export const NewReportForm: React.FC<NewReportFormProps> = ({ onReportCreated, o
         throw new Error(errorData.error || 'Failed to create report')
       }
 
-      const newReport = await response.json()
-      
+      return response.json()
+    }
+
+    const newReport = await createOperation.execute(createReport)
+    
+    if (newReport) {
       // Show success feedback
-      notifySave('Report', title)
-      
-      onReportCreated(newReport.id); // Call the callback with the new report ID
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An unknown error occurred');
-      }
-    } finally {
-      setLoading(false);
+      notifySave('Report', data.title)
+      onReportCreated(newReport.id)
     }
   }
 
-  if (loadingTemplates) {
-    return <div className="p-4">Loading templates...</div>;
+  if (templateOperation.loading) {
+    return <div className="p-4">Loading templates...</div>
   }
 
-  if (error) {
-    return <div className="p-4 text-red-500">Error: {error}</div>;
+  if (templateOperation.error) {
+    return <div className="p-4 text-red-500">Error: {templateOperation.error}</div>
   }
-
-  // Debug logging
-  console.log('Templates loaded:', templates);
-  console.log('Selected template ID:', selectedTemplateId);
 
   return (
     <div className="p-4 space-y-4">
       <h2 className="text-xl font-bold">Create New Report</h2>
-      <form onSubmit={handleCreate} className="space-y-4">
-        <div>
-          <Label htmlFor="title">Report Title</Label>
-          <Input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="studentId">Student ID</Label>
-          <Input
-            id="studentId"
-            type="text"
-            value={studentId}
-            onChange={(e) => setStudentId(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="type">Report Type</Label>
-          <Select onValueChange={(value: ReportType) => setType(value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select a type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="initial">Initial</SelectItem>
-              <SelectItem value="annual">Annual</SelectItem>
-              <SelectItem value="triennial">Triennial</SelectItem>
-              <SelectItem value="progress">Progress</SelectItem>
-              <SelectItem value="exit">Exit</SelectItem>
-              <SelectItem value="consultation">Consultation</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="template">Report Template</Label>
-          <Select onValueChange={(value: string) => setSelectedTemplateId(value)} value={selectedTemplateId} defaultValue="default">
-            <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Select a template" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">
-                Default Template (Current Schemas)
-              </SelectItem>
-              {templates.map(template => (
-                <SelectItem key={template.id} value={template.id || ''}>
-                  {template.name} (Legacy)
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+      <form onSubmit={handleCreate} className="space-y-6">
+        <FormField
+          label="Report Title"
+          name="title"
+          type="text"
+          value={formState.data.title}
+          onChange={(value) => formState.updateField('title', value)}
+          required
+          placeholder="Enter a descriptive title for this report"
+          helpText="This will be displayed in the report header and file name"
+          data-testid="report-title-input"
+        />
+
+        <FormField
+          label="Student ID"
+          name="studentId"
+          type="text"
+          value={formState.data.studentId}
+          onChange={(value) => formState.updateField('studentId', value)}
+          required
+          placeholder="Enter student identifier"
+          helpText="School-assigned student identification number"
+          data-testid="student-id-input"
+        />
+
+        <SelectField
+          label="Report Type"
+          name="type"
+          value={formState.data.type}
+          onChange={(value) => formState.updateField('type', value as ReportType)}
+          required
+          placeholder="Select a report type"
+          helpText="Choose the type of evaluation report you're creating"
+          options={[
+            { value: 'initial', label: 'Initial Evaluation' },
+            { value: 'annual', label: 'Annual Review' },
+            { value: 'triennial', label: 'Triennial Evaluation' },
+            { value: 'progress', label: 'Progress Report' },
+            { value: 'exit', label: 'Exit Evaluation' },
+            { value: 'consultation', label: 'Consultation Report' },
+            { value: 'other', label: 'Other' }
+          ]}
+          data-testid="report-type-select"
+        />
+
+        <SelectField
+          label="Report Template"
+          name="selectedTemplateId"
+          value={formState.data.selectedTemplateId}
+          onChange={(value) => formState.updateField('selectedTemplateId', value)}
+          required
+          helpText="Choose a template to structure your report sections"
+          options={[
+            { value: 'default', label: 'Default Template (Current Schemas)' },
+            ...templates.map(template => ({
+              value: template.id || '',
+              label: `${template.name} (Legacy)`
+            }))
+          ]}
+          data-testid="template-select"
+        />
+        {(formState.error || createOperation.error) && (
+          <p className="text-red-500 text-sm">
+            {formState.error || createOperation.error}
+          </p>
+        )}
         <div className="flex justify-end space-x-2">
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Creating...' : 'Create Report'}
+          <Button type="submit" disabled={createOperation.loading}>
+            {createOperation.loading ? 'Creating...' : 'Create Report'}
           </Button>
         </div>
-        {/* Optional: For debugging, can be removed later */}
-        {showJson && (
+        {/* Debug info - can be removed later */}
+        {process.env.NODE_ENV === 'development' && formState.isDirty && (
           <div className="mt-6 p-4 bg-gray-100 rounded-md">
-            <h2 className="text-lg font-semibold mb-2">Report JSON</h2>
+            <h2 className="text-lg font-semibold mb-2">Form State (Debug)</h2>
             <pre className="text-sm overflow-x-auto">
-              {JSON.stringify({ title, studentId, type, template_id: selectedTemplateId }, null, 2)}
+              {JSON.stringify(formState.data, null, 2)}
             </pre>
           </div>
         )}

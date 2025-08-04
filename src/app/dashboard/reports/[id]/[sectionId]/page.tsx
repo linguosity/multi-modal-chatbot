@@ -17,10 +17,13 @@ import { SettingsButton } from '@/components/UserSettingsModal'
 import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 import { useToast } from '@/lib/context/ToastContext'
 import { useProgressToasts } from '@/lib/context/ProgressToastContext'
-
 import { NarrativeView } from '@/components/NarrativeView'
 import SourcesGrid from '@/components/SourcesGrid'
 import Link from 'next/link'
+import { ReportSection } from '@/lib/schemas/report'
+import { getClinicalTypographyClass } from '@/lib/design-system/typography-migration'
+import { cn } from '@/lib/design-system/utils'
+import { useKeyboardNavigation } from '@/lib/context/NavigationContext'
 
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
@@ -46,6 +49,17 @@ export default function SectionPage() {
 
   const sectionSchema = section ? getSectionSchemaForType(section.sectionType, settings.preferredState) : null
   const hasStructuredSchema = !!sectionSchema
+
+  // Setup keyboard navigation
+  useKeyboardNavigation(
+    report?.sections.map(s => ({
+      id: s.id,
+      title: s.title,
+      status: s.isCompleted ? 'completed' : 'not-started',
+      isRequired: s.isRequired
+    })) || [],
+    sectionId
+  )
 
   // Initialize schema state
   useEffect(() => {
@@ -143,7 +157,7 @@ export default function SectionPage() {
   }
 
   const handleGenerateContent = async (sectionIds: string[], input: string, files?: File[]) => {
-    if (!sectionIds.includes(section.id)) return
+    if (!section || !sectionIds.includes(section.id)) return
     
     try {
       // Determine generation type based on section schema and input
@@ -163,6 +177,10 @@ export default function SectionPage() {
       }
 
       // Create request body
+      if (!report) {
+        throw new Error('Report is not loaded.')
+      }
+
       let body: any = {
         reportId: report.id,
         sectionId: section.id,
@@ -178,7 +196,7 @@ export default function SectionPage() {
         formData.append('generation_type', generationType)
         formData.append('unstructuredInput', input || `Generate content based on uploaded assessment materials.`)
         
-        files.forEach((file, index) => {
+        files.forEach((file: File, index: number) => {
           formData.append(`file_${index}`, file)
         })
         
@@ -293,8 +311,8 @@ export default function SectionPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Report not found</h2>
-          <p className="text-gray-600">The requested report could not be loaded.</p>
+          <h2 className={cn(getClinicalTypographyClass('sectionHeading'), 'mb-2')}>Report not found</h2>
+          <p className={getClinicalTypographyClass('bodyText', 'gray-600')}>The requested report could not be loaded.</p>
         </div>
       </div>
     )
@@ -304,17 +322,17 @@ export default function SectionPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Section not found</h2>
-          <p className="text-gray-600">The requested section could not be found.</p>
+          <h2 className={cn(getClinicalTypographyClass('sectionHeading'), 'mb-2')}>Section not found</h2>
+          <p className={getClinicalTypographyClass('bodyText', 'gray-600')}>The requested section could not be found.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full w-full flex flex-col overflow-x-hidden">
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white px-6 pt-4 pb-0">
+      <div className="border-b border-gray-200 bg-white">
         <div className="flex items-end justify-between">
           <div>
             <motion.h1 
@@ -322,7 +340,7 @@ export default function SectionPage() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.15, delay: 0.05 }}
-              className="text-2xl font-semibold text-gray-900"
+              className={getClinicalTypographyClass('reportTitle')}
             >
               {section.title}
             </motion.h1>
@@ -335,11 +353,13 @@ export default function SectionPage() {
               {/* Data Tab */}
               <button
                 onClick={() => setMode('data')}
-                className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
+                className={cn(
+                  'px-4 py-2 rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative',
+                  getClinicalTypographyClass('navigationText'),
                   mode === 'data' 
                     ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
                     : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
-                }`}
+                )}
               >
                 Data Entry
               </button>
@@ -410,11 +430,19 @@ export default function SectionPage() {
                 </Button>
                 
                 <CompactAIAssistant
-                  sections={[section]}
+                  sections={[{
+                    ...section,
+                    content: section.content ?? '',
+                    sectionType: section.sectionType as ReportSection['sectionType'],
+                    isRequired: section.isRequired ?? false,
+                    isGenerated: section.isGenerated ?? false,
+                    isCompleted: section.isCompleted ?? false,
+                    structured_data: section.structured_data as Record<string, any> | undefined
+                  }]}
                   reportId={report.id}
                   isOpen={showAIAssistant}
                   onToggle={() => setShowAIAssistant(!showAIAssistant)}
-                  onGenerateContent={(sectionIds, input, files) => handleGenerateContent(sectionIds, input, files)}
+                  onGenerateContent={async (sectionIds, input, files) => await handleGenerateContent(sectionIds, input, files)}
                 />
               </div>
               
@@ -499,7 +527,7 @@ export default function SectionPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden w-full">
         <motion.div 
           key={sectionId}
           initial={{ opacity: 0, x: 20 }}
@@ -509,15 +537,15 @@ export default function SectionPage() {
             duration: 0.2, 
             ease: [0.4, 0.0, 0.2, 1] // Custom easing for smooth feel
           }}
-          className="max-w-4xl mx-auto"
+          className="w-full"
         >
           {/* Main Content Section */}
-          <section className={`relative mx-6 ${hasStructuredSchema ? 'z-10 -translate-y-px' : 'mt-6'}`}>
+          <section className={`relative w-full ${hasStructuredSchema ? 'z-10 -translate-y-px' : ''}`}>
             {/* Content Area */}
-            <div className="bg-white rounded-t-lg" data-section-content>
+            <div className="bg-white rounded-t-lg w-full" data-section-content>
               {mode === 'sources' ? (
                 <SourcesGrid 
-                  sources={report.metadata?.uploadedFiles?.map(file => ({
+                  sources={(report.metadata as any)?.uploadedFiles?.map((file: any) => ({
                     id: file.id,
                     type: file.type as 'text' | 'pdf' | 'image' | 'audio',
                     fileName: file.name,
@@ -529,7 +557,7 @@ export default function SectionPage() {
                   sectionId={sectionId}
                 />
               ) : (
-                <div className="p-6 pb-8">
+                <div className="w-full overflow-x-hidden">
                   {hasStructuredSchema && currentSchema && mode === 'template' ? (
                     <DynamicStructuredBlock
                       schema={currentSchema}
@@ -547,7 +575,10 @@ export default function SectionPage() {
                         console.log('Save as template:', schema)
                         // TODO: Implement save as template
                       }}
-                      updateSectionData={updateSectionData}
+                      updateSectionData={(sectionId: string, newStructuredData: any) => {
+                        // Use the correct signature that matches ReportContext
+                        updateSectionData(sectionId, newStructuredData, sectionContent)
+                      }}
                     />
                   ) : hasStructuredSchema && currentSchema && mode === 'data' ? (
                     <DynamicStructuredBlock
@@ -566,7 +597,10 @@ export default function SectionPage() {
                         console.log('Save as template:', schema)
                         // TODO: Implement save as template
                       }}
-                      updateSectionData={updateSectionData}
+                      updateSectionData={(sectionId: string, newStructuredData: any) => {
+                        // Use the correct signature that matches ReportContext
+                        updateSectionData(sectionId, newStructuredData, sectionContent)
+                      }}
                     />
                   ) : (
                     <div className="prose max-w-none">
@@ -592,7 +626,7 @@ export default function SectionPage() {
             <div className="relative h-16 bg-gradient-to-b from-white via-blue-50/30 to-blue-50/50 w-full">
               {/* Elegant Divider with Gradient Background */}
               <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full max-w-4xl mx-auto px-6">
+                <div className="w-full">
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-gray-200/60"></div>
@@ -617,7 +651,7 @@ export default function SectionPage() {
 
             {/* Narrative Content with Full Width Gradient Background */}
             <div className="bg-gradient-to-b from-blue-50/50 via-blue-50/20 to-white w-full pb-6">
-              <div className="max-w-4xl mx-auto px-6">
+              <div className="w-full overflow-x-hidden">
                 <div className="pt-4">
                   <NarrativeView
                     reportId={report.id}
@@ -637,7 +671,7 @@ export default function SectionPage() {
 
         {/* JSON Debug View */}
         {showJsonDebug && (
-          <div className="max-w-4xl mx-auto px-6 mt-6">
+          <div className="mt-6">
             <div className="border border-gray-200 rounded-lg overflow-hidden">
               <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 font-mono text-sm">
                 Section JSON Data
@@ -658,7 +692,7 @@ export default function SectionPage() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="border-t border-gray-200 bg-white px-6 py-4">
+      <div className="border-t border-gray-200 bg-white">
         <div className="flex justify-between items-center">
           <motion.div
             whileHover={{ scale: prevSection ? 1.02 : 1 }}

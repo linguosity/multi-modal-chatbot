@@ -40,7 +40,7 @@ export default function NewReportPage() {
           throw new Error(`Error fetching templates: ${response.statusText}`);
         }
         const data = await response.json();
-        setTemplates(data);
+        setTemplates(Array.isArray(data) ? data : []);
         // Default template is already selected ('default')
       } catch (err: unknown) {
         if (err instanceof Error) {
@@ -177,7 +177,7 @@ export default function NewReportPage() {
               <SelectItem value="default">
                 Default Template (Current Schemas)
               </SelectItem>
-              {templates.map(template => (
+              {Array.isArray(templates) && templates.map(template => (
                 <SelectItem key={template.id} value={template.id || ''}>
                   {template.name} (Legacy)
                 </SelectItem>

@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  /* Prevent horizontal scrolling globally */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -97,11 +102,15 @@
 }
 
 @layer base {
-  * {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground h-full;
+    overflow-x: hidden;
   }
 }
 

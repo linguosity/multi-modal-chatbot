@@ -128,16 +128,15 @@ export default function GlobalDataUpload({ onDataReceived, availableSections }: 
       </div>
 
       {/* Upload Modal */}
-      {showUploadModal && (
-        <UploadModal
-          onClose={() => setShowUploadModal(false)}
-          onDataReceived={(data) => {
-            onDataReceived(data, selectedSections.length > 0 ? selectedSections : undefined)
-            setShowUploadModal(false)
-          }}
-          sectionType="multiple"
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onDataReceived={(data) => {
+          onDataReceived(data, selectedSections.length > 0 ? selectedSections : undefined)
+          setShowUploadModal(false)
+        }}
+        sectionType="multiple"
         />
-      )}
     </>
   )
 }

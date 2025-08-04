@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Sparkles, Upload, FileText, Image, X, Volume2, File } from 'lucide-react'
 import { ReportSection } from '@/lib/schemas/report'
+import { getClinicalTypographyClass } from '@/lib/design-system/typography-migration'
+import { cn } from '@/lib/design-system/utils'
 
 interface Props {
   sections: ReportSection[]
@@ -70,7 +72,7 @@ export const CompactAIAssistant: React.FC<Props> = ({
       <Card className="shadow-xl border bg-white">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
+            <CardTitle className={cn('flex items-center gap-2', getClinicalTypographyClass('formLabel'))}>
               <Sparkles className="h-4 w-4 text-blue-600" />
               AI Assistant
             </CardTitle>
@@ -88,27 +90,33 @@ export const CompactAIAssistant: React.FC<Props> = ({
         <CardContent className="space-y-3">
           {/* Text Input */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-gray-700">
+            <label className={cn('text-gray-700', getClinicalTypographyClass('helpText', 'gray-700'))}>
               Input Text or Assessment Notes
             </label>
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Describe what you want to generate or paste assessment notes..."
-              className="min-h-[80px] resize-none border-gray-200 focus:border-blue-500 text-sm"
+              className={cn(
+                'min-h-[80px] resize-none border-gray-200 focus:border-blue-500',
+                getClinicalTypographyClass('bodyText')
+              )}
             />
           </div>
 
           {/* File Upload */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-gray-700">
+            <label className={cn('text-gray-700', getClinicalTypographyClass('helpText', 'gray-700'))}>
               Upload Files (Optional)
             </label>
             <Button
               type="button"
               variant="outline"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full justify-start text-gray-600 border-dashed h-8 text-xs"
+              className={cn(
+                'w-full justify-start text-gray-600 border-dashed h-8',
+                getClinicalTypographyClass('helpText')
+              )}
             >
               <Upload className="h-3 w-3 mr-2" />
               Upload Files (PDF, Images, Audio, Documents)
@@ -126,7 +134,10 @@ export const CompactAIAssistant: React.FC<Props> = ({
             {files.length > 0 && (
               <div className="space-y-1 max-h-20 overflow-y-auto">
                 {files.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-1.5 bg-gray-50 rounded text-xs">
+                  <div key={index} className={cn(
+                    'flex items-center justify-between p-1.5 bg-gray-50 rounded',
+                    getClinicalTypographyClass('helpText')
+                  )}>
                     <div className="flex items-center gap-1.5">
                       {file.type.startsWith('image/') ? (
                         <Image className="h-3 w-3 text-blue-500" />
@@ -158,7 +169,10 @@ export const CompactAIAssistant: React.FC<Props> = ({
           <Button
             onClick={handleGenerate}
             disabled={loading || !hasContent}
-            className="w-full bg-blue-600 hover:bg-blue-700 h-8 text-sm"
+            className={cn(
+              'w-full bg-blue-600 hover:bg-blue-700 h-8',
+              getClinicalTypographyClass('buttonText')
+            )}
           >
             {loading ? (
               <>

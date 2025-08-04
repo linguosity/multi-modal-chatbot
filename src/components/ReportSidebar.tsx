@@ -13,6 +13,11 @@ import { useSectionDnd, SectionId } from '@/lib/hooks/useSectionDnd'
 import { SectionTocItem, Section as TocSection } from './SectionTocItem'
 import { DndContext } from '@dnd-kit/core'
 import { SortableContext } from '@dnd-kit/sortable'
+import { getClinicalTypographyClass } from '@/lib/design-system/typography-migration'
+import { cn } from '@/lib/design-system/utils'
+import { SectionProgress } from './ui/section-progress'
+import { useNavigation } from '@/lib/context/NavigationContext'
+import type { SectionProgressItem } from './ui/section-progress'
 
 interface SectionGroup {
   title: string
@@ -126,9 +131,11 @@ function GroupSectionList({
                       } : undefined}
                     >
                       <span 
-                        className={`truncate flex-1 text-sm transition-colors duration-300 ${
+                        className={cn(
+                          'truncate flex-1 transition-colors duration-300',
+                          getClinicalTypographyClass('navigationText'),
                           isUpdated ? 'font-medium' : ''
-                        }`}
+                        )}
                         aria-label={isUpdated ? `${section.title} (updated)` : section.title}
                       >
                         {section.title}
@@ -189,13 +196,13 @@ export function ReportSidebar() {
   const getSectionIcon = (status: string) => {
     switch (status) {
       case 'complete':
-        return <span className="text-brand-beige text-lg">●</span>
+        return <span className={cn('text-brand-beige', getClinicalTypographyClass('subsectionHeading'))}>●</span>
       case 'required-empty':
-        return <span className="text-brand-rust text-lg border-2 border-brand-rust rounded-full w-4 h-4 inline-block"></span>
+        return <span className={cn('text-brand-rust border-2 border-brand-rust rounded-full w-4 h-4 inline-block', getClinicalTypographyClass('subsectionHeading'))}></span>
       case 'optional-empty':
-        return <span className="text-gray-400 text-lg">○</span>
+        return <span className={cn('text-gray-400', getClinicalTypographyClass('subsectionHeading'))}>○</span>
       default:
-        return <span className="text-gray-400 text-lg">○</span>
+        return <span className={cn('text-gray-400', getClinicalTypographyClass('subsectionHeading'))}>○</span>
     }
   }
 
@@ -270,7 +277,10 @@ export function ReportSidebar() {
                 {/* Group Header */}
                 <button
                   onClick={() => toggleGroup(group.title)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md"
+                  className={cn(
+                    'w-full flex items-center justify-between px-2 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md',
+                    getClinicalTypographyClass('formLabel')
+                  )}
                 >
                   <div className="flex items-center gap-2">
                     {isCollapsed ? (
@@ -349,9 +359,37 @@ export function ReportSidebar() {
         </nav>
       </div>
 
+      {/* Progress Overview */}
+      {report && (
+        <div className="p-4 border-t border-gray-200">
+          <SectionProgress
+            sections={report.sections.map(section => ({
+              id: section.id,
+              title: section.title,
+              status: section.isCompleted ? 'completed' : 
+                    section.content && section.content.trim() ? 'in-progress' : 'not-started',
+              progress: section.isCompleted ? 100 : 
+                       section.content && section.content.trim() ? 50 : 0,
+              isRequired: section.isRequired
+            }))}
+            variant="compact"
+            showProgress={false}
+            onNavigate={(section) => {
+              if (report) {
+                router.push(`/dashboard/reports/${report.id}/${section.id}`)
+              }
+            }}
+            activeItem={currentSectionId}
+          />
+        </div>
+      )}
+
       {/* Footer Actions */}
       <div className="p-4 border-t border-gray-200">
-        <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+        <button className={cn(
+          'w-full flex items-center justify-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors',
+          getClinicalTypographyClass('buttonText')
+        )}>
           <Plus className="h-4 w-4" />
           + Section
         </button>

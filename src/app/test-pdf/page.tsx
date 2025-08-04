@@ -1,4 +1,4 @@
-import PDFProcessingDemo from '@/components/PDFProcessingDemo'
+import PDFProcessingDemo from '@/components/dev/PDFProcessingDemo'
 
 export default function TestPDFPage() {
   return (

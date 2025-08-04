@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
 import { ReportSchema, DEFAULT_SECTIONS, ReportSection } from '@/lib/schemas/report'
 import { v4 as uuidv4 } from 'uuid'
+import { safeJsonResponse } from '@/lib/api/safe-json'
 
 export async function GET() {
   const supabase = await createRouteSupabase();
@@ -10,20 +11,33 @@ export async function GET() {
 
   if (!user) {
     console.warn('Unauthorized attempt to fetch reports.');
-    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return safeJsonResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { data: reports, error } = await supabase
     .from('reports')
-    .select('*')
+    .select('id, title, type, status, student_id, created_at, updated_at, template_id')
     .eq('user_id', user.id)
+    .order('updated_at', { ascending: false })
 
   if (error) {
     console.error({ error }, 'Error fetching reports from Supabase.');
-    return new NextResponse(JSON.stringify({ error: 'Failed to fetch reports' }), { status: 500 })
+    return safeJsonResponse({ error: 'Failed to fetch reports' }, { status: 500 })
   }
 
-  return NextResponse.json(reports)
+  // Ensure clean data without circular references
+  const cleanReports = reports?.map(report => ({
+    id: report.id,
+    title: report.title,
+    type: report.type,
+    status: report.status,
+    studentId: report.student_id,
+    createdAt: report.created_at,
+    updatedAt: report.updated_at,
+    templateId: report.template_id
+  })) || []
+
+  return safeJsonResponse(cleanReports)
 }
 
 export async function POST(request: Request) {
@@ -33,7 +47,7 @@ export async function POST(request: Request) {
 
   if (!user) {
     console.warn('Unauthorized attempt to create report.');
-    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return safeJsonResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const json = await request.json()
@@ -43,11 +57,11 @@ export async function POST(request: Request) {
   // Basic validation
   if (!title || !studentId || !type || (!template_id && !providedSections)) {
     console.warn('Missing required fields for report creation.', { title, studentId, type, template_id, hasProvidedSections: !!providedSections });
-    return new NextResponse(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
+    return safeJsonResponse({ error: 'Missing required fields' }, { status: 400 })
   }
 
   let sections;
-  
+
   if (providedSections) {
     // Use provided sections (from default template)
     console.log('✅ Using provided sections from default template');
@@ -67,7 +81,7 @@ export async function POST(request: Request) {
     } else {
       console.log('✅ Found template:', templateData.name);
       console.log('📋 Template structure:', templateData.template_structure);
-      
+
       // Convert template structure (groups) to flat sections array
       sections = [];
       if (templateData.template_structure && Array.isArray(templateData.template_structure)) {
@@ -75,18 +89,18 @@ export async function POST(request: Request) {
         const { data: sectionTypes } = await supabase
           .from('report_section_types')
           .select('*');
-        
-        const sectionTypeMap = {};
+
+        const sectionTypeMap: Record<string, any> = {};
         if (sectionTypes) {
-          sectionTypes.forEach(st => {
+          sectionTypes.forEach((st: any) => {
             sectionTypeMap[st.id] = st;
           });
         }
-        
+
         // Convert groups to flat sections array
-        templateData.template_structure.forEach((group, groupIndex) => {
+        templateData.template_structure.forEach((group: any, groupIndex: number) => {
           if (group.sectionTypeIds && Array.isArray(group.sectionTypeIds)) {
-            group.sectionTypeIds.forEach((sectionTypeId, sectionIndex) => {
+            group.sectionTypeIds.forEach((sectionTypeId: string, sectionIndex: number) => {
               const sectionType = sectionTypeMap[sectionTypeId];
               if (sectionType) {
                 sections.push({
@@ -103,7 +117,7 @@ export async function POST(request: Request) {
           }
         });
       }
-      
+
       // Fallback to default if conversion failed
       if (sections.length === 0) {
         console.warn('⚠️ Template structure conversion failed, using default sections');
@@ -136,7 +150,7 @@ export async function POST(request: Request) {
   const validation = ReportSchema.safeParse(newReportData)
   if (!validation.success) {
     console.error({ validationError: validation.error }, 'Invalid report data during creation.');
-    return new NextResponse(JSON.stringify({ error: 'Invalid report data', details: validation.error.flatten() }), { status: 400 })
+    return safeJsonResponse({ error: 'Invalid report data', details: validation.error.flatten() }, { status: 400 })
   }
 
   const { data, error } = await supabase
@@ -164,9 +178,22 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error({ error }, 'Error creating report in Supabase.');
-    return new NextResponse(JSON.stringify({ error: 'Failed to create report' }), { status: 500 })
+    return safeJsonResponse({ error: 'Failed to create report' }, { status: 500 })
   }
 
   console.log({ reportId: data.id }, 'Successfully created report.');
-  return NextResponse.json(data)
+
+  // Return clean data without potential circular references
+  const cleanData = {
+    id: data.id,
+    title: data.title,
+    type: data.type,
+    status: data.status,
+    studentId: data.student_id,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+    templateId: data.template_id
+  }
+
+  return safeJsonResponse(cleanData)
 }

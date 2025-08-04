@@ -3,6 +3,7 @@
 import { ReportProvider } from '@/lib/context/ReportContext';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { User, LayoutDashboard, FilePlus } from 'lucide-react';
@@ -10,6 +11,7 @@ import ReportDependentSidebarLinks from '@/components/ReportDependentSidebarLink
 import { Drawer } from '@/components/ui/Drawer';
 import { ColorSettings } from '@/components/ColorSettings';
 import { SignOutButton } from '@/components/ui/SignOutButton';
+import { Breadcrumb, useBreadcrumbs } from '@/components/ui/breadcrumb';
 
 
 export default function DashboardLayout({
@@ -18,6 +20,19 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+  const pathname = usePathname();
+  
+  // Custom labels for better breadcrumb display
+  const breadcrumbLabels = {
+    'dashboard': 'Dashboard',
+    'reports': 'Reports',
+    'templates': 'Templates',
+    'new': 'New Report',
+    'view': 'View Report',
+    'edit': 'Edit Report'
+  };
+  
+  const breadcrumbItems = useBreadcrumbs(pathname, breadcrumbLabels);
 
   return (
     <ReportProvider>
@@ -83,6 +98,13 @@ export default function DashboardLayout({
 
         {/* ── MAIN ── */}
         <main className="flex-1 overflow-y-auto">
+          {/* Breadcrumb Navigation - Hide on report pages as they have their own detailed breadcrumbs */}
+          {breadcrumbItems.length > 1 && !pathname.includes('/reports/') && (
+            <div className="bg-white border-b border-gray-200 px-6 py-3">
+              <Breadcrumb items={breadcrumbItems} showHome={false} />
+            </div>
+          )}
+          
           <div className="p-6">
             {children}
           </div>

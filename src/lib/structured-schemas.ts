@@ -8,6 +8,7 @@ export interface FieldSchema {
   options?: string[]; // For dropdown/select fields
   placeholder?: string;
   children?: FieldSchema[]; // For nested objects
+  title?: string; // For object types that need a title
 }
 
 export interface SectionSchema {
@@ -896,7 +897,6 @@ export function getAvailableStates(): string[] {
 
 // Create a default template structure using current structured schemas
 export function createDefaultTemplate(): { name: string; sections: any[] } {
-  console.log('🏗️ Creating default template with current schemas...');
   return {
     name: "Default Template",
     sections: [

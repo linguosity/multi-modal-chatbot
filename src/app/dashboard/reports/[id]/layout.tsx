@@ -1,20 +1,59 @@
 'use client'
 
-import { useParams } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useParams, usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo } from 'react'
 import { ReportSidebar } from '@/components/ReportSidebar'
 import { useReport } from '@/lib/context/ReportContext'
+import { NavigationProvider, useReportNavigation } from '@/lib/context/NavigationContext'
+import { Breadcrumb, useReportBreadcrumbs } from '@/components/ui/breadcrumb'
 import { createBrowserSupabase } from '@/lib/supabase/browser'
+import { X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 
-export default function ReportLayout({
+function ReportLayoutContent({
   children,
 }: {
   children: React.ReactNode
 }) {
   const { id } = useParams<{ id: string }>()
+  const pathname = usePathname()
+  const router = useRouter()
   const { report, loading, setReport } = useReport()
   const [isSeedReport, setIsSeedReport] = useState(false)
+  
+  // Extract section ID from pathname
+  const pathSegments = pathname.split('/')
+  const sectionId = pathSegments[pathSegments.length - 1] !== id ? pathSegments[pathSegments.length - 1] : undefined
+  const currentSection = report?.sections.find(s => s.id === sectionId)
+  
+  // Setup navigation breadcrumbs
+  const breadcrumbs = useReportBreadcrumbs(
+    id,
+    sectionId,
+    report?.title,
+    currentSection?.title
+  )
+  
+  // Memoize sections to prevent infinite re-renders
+  const memoizedSections = useMemo(() => 
+    report?.sections.map(section => ({
+      id: section.id,
+      title: section.title,
+      isCompleted: section.isCompleted,
+      isRequired: section.isRequired,
+      progress: section.isCompleted ? 100 : 0
+    })) || [], 
+    [report?.sections]
+  )
+  
+  // Setup report navigation
+  useReportNavigation(
+    id,
+    report?.title || 'Report',
+    memoizedSections,
+    sectionId
+  )
 
   // Load report data
   useEffect(() => {
@@ -75,16 +114,59 @@ export default function ReportLayout({
   }
 
   return (
-    <div className="flex h-screen bg-white">
-      {/* Sidebar */}
-      <div className="w-80 bg-gray-50 border-r border-gray-200 flex-shrink-0">
-        <ReportSidebar />
-      </div>
+    <div className="flex h-full w-full overflow-hidden flex-col">
+      {/* Breadcrumb Navigation - Sticky header */}
+      {report && (
+        <div className="sticky top-0 z-40 flex items-center gap-2 bg-white/90 backdrop-blur border-b border-gray-200 px-6 py-3">
+          <div className="flex-1 min-w-0">
+            <Breadcrumb 
+              items={breadcrumbs}
+              variant="clinical"
+              showIcons={true}
+            />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/dashboard/reports')}
+            className="ml-4 h-8 w-8 p-0 hover:bg-gray-100 rounded-full flex-none"
+            title="Close report"
+          >
+            <X className="h-4 w-4 text-gray-500" />
+          </Button>
+        </div>
+      )}
       
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        {children}
+      {/* Main content area with sidebar */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Sidebar - Fixed width, no shrink */}
+        <div className="w-80 flex-none bg-gray-50 border-r border-gray-200 overflow-y-auto">
+          <ReportSidebar />
+        </div>
+        
+        {/* Main Content - Flexible, can shrink */}
+        <main className="flex-1 min-w-0 overflow-y-auto">
+          <div className="w-full h-full px-6 py-4">
+            <div className="max-w-4xl mx-auto min-w-0">
+              {children}
+            </div>
+          </div>
+        </main>
       </div>
     </div>
+  )
+}
+
+export default function ReportLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <NavigationProvider>
+      <ReportLayoutContent>
+        {children}
+      </ReportLayoutContent>
+    </NavigationProvider>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { InlineBulletEditor } from './InlineBulletEditor'
+import { InlineBulletEditor } from '../InlineBulletEditor'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FileText, ArrowDown } from 'lucide-react'
 
