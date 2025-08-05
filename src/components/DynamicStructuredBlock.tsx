@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import UploadModal from './UploadModal'
 import DynamicSchemaEditor from './DynamicSchemaEditor'
 import { BaseModal } from './ui/base-modal'
@@ -36,7 +36,7 @@ interface DynamicStructuredBlockProps {
   onSaveAsTemplate?: (schema: SectionSchema) => void;
   mode?: 'data' | 'template'; // Accept mode as prop instead of managing internally
   sectionId?: string; // Add sectionId for field highlighting
-  updateSectionData: (sectionId: string, data: any) => void;
+  updateSectionData?: (sectionId: string, data: any) => void;
 }
 
 export default function DynamicStructuredBlock({ 
@@ -54,6 +54,10 @@ export default function DynamicStructuredBlock({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  
+  // Initialization guard to prevent infinite loops
+  const initializedRef = useRef(false);
+  const lastDataRef = useRef<any>(null);
 
   // Helper to get default values for a schema
   const getDefaultValuesForSchema = (fields: FieldSchema[]): any => {
@@ -107,17 +111,30 @@ export default function DynamicStructuredBlock({
     return mergeDataWithSchema(initialData, schema.fields);
   }, [initialData, schema.fields]);
 
+  // Initialize data only once on mount
   useEffect(() => {
-    // Only update if the data has actually changed (shallow comparison for performance)
-    if (data !== mergedInitialData) {
+    if (!initializedRef.current) {
       setData(mergedInitialData);
+      initializedRef.current = true;
     }
-  }, [mergedInitialData]);
+  }, []); // Empty deps - only run on mount
+
+  // Handle external initialData changes after initialization
+  useEffect(() => {
+    if (initializedRef.current) {
+      const currentDataString = JSON.stringify(data);
+      const newDataString = JSON.stringify(mergedInitialData);
+      
+      if (currentDataString !== newDataString) {
+        setData(mergedInitialData);
+      }
+    }
+  }, [mergedInitialData, data]);
 
 
 
-  // Generate prose text from structured data
-  const generateProseText = (structuredData: any): string => {
+  // Generate prose text from structured data (memoized to prevent infinite loops)
+  const generateProseText = useCallback((structuredData: any): string => {
     if (!structuredData || Object.keys(structuredData).length === 0) {
       return ''
     }
@@ -173,15 +190,16 @@ export default function DynamicStructuredBlock({
     })
 
     return prose.trim()
-  }
+  }, [schema.fields])
 
   const updateData = (newData: any) => {
     setData(newData);
     const generatedText = generateProseText(newData);
     onChange(newData, generatedText);
-    if (sectionId) {
-      updateSectionData(sectionId, newData);
-    }
+    // Don't immediately save to database - let autosave handle it
+    // if (sectionId) {
+    //   updateSectionData(sectionId, newData);
+    // }
   };
 
   // Helper function to wrap fields with highlighting
@@ -590,13 +608,21 @@ export default function DynamicStructuredBlock({
     }
   }
 
-  // Generate initial text on mount or when data changes
+  // Stable onChange callback to prevent infinite loops
+  const stableOnChange = useCallback((newData: any, generatedText: string) => {
+    onChange(newData, generatedText);
+  }, [onChange]);
+
+  // Generate initial text on mount or when data changes (with loop prevention)
   useEffect(() => {
-    if (Object.keys(data).length > 0) {
+    // Prevent infinite loops by checking if data actually changed
+    const dataString = JSON.stringify(data);
+    if (dataString !== lastDataRef.current && Object.keys(data).length > 0) {
+      lastDataRef.current = dataString;
       const generatedText = generateProseText(data);
-      onChange(data, generatedText);
+      stableOnChange(data, generatedText);
     }
-  }, [data, schema]);
+  }, [data, stableOnChange]);
 
   return (
     <div className="h-full">

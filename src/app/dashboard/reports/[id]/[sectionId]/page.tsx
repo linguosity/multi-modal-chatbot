@@ -11,9 +11,9 @@ import DynamicStructuredBlock from '@/components/DynamicStructuredBlock'
 import TiptapEditor from '@/components/TiptapEditor'
 import { useAutosave } from '@/lib/hooks/useAutosave'
 import { motion } from 'framer-motion'
-import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
+
 import { useToast } from '@/lib/context/ToastContext'
-import { useProgressToasts } from '@/lib/context/ProgressToastContext'
+
 import { NarrativeView } from '@/components/NarrativeView'
 import SourcesGrid from '@/components/SourcesGrid'
 import { getClinicalTypographyClass } from '@/lib/design-system/typography-migration'
@@ -23,17 +23,17 @@ import { useKeyboardNavigation } from '@/lib/context/NavigationContext'
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
   const router = useRouter()
-  const { report, handleSave, updateSectionData, refreshReport } = useReport()
+  const { report, handleSave } = useReport()
   const { settings } = useUserSettings()
-  const [mode] = useState<'data' | 'template' | 'sources'>('data')
+  const [mode, setMode] = useState<'data' | 'template' | 'sources'>('data')
   const [showJsonDebug] = useState(false)
   const [sectionContent, setSectionContent] = useState('')
-  const [currentSchema, setCurrentSchema] = useState<any>(null)
+  const [currentSchema, setCurrentSchema] = useState<unknown>(null)
+  const [structuredData, setStructuredData] = useState<Record<string, unknown>>({})
   
   
   const [isNavigating, setIsNavigating] = useState(false)
-  const { addRecentUpdate } = useRecentUpdates()
-  const { showAIUpdateToast, showProcessingSummaryToast } = useToast()
+  const { showAIUpdateToast } = useToast()
 
   // Get section and related data
   const section = report?.sections.find(s => s.id === sectionId)
@@ -64,20 +64,16 @@ export default function SectionPage() {
 
   // Memoize initial data to prevent infinite re-renders
   const memoizedInitialData = useMemo(() => {
-    if (!section) return {};
-    // Safe logging to avoid circular reference issues
-    try {
-      console.log(`📊 Passing structured_data to ${section.title}:`, JSON.stringify(section.structured_data, null, 2));
-    } catch {
-      console.log(`📊 Passing structured_data to ${section.title}: [Circular Reference Detected]`);
-    }
-    return section.structured_data || {};
-  }, [section?.structured_data, section?.title])
+    // Use local structured data state instead of section data to avoid circular updates
+    console.log(`📊 Using local structured_data for ${section?.title || 'Unknown Section'} (${Object.keys(structuredData).length} keys)`);
+    return structuredData;
+  }, [structuredData, section?.title])
 
-  // Initialize section content from report
+  // Initialize section content and structured data from report
   useEffect(() => {
     if (section) {
       setSectionContent(section.content || '')
+      setStructuredData(section.structured_data || {})
     }
   }, [section])
 
@@ -85,12 +81,20 @@ export default function SectionPage() {
   useEffect(() => {
     if (report && section) {
       const updatedSection = report.sections.find(s => s.id === sectionId)
-      if (updatedSection && updatedSection.content !== sectionContent) {
-        console.log('📝 Updating section content from refreshed report data')
-        setSectionContent(updatedSection.content || '')
+      if (updatedSection) {
+        // Only update if content actually changed
+        if (updatedSection.content !== section.content) {
+          console.log('📝 Updating section content from refreshed report data')
+          setSectionContent(updatedSection.content || '')
+        }
+        // Only update structured data if it's different (avoid circular refs)
+        if (updatedSection.structured_data !== section.structured_data) {
+          console.log('📝 Updating structured data from refreshed report data')
+          setStructuredData(updatedSection.structured_data || {})
+        }
       }
     }
-  }, [report, section, sectionId, sectionContent])
+  }, [report, sectionId, section])
 
   // Handle content changes
   const handleContentChange = useCallback((newContent: string) => {
@@ -105,7 +109,12 @@ export default function SectionPage() {
       ...report,
       sections: report.sections.map(s => 
         s.id === sectionId 
-          ? { ...s, content: sectionContent, lastUpdated: new Date().toISOString() } 
+          ? { 
+              ...s, 
+              content: sectionContent, 
+              structured_data: structuredData,
+              lastUpdated: new Date().toISOString() 
+            } 
           : s
       )
     }
@@ -116,13 +125,13 @@ export default function SectionPage() {
     if (showToast) {
       showAIUpdateToast([], [], 'Report saved successfully')
     }
-  }, [report, sectionId, sectionContent, handleSave, showAIUpdateToast])
+  }, [report, sectionId, sectionContent, structuredData, handleSave, showAIUpdateToast])
 
   // Setup autosave with better UX timing - only for emergency backup
-  const { forceSave, hasUnsavedChanges } = useAutosave({
-    data: sectionContent,
+  const { hasUnsavedChanges } = useAutosave({
+    data: { content: sectionContent, structuredData },
     onSave: async () => await saveSection(false), // No toast for auto-saves
-    debounceMs: 180000, // 3 minutes - emergency backup only
+    debounceMs: 30000, // 30 seconds - reasonable debounce for structured data
     enabled: !!section
   })
 
@@ -195,6 +204,42 @@ export default function SectionPage() {
 
 
         </div>
+        
+        {/* Tab Navigation */}
+        <div className="flex border-t border-gray-200 bg-gray-50">
+          <button
+            onClick={() => setMode('data')}
+            className={`px-4 py-2 text-sm font-medium border-r border-gray-200 transition-colors ${
+              mode === 'data'
+                ? 'bg-white text-gray-900 border-b-2 border-blue-500'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            Data Entry
+          </button>
+          {hasStructuredSchema && (
+            <button
+              onClick={() => setMode('template')}
+              className={`px-4 py-2 text-sm font-medium border-r border-gray-200 transition-colors ${
+                mode === 'template'
+                  ? 'bg-white text-gray-900 border-b-2 border-blue-500'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              Edit Template
+            </button>
+          )}
+          <button
+            onClick={() => setMode('sources')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              mode === 'sources'
+                ? 'bg-white text-gray-900 border-b-2 border-blue-500'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            Sources
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -216,7 +261,14 @@ export default function SectionPage() {
             <div className="bg-white rounded-t-lg w-full" data-section-content>
               {mode === 'sources' ? (
                 <SourcesGrid 
-                  sources={(report.metadata as any)?.uploadedFiles?.map((file: any) => ({
+                  sources={(report.metadata as { uploadedFiles?: Array<{
+                    id: string;
+                    type: string;
+                    name: string;
+                    uploadDate: string;
+                    size: number;
+                    description?: string;
+                  }> })?.uploadedFiles?.map((file) => ({
                     id: file.id,
                     type: file.type as 'text' | 'pdf' | 'image' | 'audio',
                     fileName: file.name,
@@ -235,7 +287,8 @@ export default function SectionPage() {
                       initialData={memoizedInitialData}
                       mode={mode}
                       sectionId={section.id}
-                      onChange={(_, generatedText) => {
+                      onChange={(newStructuredData, generatedText) => {
+                        setStructuredData(newStructuredData)
                         handleContentChange(generatedText)
                       }}
                       onSchemaChange={(newSchema) => {
@@ -245,10 +298,6 @@ export default function SectionPage() {
                       onSaveAsTemplate={(schema) => {
                         console.log('Save as template:', schema)
                         // TODO: Implement save as template
-                      }}
-                      updateSectionData={(sectionId: string, newStructuredData: any) => {
-                        // Use the correct signature that matches ReportContext
-                        updateSectionData(sectionId, newStructuredData, sectionContent)
                       }}
                     />
                   ) : hasStructuredSchema && currentSchema && mode === 'data' ? (
@@ -257,7 +306,8 @@ export default function SectionPage() {
                       initialData={memoizedInitialData}
                       mode={mode}
                       sectionId={section.id}
-                      onChange={(_, generatedText) => {
+                      onChange={(newStructuredData, generatedText) => {
+                        setStructuredData(newStructuredData)
                         handleContentChange(generatedText)
                       }}
                       onSchemaChange={(newSchema) => {
@@ -267,10 +317,6 @@ export default function SectionPage() {
                       onSaveAsTemplate={(schema) => {
                         console.log('Save as template:', schema)
                         // TODO: Implement save as template
-                      }}
-                      updateSectionData={(sectionId: string, newStructuredData: any) => {
-                        // Use the correct signature that matches ReportContext
-                        updateSectionData(sectionId, newStructuredData, sectionContent)
                       }}
                     />
                   ) : (

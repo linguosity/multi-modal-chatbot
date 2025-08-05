@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { safeStringify } from '@/lib/utils/clean-data'
 
 interface UseAutosaveOptions {
   data: any
@@ -29,8 +30,8 @@ export function useAutosave({
   useEffect(() => {
     dataRef.current = data
     
-    // Check if data has actually changed
-    const hasChanged = JSON.stringify(data) !== JSON.stringify(lastSavedDataRef.current)
+    // Check if data has actually changed using safe stringify
+    const hasChanged = safeStringify(data) !== safeStringify(lastSavedDataRef.current)
     setHasUnsavedChanges(hasChanged)
   }, [data])
 

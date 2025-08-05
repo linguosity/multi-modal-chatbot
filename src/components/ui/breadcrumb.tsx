@@ -20,7 +20,7 @@ export interface BreadcrumbItem extends NavigationItem {
   }
 }
 
-interface BreadcrumbProps extends Omit<NavigationComponentProps, 'items'> {
+interface BreadcrumbProps extends Omit<NavigationComponentProps, 'items' | 'variant'> {
   items: BreadcrumbItem[]
   showHome?: boolean
   separator?: React.ReactNode
@@ -110,11 +110,7 @@ export function Breadcrumb({
                   <span className={isHome ? 'sr-only' : undefined}>
                     {item.label}
                   </span>
-                  {item.metadata?.reportTitle && (
-                    <span className="text-xs text-gray-400 ml-1">
-                      ({item.metadata.reportTitle})
-                    </span>
-                  )}
+
                 </Link>
               ) : (
                 <span 
@@ -132,11 +128,7 @@ export function Breadcrumb({
                   <span className={isHome ? 'sr-only' : undefined}>
                     {item.label}
                   </span>
-                  {item.metadata?.sectionTitle && (
-                    <span className="text-xs text-gray-500 ml-1">
-                      - {item.metadata.sectionTitle}
-                    </span>
-                  )}
+
                 </span>
               )}
             </li>
@@ -156,9 +148,13 @@ export function useBreadcrumbs(
 ) {
   const segments = pathname.split('/').filter(Boolean)
   
-  const items: BreadcrumbItem[] = segments.map((segment, index) => {
-    const href = '/' + segments.slice(0, index + 1).join('/')
-    const isLast = index === segments.length - 1
+  // Filter out 'dashboard' segment if it's the first one (to avoid duplication with home item)
+  const filteredSegments = segments[0] === 'dashboard' ? segments.slice(1) : segments
+  
+  const items: BreadcrumbItem[] = filteredSegments.map((segment, index) => {
+    const originalIndex = segments.indexOf(segment)
+    const href = '/' + segments.slice(0, originalIndex + 1).join('/')
+    const isLast = index === filteredSegments.length - 1
     
     // Determine label and icon based on segment
     let label = customLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1)
@@ -179,17 +175,23 @@ export function useBreadcrumbs(
         iconKey = 'file-text'
         break
       default:
-        // Check if this is a report ID (UUID pattern)
+        // Check if this is a UUID segment
         if (segment.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-          label = reportData?.title || 'Report'
-          iconKey = 'file-text'
-          metadata.reportTitle = reportData?.title
-          metadata.reportType = reportData?.type
-        }
-        // Check if this is a section ID
-        else if (segments[index - 1]?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-          label = sectionData?.title || 'Section'
-          metadata.sectionTitle = sectionData?.title
+          const originalIndex = segments.indexOf(segment)
+          const previousSegment = segments[originalIndex - 1]
+          
+          // If previous segment is 'reports', this is a report ID
+          if (previousSegment === 'reports') {
+            label = reportData?.title || 'Report'
+            iconKey = 'file-text'
+            metadata.reportTitle = reportData?.title
+            metadata.reportType = reportData?.type
+          }
+          // If previous segment is a UUID (report ID), this is a section ID
+          else if (previousSegment?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            label = sectionData?.title || 'Section'
+            metadata.sectionTitle = sectionData?.title
+          }
         }
         break
     }

@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Report } from '@/types/report-types';
 import { useToast } from '@/lib/context/ToastContext';
 import { ReportContextType } from '@/types/report-context-types';
+import { removeCircularReferences, hasCircularReference } from '@/lib/utils/clean-data';
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
 
@@ -27,7 +28,7 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
   const reportId = params.id;
   
   // Use toast with error handling
-  let showToast: ((toast: any) => void) | null = null;
+  let showToast: ((toast: { type: string; title: string; description: string }) => void) | null = null;
   try {
     const toastContext = useToast();
     showToast = toastContext.showToast;
@@ -86,25 +87,32 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
     return () => {
       isMounted = false;
     };
-  }, [reportId, supabase]);
+  }, [reportId, supabase, initialReport]);
 
   const handleSave = async (reportToSave: Report) => {
     // Don't set loading to true for auto-saves to prevent UI disruption
     if (reportToSave) {
+      // Clean the report data to prevent circular references
+      const cleanedReport = hasCircularReference(reportToSave) 
+        ? removeCircularReferences(reportToSave)
+        : reportToSave;
+      
+      console.log('💾 Saving report with cleaned data');
+      
       // First, try to save with metadata
       let { error } = await supabase
         .from('reports')
-        .update(reportToSave)
-        .eq('id', reportToSave.id);
+        .update(cleanedReport)
+        .eq('id', cleanedReport.id);
       
       // If metadata column doesn't exist, try saving without it
       if (error && (error.message?.includes("metadata") || error.code === "PGRST204")) {
         console.warn('Metadata column not found, saving without metadata. Please run database migration.');
-        const { metadata, ...reportWithoutMetadata } = reportToSave;
+        const { metadata: _metadata, ...reportWithoutMetadata } = cleanedReport;
         const { error: retryError } = await supabase
           .from('reports')
           .update(reportWithoutMetadata)
-          .eq('id', reportToSave.id);
+          .eq('id', cleanedReport.id);
         error = retryError;
         
         // Show a toast about the missing metadata column
@@ -129,7 +137,7 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
       } else {
         // Subtle success indication - no toast for auto-saves
         console.log('✅ Report auto-saved successfully');
-        // Update local state to reflect the save
+        // Update local state to reflect the save (use original report, not cleaned)
         setReport(reportToSave);
       }
     }
@@ -160,7 +168,7 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
     setLoading(false);
   };
 
-  const updateSectionData = (sectionId: string, newStructuredData: any, newContent: string) => {
+  const updateSectionData = (sectionId: string, newStructuredData: Record<string, unknown>, newContent: string) => {
     if (!report) return;
 
     const newSections = report.sections.map(section => 
@@ -169,8 +177,10 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
 
     const newReport = { ...report, sections: newSections };
 
+    // Only update local state, don't immediately save
+    // Let the autosave mechanism handle the database save
     setReport(newReport);
-    handleSave(newReport);
+    console.log('📝 Updated section data locally (autosave will handle database save)');
   };
 
   const refreshReport = async () => {
