@@ -1,12 +1,9 @@
-import { SignOutButton } from "@/components/ui/SignOutButton";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MigrationPanel } from "@/components/MigrationPanel";
 import { ReportTimeline } from "@/components/ReportTimeline";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Plus, BarChart3, Users, Clock, Home } from "lucide-react";
-import Link from "next/link";
+import { BarChart3, Users, Clock, Home } from "lucide-react";
 
 export default async function DashboardPage() {
   console.log('Rendering DashboardPage');

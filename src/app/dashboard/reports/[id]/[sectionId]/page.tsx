@@ -4,23 +4,18 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useReport } from '@/lib/context/ReportContext'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Settings, Save, Download, FolderOpen, Upload, Trash2, Sparkles, FileText } from 'lucide-react'
-import { SplitButton } from '@/components/ui/split-button'
+import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { getSectionSchemaForType } from '@/lib/structured-schemas'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
 import DynamicStructuredBlock from '@/components/DynamicStructuredBlock'
 import TiptapEditor from '@/components/TiptapEditor'
 import { useAutosave } from '@/lib/hooks/useAutosave'
-import { CompactAIAssistant } from '@/components/CompactAIAssistant'
 import { motion } from 'framer-motion'
-import { SettingsButton } from '@/components/UserSettingsModal'
 import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 import { useToast } from '@/lib/context/ToastContext'
 import { useProgressToasts } from '@/lib/context/ProgressToastContext'
 import { NarrativeView } from '@/components/NarrativeView'
 import SourcesGrid from '@/components/SourcesGrid'
-import Link from 'next/link'
-import { ReportSection } from '@/lib/schemas/report'
 import { getClinicalTypographyClass } from '@/lib/design-system/typography-migration'
 import { cn } from '@/lib/design-system/utils'
 import { useKeyboardNavigation } from '@/lib/context/NavigationContext'
@@ -28,18 +23,17 @@ import { useKeyboardNavigation } from '@/lib/context/NavigationContext'
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
   const router = useRouter()
-  const { report, handleSave, handleDelete, updateSectionData, refreshReport } = useReport()
+  const { report, handleSave, updateSectionData, refreshReport } = useReport()
   const { settings } = useUserSettings()
-  const [mode, setMode] = useState<'data' | 'template' | 'sources'>('data')
+  const [mode] = useState<'data' | 'template' | 'sources'>('data')
   const [showJsonDebug] = useState(false)
   const [sectionContent, setSectionContent] = useState('')
   const [currentSchema, setCurrentSchema] = useState<any>(null)
-  const [showAIAssistant, setShowAIAssistant] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  
+  
   const [isNavigating, setIsNavigating] = useState(false)
   const { addRecentUpdate } = useRecentUpdates()
   const { showAIUpdateToast, showProcessingSummaryToast } = useToast()
-  const { processLogLine } = useProgressToasts()
 
   // Get section and related data
   const section = report?.sections.find(s => s.id === sectionId)
@@ -74,7 +68,7 @@ export default function SectionPage() {
     // Safe logging to avoid circular reference issues
     try {
       console.log(`📊 Passing structured_data to ${section.title}:`, JSON.stringify(section.structured_data, null, 2));
-    } catch (e) {
+    } catch {
       console.log(`📊 Passing structured_data to ${section.title}: [Circular Reference Detected]`);
     }
     return section.structured_data || {};
@@ -125,9 +119,9 @@ export default function SectionPage() {
   }, [report, sectionId, sectionContent, handleSave, showAIUpdateToast])
 
   // Setup autosave with better UX timing - only for emergency backup
-  const { isSaving, lastSaved, forceSave, hasUnsavedChanges } = useAutosave({
+  const { forceSave, hasUnsavedChanges } = useAutosave({
     data: sectionContent,
-    onSave: async (data) => await saveSection(false), // No toast for auto-saves
+    onSave: async () => await saveSection(false), // No toast for auto-saves
     debounceMs: 180000, // 3 minutes - emergency backup only
     enabled: !!section
   })
@@ -156,155 +150,7 @@ export default function SectionPage() {
     }, 50)
   }
 
-  const handleGenerateContent = async (sectionIds: string[], input: string, files?: File[]) => {
-    if (!section || !sectionIds.includes(section.id)) return
-    
-    try {
-      // Determine generation type based on section schema and input
-      let generationType = 'prose'; // Default
-      
-      if (files && files.length > 0) {
-        // Check if section has structured schema for structured processing
-        const sectionSchema = getSectionSchemaForType(section.sectionType || '');
-        if (sectionSchema && sectionSchema.fields && sectionSchema.fields.length > 0) {
-          generationType = 'structured_data_processing';
-        } else {
-          generationType = 'multi_modal_assessment';
-        }
-      } else if (currentSchema && currentSchema.fields && currentSchema.fields.length > 0) {
-        // For text-only input, use structured processing if schema exists
-        generationType = 'structured_data_processing';
-      }
-
-      // Create request body
-      if (!report) {
-        throw new Error('Report is not loaded.')
-      }
-
-      let body: any = {
-        reportId: report.id,
-        sectionId: section.id,
-        generation_type: generationType,
-        unstructuredInput: input || `Generate content for ${section.title} section.`
-      }
-      
-      // Handle file uploads if present
-      if (files && files.length > 0) {
-        const formData = new FormData()
-        formData.append('reportId', report.id)
-        // Don't append sectionId for multi-modal assessment - let AI determine sections
-        formData.append('generation_type', generationType)
-        formData.append('unstructuredInput', input || `Generate content based on uploaded assessment materials.`)
-        
-        files.forEach((file: File, index: number) => {
-          formData.append(`file_${index}`, file)
-        })
-        
-        body = formData
-      }
-      
-      // Make API request with streaming support
-      const res = await fetch('/api/ai/generate-section', {
-        method: 'POST',
-        ...(files && files.length > 0 ? {} : { headers: { 'Content-Type': 'application/json' } }),
-        body: files && files.length > 0 ? body : JSON.stringify(body)
-      })
-      
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'AI generation failed')
-      
-      // Handle different response formats
-      if (generationType === 'structured_data_processing' || generationType === 'multi_modal_assessment') {
-        // Structured data or multi-modal assessment response
-        try {
-          console.log('🎯 AI Processing Response:', JSON.stringify(json, null, 2));
-        } catch (e) {
-          console.log('🎯 AI Processing Response: [Circular Reference Detected]');
-        }
-        
-        if (json.updatedSections && json.updatedSections.length > 0) {
-          // Collect all field changes for toast
-          const allChanges: string[] = [];
-          
-          // Track updates for visual indicators
-          json.updatedSections.forEach((updatedSectionId: string) => {
-            // Extract field changes from the response if available
-            const changes = json.analysisResult?.content_analysis?.identified_updates
-              ?.filter((update: any) => update.section_id === updatedSectionId)
-              ?.map((update: any) => update.field_path) || ['content'];
-            
-            console.log(`📍 Tracking update for section ${updatedSectionId}:`, changes);
-            addRecentUpdate(updatedSectionId, changes, 'ai_update');
-            allChanges.push(...changes);
-          });
-          
-          // Show processing summary toast (persistent)
-          // Extract processing summary from various possible locations
-          let processingSummary = null;
-          
-          // Try to get from analysisResult (analyze_assessment_content tool)
-          if (json.analysisResult?.content_analysis?.processing_notes) {
-            processingSummary = json.analysisResult.content_analysis.processing_notes;
-          }
-          
-          // Try to get from tool data (update_report_data tool)
-          if (!processingSummary && json.analysisResult?.data?.processing_summary) {
-            processingSummary = json.analysisResult.data.processing_summary;
-          }
-          
-          // Try to get from message (fallback)
-          if (!processingSummary && json.message) {
-            processingSummary = json.message;
-          }
-          
-          if (processingSummary) {
-            showProcessingSummaryToast({
-              summary: processingSummary,
-              updatedSections: json.updatedSections,
-              processedFiles: json.processedFiles || [],
-              fieldUpdates: allChanges
-            });
-          }
-          
-          // Show quick update toast (auto-dismiss)
-          showAIUpdateToast(json.updatedSections, allChanges);
-          
-          // Refresh the report data from database
-          console.log('🔄 Refreshing report data to show updates...');
-          setIsRefreshing(true);
-          try {
-            await refreshReport();
-          } finally {
-            setIsRefreshing(false);
-          }
-          
-          // If current section was updated, show visual feedback
-          if (json.updatedSections.includes(section.id)) {
-            console.log('✨ Current section was updated, showing visual feedback');
-            // Add a subtle animation or highlight effect
-            const element = document.querySelector('[data-section-content]');
-            if (element) {
-              element.classList.add('animate-pulse');
-              setTimeout(() => {
-                element.classList.remove('animate-pulse');
-              }, 2000);
-            }
-          }
-        } else {
-          console.log('ℹ️ Processing completed but no sections were updated:', json.message)
-          // Show info message
-          showAIUpdateToast([], []);
-        }
-      } else {
-        // Single section response (legacy prose generation)
-        console.log('📝 Legacy prose generation completed');
-        handleContentChange(json.updatedSection.content)
-        forceSave()
-      }
-    } catch (error) {
-      console.error('AI generation failed:', error)
-    }
-  }
+  
 
   // Early returns after all hooks
   if (!report) {
@@ -347,182 +193,7 @@ export default function SectionPage() {
 
           </div>
 
-          <div className="flex items-end gap-4">
-            {/* Mode Toggle Tabs */}
-            <div className="flex gap-0 relative -mb-px z-10">
-              {/* Data Tab */}
-              <button
-                onClick={() => setMode('data')}
-                className={cn(
-                  'px-4 py-2 rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative',
-                  getClinicalTypographyClass('navigationText'),
-                  mode === 'data' 
-                    ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
-                    : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
-                )}
-              >
-                Data Entry
-              </button>
-              
-              {/* Template Tab - Only show when structured schema exists */}
-              {hasStructuredSchema && (
-                <button
-                  onClick={() => setMode('template')}
-                  className={`px-4 py-2 text-sm border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
-                    mode === 'template' 
-                      ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
-                      : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
-                  } ${mode === 'data' ? '-ml-px' : ''}`}
-                >
-                  <Settings className="h-3 w-3" />
-                  Edit Template
-                </button>
-              )}
-              
-              {/* Sources Tab */}
-              <button
-                onClick={() => setMode('sources')}
-                className={`px-4 py-2 text-sm rounded-t-md border border-b-0 outline-none flex items-center gap-1 transition-colors relative ${
-                  mode === 'sources' 
-                    ? 'bg-white text-gray-900 font-semibold z-20 border-gray-200 shadow-sm' 
-                    : 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-50 z-10 border-gray-200'
-                } -ml-px`}
-              >
-                <FileText className="h-3 w-3" />
-                Sources
-              </button>
-            </div>
-          
-            <div className="flex items-end gap-3">
-            <div className="flex items-center gap-2 text-sm min-w-[120px] h-6">
-              {isRefreshing ? (
-                <>
-                  <div className="animate-spin h-4 w-4 border-2 border-green-600 border-t-transparent rounded-full"></div>
-                  <span className="text-green-600">Updating...</span>
-                </>
-              ) : null}
-            </div>
-            
-            {/* Consolidated Action Bar */}
-            <div className="flex items-center gap-2">
-              {/* View Report Button */}
-              <Link href={`/dashboard/reports/${reportId}/view`} passHref>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="flex items-center gap-1"
-                >
-                  <FileText className="h-4 w-4" />
-                  View Report
-                </Button>
-              </Link>
 
-              {/* AI Assistant Button */}
-              <div className="relative">
-                <Button
-                  onClick={() => setShowAIAssistant(!showAIAssistant)}
-                  variant="secondary"
-                  size="sm"
-                  className={`flex items-center gap-1 ${showAIAssistant ? 'bg-blue-50 border-blue-300' : ''}`}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  AI
-                </Button>
-                
-                <CompactAIAssistant
-                  sections={[{
-                    ...section,
-                    content: section.content ?? '',
-                    sectionType: section.sectionType as ReportSection['sectionType'],
-                    isRequired: section.isRequired ?? false,
-                    isGenerated: section.isGenerated ?? false,
-                    isCompleted: section.isCompleted ?? false,
-                    structured_data: section.structured_data as Record<string, any> | undefined
-                  }]}
-                  reportId={report.id}
-                  isOpen={showAIAssistant}
-                  onToggle={() => setShowAIAssistant(!showAIAssistant)}
-                  onGenerateContent={async (sectionIds, input, files) => await handleGenerateContent(sectionIds, input, files)}
-                />
-              </div>
-              
-              <SplitButton
-                onClick={() => saveSection(true)} // Show toast for manual saves
-                variant="primary"
-                size="sm"
-                isSaving={isSaving}
-                lastSaved={lastSaved}
-                hasUnsavedChanges={hasUnsavedChanges}
-                dropdownItems={[
-                  {
-                    label: "Save as Template",
-                    icon: <FolderOpen className="h-4 w-4" />,
-                    onClick: () => {
-                      if (currentSchema) {
-                        console.log('Save as template:', currentSchema)
-                        // TODO: Implement save as template
-                      }
-                    }
-                  },
-                  {
-                    label: "Download JSON",
-                    icon: <Download className="h-4 w-4" />,
-                    onClick: () => {
-                      const reportData = {
-                        id: section.id,
-                        title: section.title,
-                        sectionType: section.sectionType,
-                        content: sectionContent,
-                        lastUpdated: new Date().toISOString(),
-                        schema: currentSchema
-                      }
-                      const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `${section.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_section.json`
-                      document.body.appendChild(a)
-                      a.click()
-                      document.body.removeChild(a)
-                      URL.revokeObjectURL(url)
-                    }
-                  },
-                  {
-                    label: "Upload Template JSON",
-                    icon: <Upload className="h-4 w-4" />,
-                    onClick: () => {
-                      console.log('Upload template JSON')
-                      // TODO: Implement upload template
-                    }
-                  },
-                  {
-                    label: "Upload Report JSON",
-                    icon: <Upload className="h-4 w-4" />,
-                    onClick: () => {
-                      console.log('Upload report JSON')
-                      // TODO: Implement upload report
-                    }
-                  },
-                  {
-                    label: "Delete Report",
-                    icon: <Trash2 className="h-4 w-4 text-red-500" />,
-                    separator: true,
-                    onClick: () => {
-                      if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
-                        handleDelete()
-                      }
-                    }
-                  }
-                ]}
-              >
-                <Save className="h-4 w-4 mr-1" />
-                Save Report
-              </SplitButton>
-              
-              <SettingsButton />
-            </div>
-            </div>
-          </div>
         </div>
       </div>
 
