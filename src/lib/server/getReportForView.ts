@@ -59,6 +59,8 @@ function createBasicStructuredDataDisplay(data: Record<string, any>, sectionTitl
 }
 
 export async function getReportForView(reportId: string): Promise<Report | null> {
+  console.log('🔍 getReportForView called for reportId:', reportId);
+  
   const supabase = await createSupabaseServerClient();
 
   const { data: reportData, error } = await supabase
@@ -76,6 +78,19 @@ export async function getReportForView(reportId: string): Promise<Report | null>
     console.error("❌ Report not found for ID:", reportId);
     return null;
   }
+
+  console.log('📊 Raw report data from database:', {
+    id: reportData.id,
+    title: reportData.title,
+    sectionsCount: Array.isArray(reportData.sections) ? reportData.sections.length : 0,
+    sections: Array.isArray(reportData.sections) ? reportData.sections.map((s: any) => ({
+      id: s.id,
+      title: s.title,
+      contentLength: s.content?.length || 0,
+      contentPreview: s.content?.substring(0, 100) + (s.content && s.content.length > 100 ? '...' : ''),
+      hasStructuredData: !!s.structured_data && Object.keys(s.structured_data || {}).length > 0
+    })) : []
+  });
 
   // Transform the database response to match our frontend types
   const report: Report = {
@@ -189,12 +204,19 @@ export async function getReportForView(reportId: string): Promise<Report | null>
         
         console.log(`🔍 Section ${index} hydration input:`, {
           htmlLength: (s.content || '').length,
+          htmlPreview: (s.content || '').substring(0, 100) + ((s.content || '').length > 100 ? '...' : ''),
           dataKeys: Object.keys(safeStructuredData),
           hasReportMeta: !!report.metadata
         });
         
         let hydratedHtml;
         try {
+          // Check if this section has actual user content (not just template placeholders)
+          const hasUserContent = s.content && s.content.trim() !== '' && 
+            !s.content.includes('{first_name}') && // Not just template content
+            !s.content.includes('[Student Name]') &&
+            s.content !== `<p><em>No content available for ${s.title}</em></p>`;
+          
           // For sections with structured data that have specific renderers, prefer structured rendering
           const hasStructuredRenderer = (
             (s.sectionType === 'assessment_results' && (safeStructuredData as any).assessment_items && Array.isArray((safeStructuredData as any).assessment_items)) ||
@@ -202,20 +224,26 @@ export async function getReportForView(reportId: string): Promise<Report | null>
             (s.sectionType === 'recommendations' && Object.keys(safeStructuredData).length > 0)
           );
           
-          if (hasStructuredRenderer) {
+          if (hasUserContent) {
+            // User has typed actual content - use it directly with minimal hydration
+            console.log(`🔍 Section ${index} has user content, using direct content with hydration`);
+            hydratedHtml = hydrateSection(hydrationInput);
+          } else if (hasStructuredRenderer) {
             console.log(`🔍 Section ${index} (${s.sectionType}) has structured data, using structured rendering`);
             const { renderStructuredData } = await import('@/lib/report-renderer');
             hydratedHtml = renderStructuredData(safeStructuredData, s.sectionType);
+          } else if (Object.keys(safeStructuredData).length > 0) {
+            // Has structured data but no specific renderer - create basic display
+            console.log(`🔍 Section ${index} has structured data but no specific renderer, creating basic display`);
+            hydratedHtml = createBasicStructuredDataDisplay(safeStructuredData, s.title);
           } else {
+            // No user content and no structured data - try hydration anyway in case it's a template
             hydratedHtml = hydrateSection(hydrationInput);
           }
           
-          // If the hydrated HTML is empty but we have structured data, create a basic display
-          if ((!hydratedHtml || hydratedHtml.trim() === '') && Object.keys(safeStructuredData).length > 0) {
-            console.log(`🔍 Section ${index} has no content but has structured data, creating basic display`);
-            hydratedHtml = createBasicStructuredDataDisplay(safeStructuredData, s.title);
-          } else if (!hydratedHtml || hydratedHtml.trim() === '') {
-            hydratedHtml = `<p><em>No content available for ${s.title}</em></p>`;
+          // Final fallback if still empty
+          if (!hydratedHtml || hydratedHtml.trim() === '') {
+            hydratedHtml = s.content || `<p><em>No content available for ${s.title}</em></p>`;
           }
         } catch (hydrationError) {
           console.error(`❌ Error during hydrateSection for section ${index}:`, hydrationError);

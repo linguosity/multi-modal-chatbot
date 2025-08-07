@@ -516,7 +516,10 @@ export default function ReportView() { // Removed props
 
       {/* Report Sections */}
       {report.sections
-        .filter(section => section.title !== 'Student Information') // Skip the dedicated student info section
+        .filter(section => {
+          // Skip the Student Information section since we render it as a header table
+          return section.title !== 'Student Information' && section.sectionType !== 'student_information';
+        })
         .map((section, index) => (
         <Fragment key={index}>
           {index > 0 && <hr className="section-divider" />}
@@ -527,7 +530,21 @@ export default function ReportView() { // Removed props
             <div
               className="tiptap"
               dangerouslySetInnerHTML={{
-                __html: section.hydratedHtml || (section.structured_data ? renderStructuredData(section.structured_data, section.sectionType) : '')
+                __html: (() => {
+                  const htmlToRender = section.hydratedHtml || (section.structured_data ? renderStructuredData(section.structured_data, section.sectionType) : '');
+                  console.log('🖼️ ReportView rendering section:', {
+                    sectionId: section.id,
+                    sectionTitle: section.title,
+                    originalContentLength: section.content?.length || 0,
+                    originalContentPreview: section.content?.substring(0, 100) + (section.content && section.content.length > 100 ? '...' : ''),
+                    hydratedHtmlLength: section.hydratedHtml?.length || 0,
+                    hydratedHtmlPreview: section.hydratedHtml?.substring(0, 100) + (section.hydratedHtml && section.hydratedHtml.length > 100 ? '...' : ''),
+                    finalHtmlLength: htmlToRender.length,
+                    finalHtmlPreview: htmlToRender.substring(0, 100) + (htmlToRender.length > 100 ? '...' : ''),
+                    hasStructuredData: !!section.structured_data && Object.keys(section.structured_data).length > 0
+                  });
+                  return htmlToRender;
+                })()
               }}
             />
           </section>

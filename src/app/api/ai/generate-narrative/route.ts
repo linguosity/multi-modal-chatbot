@@ -216,7 +216,7 @@ Write a comprehensive, professional narrative that would be appropriate for an o
 
     console.log('🤖 Calling Anthropic API...')
     const response = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219', // Use the standard model name
+      model: 'claude-opus-4-1-20250805', // Claude Opus 4.1 - latest model
       max_tokens: 4000,
       temperature: 0.3,
       messages: [

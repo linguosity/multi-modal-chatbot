@@ -1,8 +1,9 @@
 'use client'
 
-import { Save, FileDown, X } from "lucide-react";
+import { Save, FileDown, X, Trash2 } from "lucide-react";
 import { SplitButton } from "@/components/ui/split-button";
 import { Breadcrumb, useBreadcrumbs } from "@/components/ui/breadcrumb";
+import { AIIntakeDrawer } from "@/components/AIIntakeDrawer";
 import { usePathname, useRouter } from "next/navigation";
 import { useReport } from "@/lib/context/ReportContext";
 import { useState, useEffect } from "react";
@@ -10,7 +11,7 @@ import { useState, useEffect } from "react";
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { report, handleSave } = useReport();
+  const { report, handleSave, handleDelete } = useReport();
   
   const breadcrumbItems = useBreadcrumbs(
     pathname, 
@@ -67,39 +68,56 @@ export default function Header() {
     // TODO: Implement PDF export
   };
 
+  const handleAIIntakeProcess = (data: string | Record<string, unknown>, type: 'structured' | 'unstructured') => {
+    console.log(`Processing ${type} data:`, data);
+    // TODO: Implement AI processing logic
+    // This would typically call an API endpoint to process the data
+    // and update the report sections accordingly
+  };
+
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between
                        bg-white/95 backdrop-blur border-b px-4 py-2">
       <Breadcrumb items={breadcrumbItems} />
 
-      <SplitButton
-        onClick={handleSaveClick}
-        isSaving={isSaving}
-        lastSaved={lastSaved}
-        hasUnsavedChanges={hasUnsavedChanges}
-        saveError={saveError}
-        dropdownItems={[
-          {
-            label: "Save",
-            icon: <Save className="h-4 w-4" />,
-            onClick: handleSaveClick
-          },
-          {
-            label: "Save & Close",
-            icon: <X className="h-4 w-4" />,
-            onClick: handleSaveAndClose
-          },
-          {
-            label: "Export PDF",
-            icon: <FileDown className="h-4 w-4" />,
-            onClick: handleExportPdf,
-            separator: true
-          }
-        ]}
-      >
-        <Save className="h-4 w-4 mr-1" />
-        Save Report
-      </SplitButton>
+      <div className="flex items-center gap-2">
+        <AIIntakeDrawer onProcessData={handleAIIntakeProcess} />
+        
+        <SplitButton
+          onClick={handleSaveClick}
+          isSaving={isSaving}
+          lastSaved={lastSaved}
+          hasUnsavedChanges={hasUnsavedChanges}
+          saveError={saveError}
+          dropdownItems={[
+            {
+              label: "Save",
+              icon: <Save className="h-4 w-4" />,
+              onClick: handleSaveClick
+            },
+            {
+              label: "Save & Close",
+              icon: <X className="h-4 w-4" />,
+              onClick: handleSaveAndClose
+            },
+            {
+              label: "Export PDF",
+              icon: <FileDown className="h-4 w-4" />,
+              onClick: handleExportPdf,
+              separator: true
+            },
+            {
+              label: "Delete Report",
+              icon: <Trash2 className="h-4 w-4 text-red-500" />,
+              onClick: handleDelete,
+              separator: true
+            }
+          ]}
+        >
+          <Save className="h-4 w-4 mr-1" />
+          Save Report
+        </SplitButton>
+      </div>
     </header>
   );
 }

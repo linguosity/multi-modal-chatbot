@@ -1,4 +1,4 @@
-import React from 'react'
+import { type ReactNode, type MouseEvent, type KeyboardEvent, type FocusEvent, type ChangeEvent, type FormEvent, type ComponentType } from 'react'
 import { type ColorVariant, type SizeVariant } from '../design-tokens'
 
 /**
@@ -18,7 +18,7 @@ export interface BaseComponentProps {
   /** Test identifier for automated testing */
   'data-testid'?: string
   /** Children elements */
-  children?: React.ReactNode
+  children?: ReactNode
 }
 
 /**
@@ -48,13 +48,13 @@ export interface AccessibilityProps {
  */
 export interface InteractiveComponentProps extends BaseComponentProps, AccessibilityProps {
   /** Click handler */
-  onClick?: (event: React.MouseEvent<HTMLElement>) => void
+  onClick?: (event: MouseEvent<HTMLElement>) => void
   /** Key down handler for keyboard navigation */
-  onKeyDown?: (event: React.KeyboardEvent<HTMLElement>) => void
+  onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void
   /** Focus handler */
-  onFocus?: (event: React.FocusEvent<HTMLElement>) => void
+  onFocus?: (event: FocusEvent<HTMLElement>) => void
   /** Blur handler */
-  onBlur?: (event: React.FocusEvent<HTMLElement>) => void
+  onBlur?: (event: FocusEvent<HTMLElement>) => void
   /** Tab index for keyboard navigation */
   tabIndex?: number
   /** Whether the component is currently focused */
@@ -72,7 +72,7 @@ export interface FormComponentProps extends InteractiveComponentProps {
   /** Default value for uncontrolled components */
   defaultValue?: string | number | boolean
   /** Change handler */
-  onChange?: (value: any, event?: React.ChangeEvent<HTMLElement>) => void
+  onChange?: (value: any, event?: ChangeEvent<HTMLElement>) => void
   /** Whether the field is required */
   required?: boolean
   /** Whether the field is readonly */
@@ -104,7 +104,7 @@ export interface ModalComponentProps extends BaseComponentProps {
   /** Whether to show close button */
   showCloseButton?: boolean
   /** Modal footer content */
-  footer?: React.ReactNode
+  footer?: ReactNode
 }
 
 /**
@@ -129,7 +129,7 @@ export interface NavigationItem {
   /** Click handler */
   onClick?: () => void
   /** Icon component */
-  icon?: React.ComponentType<{ className?: string }>
+  icon?: ComponentType<{ className?: string }>
   /** Whether the item is active */
   isActive?: boolean
   /** Whether the item is disabled */
@@ -151,7 +151,7 @@ export interface DataDisplayProps extends BaseComponentProps {
   /** Empty state message */
   emptyMessage?: string
   /** Render function for custom display */
-  renderItem?: (item: any, index: number) => React.ReactNode
+  renderItem?: (item: any, index: number) => ReactNode
 }
 
 /**
@@ -163,7 +163,7 @@ export interface StatusComponentProps extends BaseComponentProps {
   /** Status label */
   label: string
   /** Optional icon */
-  icon?: React.ComponentType<{ className?: string }>
+  icon?: ComponentType<{ className?: string }>
   /** Whether to show as a dot indicator */
   dot?: boolean
 }
@@ -264,11 +264,11 @@ export interface LoadingState {
  */
 export interface EventHandlers {
   /** Generic click handler */
-  onClick?: (event: React.MouseEvent) => void
+  onClick?: (event: MouseEvent) => void
   /** Generic change handler */
-  onChange?: (value: any, event?: React.ChangeEvent) => void
+  onChange?: (value: any, event?: ChangeEvent) => void
   /** Generic submit handler */
-  onSubmit?: (data: any, event?: React.FormEvent) => void
+  onSubmit?: (data: any, event?: FormEvent) => void
   /** Generic error handler */
   onError?: (error: Error) => void
   /** Generic success handler */

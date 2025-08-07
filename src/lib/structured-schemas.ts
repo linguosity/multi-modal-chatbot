@@ -728,7 +728,7 @@ export const ASSESSMENT_RESULTS_SCHEMA: StructuredSchema = {
     },
     {
       key: 'voice',
-      label: 'Voice Skills',
+      title: 'Voice Skills',
       type: 'object',
       children: [
         { key: 'vocal_quality', label: 'Vocal Quality', type: 'string', placeholder: 'Describe vocal quality (e.g., hoarse, breathy, clear)...', },
@@ -739,7 +739,7 @@ export const ASSESSMENT_RESULTS_SCHEMA: StructuredSchema = {
     },
     {
       key: 'fluency',
-      label: 'Fluency Skills',
+      title: 'Fluency Skills',
       type: 'object',
       children: [
         { key: 'stuttering_type', label: 'Type of Disfluency', type: 'string', placeholder: 'e.g., repetitions, prolongations, blocks...', },
@@ -1065,6 +1065,7 @@ export function getSectionSchemaForType(sectionType: string, userState?: string)
   switch (sectionType) {
     case 'header':
     case 'heading':
+    case 'student_information':
       return HEADER_SECTION;
     case 'validity_statement':
       return VALIDITY_STATEMENT_SECTION;

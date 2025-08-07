@@ -146,7 +146,9 @@ export const clinicalTypographyGuide = {
   navigationText: { size: 'sm' as TypographyScale, weight: 'normal' as const },
   metadata: { size: 'xs' as TypographyScale, weight: 'normal' as const },
   errorText: { size: 'xs' as TypographyScale, weight: 'medium' as const },
-  statusText: { size: 'xs' as TypographyScale, weight: 'medium' as const }
+  statusText: { size: 'xs' as TypographyScale, weight: 'medium' as const },
+  modalTitle: { size: 'xl' as TypographyScale, weight: 'semibold' as const },
+  cardTitle: { size: 'base' as TypographyScale, weight: 'medium' as const }
 }
 
 // Helper function to get clinical typography class
@@ -155,6 +157,10 @@ export function getClinicalTypographyClass(
   color?: string
 ): string {
   const guide = clinicalTypographyGuide[usage]
+  if (!guide || !guide.size) {
+    console.warn(`Invalid typography usage: ${usage}`)
+    return getTypographyClass('base', 'normal', color)
+  }
   return getTypographyClass(guide.size, guide.weight, color)
 }
 

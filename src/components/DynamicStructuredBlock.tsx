@@ -10,6 +10,8 @@ import { FieldHighlight } from './ui/FieldHighlight'
 import { AssessmentItemEditor } from './AssessmentItemEditor'
 import { AssessmentToolsDisplay } from './AssessmentToolsDisplay'
 import { AssessmentToolsGrid } from './AssessmentToolsGrid'
+import { safeStringify } from '@/lib/utils/safeStringify'
+import type { Json } from '@/lib/types/json'
 
 interface FieldSchema {
   key: string
@@ -30,13 +32,18 @@ interface SectionSchema {
 
 interface DynamicStructuredBlockProps {
   schema: SectionSchema
-  initialData?: any
-  onChange: (data: any, generatedText: string) => void;
+  initialData?: Json
+  onChange: (data: Json, generatedText: string) => void;
   onSchemaChange?: (newSchema: SectionSchema) => void;
   onSaveAsTemplate?: (schema: SectionSchema) => void;
   mode?: 'data' | 'template'; // Accept mode as prop instead of managing internally
   sectionId?: string; // Add sectionId for field highlighting
-  updateSectionData?: (sectionId: string, data: any) => void;
+  updateSectionData?: (sectionId: string, data: Json) => void;
+}
+
+// Helper function to get nested values
+function getNestedValue(obj: any, path: string[]): any {
+  return path.reduce((current, key) => current?.[key], obj);
 }
 
 export default function DynamicStructuredBlock({ 
@@ -49,7 +56,7 @@ export default function DynamicStructuredBlock({
   sectionId,
   updateSectionData
 }: DynamicStructuredBlockProps) {
-  const [data, setData] = useState<any>(initialData)
+  const [data, setData] = useState<Json>(initialData)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -120,16 +127,16 @@ export default function DynamicStructuredBlock({
   }, []); // Empty deps - only run on mount
 
   // Handle external initialData changes after initialization
+  const prevMerged = useRef<Json | null>(null);
   useEffect(() => {
-    if (initializedRef.current) {
-      const currentDataString = JSON.stringify(data);
-      const newDataString = JSON.stringify(mergedInitialData);
-      
-      if (currentDataString !== newDataString) {
-        setData(mergedInitialData);
-      }
+    // Simple reference check is enough – Next will give you a *new*
+    // object when the parent really sends different data
+    if (prevMerged.current !== mergedInitialData) {
+      prevMerged.current = mergedInitialData;
+      setData(mergedInitialData);
     }
-  }, [mergedInitialData, data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergedInitialData]); // <- note: data removed from deps
 
 
 
@@ -192,15 +199,7 @@ export default function DynamicStructuredBlock({
     return prose.trim()
   }, [schema.fields])
 
-  const updateData = (newData: any) => {
-    setData(newData);
-    const generatedText = generateProseText(newData);
-    onChange(newData, generatedText);
-    // Don't immediately save to database - let autosave handle it
-    // if (sectionId) {
-    //   updateSectionData(sectionId, newData);
-    // }
-  };
+
 
   // Helper function to wrap fields with highlighting
   const wrapWithHighlight = (fieldPath: string, content: React.ReactNode) => {
@@ -219,7 +218,19 @@ export default function DynamicStructuredBlock({
   const renderField = (field: FieldSchema, value: any, path: string[] = []): React.ReactNode => {
     const fieldPath = [...path, field.key].join('.')
     
-    const updateFieldValue = (newValue: any) => {
+    const updateFieldValue = (newValue: any, shouldTriggerSave = false) => {
+      // Only log when actually saving, not on every keystroke
+      if (shouldTriggerSave) {
+        console.log('💾 DynamicStructuredBlock updateFieldValue (saving):', {
+          sectionId,
+          fieldKey: field.key,
+          fieldPath: [...path, field.key].join('.'),
+          oldValue: getNestedValue(data, [...path, field.key]),
+          newValue,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
       const newData = { ...data }
       let current = newData
       
@@ -229,7 +240,21 @@ export default function DynamicStructuredBlock({
       }
       
       current[field.key] = newValue
-      updateData(newData)
+      
+      // Update local state immediately for responsive UI
+      setData(newData);
+      
+      // Only trigger save callback when explicitly requested (onBlur, not onChange)
+      if (shouldTriggerSave) {
+        const generatedText = generateProseText(newData);
+        console.log('💾 DynamicStructuredBlock calling onChange (saving):', {
+          sectionId,
+          dataKeys: Object.keys(newData),
+          generatedTextLength: generatedText.length,
+          timestamp: new Date().toISOString()
+        });
+        onChange(newData, generatedText);
+      }
     }
 
     switch (field.type) {
@@ -268,7 +293,7 @@ export default function DynamicStructuredBlock({
             <input
               type="checkbox"
               checked={value || false}
-              onChange={(e) => updateFieldValue(e.target.checked)}
+              onChange={(e) => updateFieldValue(e.target.checked, true)}
               className="rounded"
             />
             <label className="text-sm text-gray-700">{field.label}</label>
@@ -282,7 +307,8 @@ export default function DynamicStructuredBlock({
             <input
               type="date"
               value={value || ''}
-              onChange={(e) => updateFieldValue(e.target.value)}
+              onChange={(e) => updateFieldValue(e.target.value, false)}
+              onBlur={(e) => updateFieldValue(e.target.value, true)}
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -294,7 +320,7 @@ export default function DynamicStructuredBlock({
             <label className="text-sm text-gray-700">{field.label}:</label>
             <select
               value={value || ''}
-              onChange={(e) => updateFieldValue(e.target.value)}
+              onChange={(e) => updateFieldValue(e.target.value, true)}
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Select an option...</option>
@@ -314,7 +340,8 @@ export default function DynamicStructuredBlock({
             <input
               type="number"
               value={value || 0}
-              onChange={(e) => updateFieldValue(parseFloat(e.target.value) || 0)}
+              onChange={(e) => updateFieldValue(parseFloat(e.target.value) || 0, false)}
+              onBlur={(e) => updateFieldValue(parseFloat(e.target.value) || 0, true)}
               placeholder={field.placeholder}
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
@@ -563,7 +590,11 @@ export default function DynamicStructuredBlock({
                 value={Array.isArray(value) ? value.join(', ') : ''}
                 onChange={(e) => {
                   const items = e.target.value.split(',').map(item => item.trim()).filter(item => item)
-                  updateFieldValue(items)
+                  updateFieldValue(items, false)
+                }}
+                onBlur={(e) => {
+                  const items = e.target.value.split(',').map(item => item.trim()).filter(item => item)
+                  updateFieldValue(items, true)
                 }}
                 placeholder="Enter items separated by commas..."
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
@@ -598,7 +629,8 @@ export default function DynamicStructuredBlock({
             <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
             <textarea
               value={value || ''}
-              onChange={(e) => updateFieldValue(e.target.value)}
+              onChange={(e) => updateFieldValue(e.target.value, false)}
+              onBlur={(e) => updateFieldValue(e.target.value, true)}
               placeholder={field.placeholder}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
@@ -614,11 +646,11 @@ export default function DynamicStructuredBlock({
   }, [onChange]);
 
   // Generate initial text on mount or when data changes (with loop prevention)
+  const prevDataRef = useRef<Json | null>(null);
   useEffect(() => {
-    // Prevent infinite loops by checking if data actually changed
-    const dataString = JSON.stringify(data);
-    if (dataString !== lastDataRef.current && Object.keys(data).length > 0) {
-      lastDataRef.current = dataString;
+    // Use reference equality check instead of deep stringify
+    if (prevDataRef.current !== data && Object.keys(data).length > 0) {
+      prevDataRef.current = data;
       const generatedText = generateProseText(data);
       stableOnChange(data, generatedText);
     }
@@ -652,7 +684,10 @@ export default function DynamicStructuredBlock({
         onClose={() => setShowUploadModal(false)}
         onDataReceived={(receivedData) => {
           // Update structured data from uploaded content
-          updateData({ ...data, ...receivedData })
+          const newData = { ...data, ...receivedData }
+          setData(newData)
+          const generatedText = generateProseText(newData)
+          onChange(newData, generatedText)
           setShowUploadModal(false)
         }}
         sectionType={schema.key}

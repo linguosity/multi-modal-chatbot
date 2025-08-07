@@ -1,1 +1,277 @@
-import { ReportTemplate, REPORT_SECTION_TYPES } from '@/lib/schemas/report';export const seedReportTemplates: ReportTemplate[] = [{id: "a1b2c3d4-e5f6-7890-1234-567890abcdef",name: "Initial Evaluation Template",description: "Standard template for initial speech-language evaluations.",type: "initial",sections: [{id: "sec-reason-for-referral",sectionType: REPORT_SECTION_TYPES.REASON_FOR_REFERRAL,title: "Reason for Referral",content: "",order: 1,isRequired: true,isGenerated: true,generationPrompt: "Generate a concise reason for referral paragraph explaining who referred the student, what concerns prompted the referral, and the purpose of the evaluation.",ai_directive: "Focus on academic and social communication concerns. Keep it professional and objective."},{id: "sec-health-history",sectionType: REPORT_SECTION_TYPES.HEALTH_DEVELOPMENTAL_HISTORY,title: "Health and Developmental History",content: "",order: 2,isRequired: true,isGenerated: true,generationPrompt: "Generate a comprehensive health and developmental history section that summarizes relevant medical conditions, developmental milestones, and previous diagnoses that may impact speech and language development.",ai_directive: "Include only relevant medical history. If no significant history, state that."},{id: "sec-assessment-tools",sectionType: REPORT_SECTION_TYPES.ASSESSMENT_TOOLS,title: "Assessment Tools",content: "",order: 3,isRequired: true,isGenerated: true,generationPrompt: "Generate an assessment tools section. List and briefly describe each formal and informal assessment measure used in the evaluation. Crucially, if the unstructured notes describe any assessment procedures (e.g., 'language sample analysis', 'oral mechanism exam', 'clinical observation', 'parent/caregiver interview', 'questionnaire', 'survey', 'classroom observation'), infer and list them here, even if no formal test names are explicitly given.",ai_directive: "List tests with full names and acronyms. Briefly describe what each test measures."},{id: "sec-assessment-results",sectionType: REPORT_SECTION_TYPES.ASSESSMENT_RESULTS,title: "Assessment Results",content: "",order: 4,isRequired: true,isGenerated: true,generationPrompt: "Generate a comprehensive assessment results section that presents and interprets standardized test scores and describes the student's performance in relevant speech and language domains.",ai_directive: "Interpret scores clearly. Use standard score, percentile rank, and descriptive categories. Include both strengths and weaknesses."},{id: "sec-conclusion",sectionType: REPORT_SECTION_TYPES.CONCLUSION,title: "Conclusion",content: "",order: 5,isRequired: true,isGenerated: true,generationPrompt: "Generate a conclusion paragraph that summarizes the student's speech and language profile, educational impact, and eligibility determination.",ai_directive: "Summarize key findings. State eligibility clearly based on criteria."},{id: "sec-recommendations",sectionType: REPORT_SECTION_TYPES.RECOMMENDATIONS,title: "Recommendations",content: "",order: 6,isRequired: true,isGenerated: true,generationPrompt: "Generate specific recommendations for the student based on assessment results, including service delivery recommendations, intervention targets, and progress monitoring approaches.",ai_directive: "Provide actionable, measurable recommendations. Include both direct and indirect services."}],defaultSections: ["sec-reason-for-referral","sec-health-history","sec-assessment-tools","sec-assessment-results","sec-conclusion","sec-recommendations",],createdBy: "seed-user",createdAt: new Date().toISOString(),updatedAt: new Date().toISOString(),},];export const seedReports: Report[] = [{id: "d0759607-c44f-4e44-9ef9-eeb8f75787d7",templateId: "a1b2c3d4-e5f6-7890-1234-567890abcdef",title: "Brandon Brewer - Initial SLP Evaluation",studentName: "Brandon Brewer",studentId: "BB12345",type: "initial",createdAt: new Date().toISOString(),updatedAt: new Date().toISOString(),status: "draft",evaluatorId: "seed-user",sections: [{id: "sec-reason-for-referral",sectionType: REPORT_SECTION_TYPES.REASON_FOR_REFERRAL,title: "Reason for Referral",content: "Brandon Brewer was referred for a speech and language evaluation by his parents due to concerns regarding his vocal quality and resonance. Parents report that Brandon's voice often sounds hoarse and he experiences vocal fatigue after prolonged speaking. This evaluation was conducted to determine if Brandon demonstrates a voice disorder that is adversely affecting his communication and require intervention.",points: ["Referred by parents","Concerns: vocal quality, resonance, hoarseness, vocal fatigue","Purpose: determine if voice disorder affects communication and requires intervention"],order: 1,isRequired: true,isGenerated: true,generationPrompt: "Generate a concise reason for referral paragraph explaining who referred the student, what concerns prompted the referral, and the purpose of the evaluation.",ai_directive: "Focus on academic and social communication concerns. Keep it professional and objective."},{id: "sec-health-history",sectionType: REPORT_SECTION_TYPES.HEALTH_DEVELOPMENTAL_HISTORY,title: "Health and Developmental History",content: "According to information provided by Brandon's parents, his health and developmental history is largely unremarkable, with no significant medical conditions or developmental delays noted. He has no history of ear infections or chronic respiratory issues. His parents report that he occasionally clears his throat excessively, and they are seeking guidance on vocal hygiene strategies. Hearing and vision screenings were completed at school and were within normal limits. There are no other known medical or developmental factors that may contribute to vocal behaviors.",points: ["Largely unremarkable health/developmental history","No ear infections or chronic respiratory issues","Occasional excessive throat clearing","Seeking vocal hygiene guidance","Hearing/vision screenings WNL"],order: 2,isRequired: true,isGenerated: true,generationPrompt: "Generate a comprehensive health and developmental history section that summarizes relevant medical conditions, developmental milestones, and previous diagnoses that may impact speech and language development.",ai_directive: "Include only relevant medical history. If no significant history, state that."},{id: "sec-assessment-tools",sectionType: REPORT_SECTION_TYPES.ASSESSMENT_TOOLS,title: "Assessment Tools",content: "The following assessment tools were used in this evaluation:\n\n1. Clinical Voice Assessment (informal): Included perceptual voice analysis, vocal hygiene interview, and observation of vocal behaviors.\n2. Oral Mechanism Examination: Assessed the structure and function of the oral motor mechanism.\n3. Language Sample Analysis: Evaluated spontaneous speech for fluency, articulation, and overall communication effectiveness.\n4. Parent Interview: Gathered information regarding vocal history, concerns, and impact on daily life.\n5. Classroom Observation: Observed Brandon's vocal use in a naturalistic academic setting.\n\nNote: Formal standardized voice assessments were not administered at this time, as the primary focus was on identifying functional vocal behaviors and providing initial recommendations. Further assessment results require additional evaluation and documentation.",points: ["Clinical Voice Assessment (informal)",{ heading: "Included:", points: ["Perceptual voice analysis", "Vocal hygiene interview", "Observation of vocal behaviors"] },"Oral Mechanism Examination","Language Sample Analysis","Parent Interview","Classroom Observation","No formal standardized voice assessments administered at this time"],order: 3,isRequired: true,isGenerated: true,generationPrompt: "Generate an assessment tools section. List and briefly describe each formal and informal assessment measure used in the evaluation. Crucially, if the unstructured notes describe any assessment procedures (e.g., 'language sample analysis', 'oral mechanism exam', 'clinical observation', 'parent/caregiver interview', 'questionnaire', 'survey', 'classroom observation'), infer and list them here, even if no formal test names are explicitly given.",ai_directive: "List tests with full names and acronyms. Briefly describe what each test measures."},{id: "sec-assessment-results",sectionType: REPORT_SECTION_TYPES.ASSESSMENT_RESULTS,title: "Assessment Results",content: "### Voice Quality Assessment\n\nBased on clinical observation and perceptual voice analysis, Brandon's voice exhibited intermittent hoarseness and a slightly breathy quality. Pitch and loudness were generally appropriate for his age and gender, but occasional vocal fry was noted. He demonstrated mild vocal fatigue after sustained speaking tasks. During the vocal hygiene interview, Brandon reported infrequent water intake and occasional yelling during play.\n\n### Oral Mechanism Examination\n\nResults of the oral mechanism examination were within normal limits for speech production. All structures (lips, tongue, jaw, palate) appeared symmetrical and moved with adequate range, strength, and coordination.\n\n### Language Sample Analysis\n\nAnalysis of Brandon's spontaneous speech revealed age-appropriate vocabulary, sentence structure, and grammatical skills. Articulation was clear and intelligible in conversational speech. No significant disfluencies were observed. His pragmatic language skills were also age-appropriate, demonstrating good turn-taking, topic maintenance, and conversational repair strategies.\n\n### Classroom Observation\n\nDuring classroom observation, Brandon participated actively in discussions. His voice was audible, but instances of increased vocal effort and occasional hoarseness were noted during periods of sustained talking or when speaking over background noise. He demonstrated appropriate social communication skills with peers and teachers.\n\n### Summary of Findings\n\nBrandon presents with a mild voice disorder characterized by intermittent hoarseness and vocal fatigue. His oral motor skills, articulation, language, and fluency are within normal limits. The voice difficulties appear to be primarily related to vocal behaviors and habits rather than structural or neurological issues. Further assessment results require additional evaluation and documentation.",points: [{ heading: "Voice Quality", points: ["Intermittent hoarseness", "Slightly breathy quality", "Occasional vocal fry", "Mild vocal fatigue after sustained speaking"] },{ heading: "Oral Mechanism", points: ["WNL for speech production", "Symmetrical structures, adequate range, strength, coordination"] },{ heading: "Language Sample", points: ["Age-appropriate vocabulary, sentence structure, grammar", "Clear and intelligible articulation", "No significant disfluencies", "Age-appropriate pragmatic skills"] },{ heading: "Classroom Observation", points: ["Active participation", "Audible voice, but increased vocal effort/hoarseness during sustained talking/noise", "Appropriate social communication"] },{ heading: "Summary", points: ["Mild voice disorder (intermittent hoarseness, vocal fatigue)", "Related to vocal behaviors/habits, not structural/neurological"] }],order: 4,isRequired: true,isGenerated: true,generationPrompt: "Generate a comprehensive assessment results section that presents and interprets standardized test scores and describes the student's performance in relevant speech and language domains.",ai_directive: "Interpret scores clearly. Use standard score, percentile rank, and descriptive categories. Include both strengths and weaknesses."},{id: "sec-conclusion",sectionType: REPORT_SECTION_TYPES.CONCLUSION,title: "Conclusion",content: "Brandon Brewer presents with a mild voice disorder characterized by intermittent hoarseness and vocal fatigue. His oral motor skills, articulation, language, and fluency are within normal limits. The voice difficulties appear to be primarily related to vocal behaviors and habits rather than structural or neurological issues. These difficulties adversely affect his communication in situations requiring sustained vocal use, such as classroom participation and social interactions. Based on the results of this evaluation, Brandon qualifies for speech and language services to address his voice disorder.",points: ["Mild voice disorder (intermittent hoarseness, vocal fatigue)","Oral motor, articulation, language, fluency WNL","Voice difficulties related to vocal behaviors/habits","Adversely affects communication (sustained vocal use, classroom, social)","Qualifies for speech and language services"],order: 5,isRequired: true,isGenerated: true,generationPrompt: "Generate a conclusion paragraph that summarizes the student's speech and language profile, educational impact, and eligibility determination.",ai_directive: "Summarize key findings. State eligibility clearly based on criteria."},{id: "sec-recommendations",sectionType: REPORT_SECTION_TYPES.RECOMMENDATIONS,title: "Recommendations",content: "The following recommendations are made based on the results of this evaluation:\n\n1. Direct speech-language therapy services: Focus on vocal hygiene education, resonant voice therapy techniques, and strategies to reduce vocal misuse/abuse.\n2. Collaboration with classroom teachers: Provide strategies for modifying the classroom environment to support vocal health (e.g., amplification, reducing background noise, encouraging appropriate vocal volume).\n3. Parent education: Provide resources and strategies for promoting healthy vocal habits at home.\n4. Monitor vocal quality: Regular monitoring of vocal quality and fatigue to track improvement and prevent further vocal trauma.",points: ["Direct SLP therapy: vocal hygiene, resonant voice therapy, reduce misuse/abuse","Collaboration with teachers: classroom modifications (amplification, noise reduction, appropriate volume)","Parent education: healthy vocal habits at home","Monitor vocal quality/fatigue"],order: 6,isRequired: true,isGenerated: true,generationPrompt: "Generate specific recommendations for the student based on assessment results, including service delivery recommendations, intervention targets, and progress monitoring approaches.",ai_directive: "Provide actionable, measurable recommendations. Include both direct and indirect services."},],tags: ["voice", "initial", "evaluation"],finalizedDate: null,printVersion: null,relatedAssessmentIds: [],relatedEligibilityIds: [],},];export const seedData = {reportTemplates: seedReportTemplates,reports: seedReports,};
+import { ReportTemplate, Report, REPORT_SECTION_TYPES } from '@/lib/schemas/report';
+
+export const seedReportTemplates: ReportTemplate[] = [
+  {
+    id: "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    name: "Initial Evaluation Template",
+    description: "Standard template for initial speech-language evaluations.",
+    type: "initial",
+    sections: [
+      {
+        id: "sec-reason-for-referral",
+        sectionType: REPORT_SECTION_TYPES.REASON_FOR_REFERRAL,
+        title: "Reason for Referral",
+        content: "",
+        order: 1,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: false,
+        generationPrompt: "Generate a concise reason for referral paragraph explaining who referred the student, what concerns prompted the referral, and the purpose of the evaluation.",
+        ai_directive: "Focus on academic and social communication concerns. Keep it professional and objective."
+      },
+      {
+        id: "sec-health-history",
+        sectionType: REPORT_SECTION_TYPES.HEALTH_DEVELOPMENTAL_HISTORY,
+        title: "Health and Developmental History",
+        content: "",
+        order: 2,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: false,
+        generationPrompt: "Generate a comprehensive health and developmental history section that summarizes relevant medical conditions, developmental milestones, and previous diagnoses that may impact speech and language development.",
+        ai_directive: "Include only relevant medical history. If no significant history, state that."
+      },
+      {
+        id: "sec-assessment-tools",
+        sectionType: REPORT_SECTION_TYPES.ASSESSMENT_TOOLS,
+        title: "Assessment Tools",
+        content: "",
+        order: 3,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: false,
+        generationPrompt: "Generate an assessment tools section. List and briefly describe each formal and informal assessment measure used in the evaluation. Crucially, if the unstructured notes describe any assessment procedures (e.g., 'language sample analysis', 'oral mechanism exam', 'clinical observation', 'parent/caregiver interview', 'questionnaire', 'survey', 'classroom observation'), infer and list them here, even if no formal test names are explicitly given.",
+        ai_directive: "List tests with full names and acronyms. Briefly describe what each test measures."
+      },
+      {
+        id: "sec-assessment-results",
+        sectionType: REPORT_SECTION_TYPES.ASSESSMENT_RESULTS,
+        title: "Assessment Results",
+        content: "",
+        order: 4,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: false,
+        generationPrompt: "Generate a comprehensive assessment results section that presents and interprets standardized test scores and describes the student's performance in relevant speech and language domains.",
+        ai_directive: "Interpret scores clearly. Use standard score, percentile rank, and descriptive categories. Include both strengths and weaknesses."
+      },
+      {
+        id: "sec-conclusion",
+        sectionType: REPORT_SECTION_TYPES.CONCLUSION,
+        title: "Conclusion",
+        content: "",
+        order: 5,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: false,
+        generationPrompt: "Generate a conclusion paragraph that summarizes the student's speech and language profile, educational impact, and eligibility determination.",
+        ai_directive: "Summarize key findings. State eligibility clearly based on criteria."
+      },
+      {
+        id: "sec-recommendations",
+        sectionType: REPORT_SECTION_TYPES.RECOMMENDATIONS,
+        title: "Recommendations",
+        content: "",
+        order: 6,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: false,
+        generationPrompt: "Generate specific recommendations for the student based on assessment results, including service delivery recommendations, intervention targets, and progress monitoring approaches.",
+        ai_directive: "Provide actionable, measurable recommendations. Include both direct and indirect services."
+      }
+    ],
+    defaultSections: [
+      "sec-reason-for-referral",
+      "sec-health-history",
+      "sec-assessment-tools",
+      "sec-assessment-results",
+      "sec-conclusion",
+      "sec-recommendations"
+    ],
+    createdBy: "seed-user",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export const seedReports: Report[] = [
+  {
+    id: "d0759607-c44f-4e44-9ef9-eeb8f75787d7",
+    templateId: "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    title: "Brandon Brewer - Initial SLP Evaluation",
+    studentName: "Brandon Brewer",
+    studentId: "BB12345",
+    type: "initial",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    status: "draft",
+    evaluatorId: "seed-user",
+    sections: [
+      {
+        id: "sec-reason-for-referral",
+        sectionType: REPORT_SECTION_TYPES.REASON_FOR_REFERRAL,
+        title: "Reason for Referral",
+        content: "Brandon Brewer was referred for a speech and language evaluation by his parents due to concerns regarding his vocal quality and resonance. Parents report that Brandon's voice often sounds hoarse and he experiences vocal fatigue after prolonged speaking. This evaluation was conducted to determine if Brandon demonstrates a voice disorder that is adversely affecting his communication and require intervention.",
+        points: [
+          "Referred by parents",
+          "Concerns: vocal quality, resonance, hoarseness, vocal fatigue",
+          "Purpose: determine if voice disorder affects communication and requires intervention"
+        ],
+        order: 1,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: true,
+        generationPrompt: "Generate a concise reason for referral paragraph explaining who referred the student, what concerns prompted the referral, and the purpose of the evaluation.",
+        ai_directive: "Focus on academic and social communication concerns. Keep it professional and objective."
+      },
+      {
+        id: "sec-health-history",
+        sectionType: REPORT_SECTION_TYPES.HEALTH_DEVELOPMENTAL_HISTORY,
+        title: "Health and Developmental History",
+        content: "According to information provided by Brandon's parents, his health and developmental history is largely unremarkable, with no significant medical conditions or developmental delays noted. He has no history of ear infections or chronic respiratory issues. His parents report that he occasionally clears his throat excessively, and they are seeking guidance on vocal hygiene strategies. Hearing and vision screenings were completed at school and were within normal limits. There are no other known medical or developmental factors that may contribute to vocal behaviors.",
+        points: [
+          "Largely unremarkable health/developmental history",
+          "No ear infections or chronic respiratory issues",
+          "Occasional excessive throat clearing",
+          "Seeking vocal hygiene guidance",
+          "Hearing/vision screenings WNL"
+        ],
+        order: 2,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: true,
+        generationPrompt: "Generate a comprehensive health and developmental history section that summarizes relevant medical conditions, developmental milestones, and previous diagnoses that may impact speech and language development.",
+        ai_directive: "Include only relevant medical history. If no significant history, state that."
+      },
+      {
+        id: "sec-assessment-tools",
+        sectionType: REPORT_SECTION_TYPES.ASSESSMENT_TOOLS,
+        title: "Assessment Tools",
+        content: "The following assessment tools were used in this evaluation:\n\n1. Clinical Voice Assessment (informal): Included perceptual voice analysis, vocal hygiene interview, and observation of vocal behaviors.\n2. Oral Mechanism Examination: Assessed the structure and function of the oral motor mechanism.\n3. Language Sample Analysis: Evaluated spontaneous speech for fluency, articulation, and overall communication effectiveness.\n4. Parent Interview: Gathered information regarding vocal history, concerns, and impact on daily life.\n5. Classroom Observation: Observed Brandon's vocal use in a naturalistic academic setting.\n\nNote: Formal standardized voice assessments were not administered at this time, as the primary focus was on identifying functional vocal behaviors and providing initial recommendations. Further assessment results require additional evaluation and documentation.",
+        points: [
+          "Clinical Voice Assessment (informal)",
+          {
+            heading: "Included:",
+            points: [
+              "Perceptual voice analysis",
+              "Vocal hygiene interview",
+              "Observation of vocal behaviors"
+            ]
+          },
+          "Oral Mechanism Examination",
+          "Language Sample Analysis",
+          "Parent Interview",
+          "Classroom Observation",
+          "No formal standardized voice assessments administered at this time"
+        ],
+        order: 3,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: true,
+        generationPrompt: "Generate an assessment tools section. List and briefly describe each formal and informal assessment measure used in the evaluation. Crucially, if the unstructured notes describe any assessment procedures (e.g., 'language sample analysis', 'oral mechanism exam', 'clinical observation', 'parent/caregiver interview', 'questionnaire', 'survey', 'classroom observation'), infer and list them here, even if no formal test names are explicitly given.",
+        ai_directive: "List tests with full names and acronyms. Briefly describe what each test measures."
+      },
+      {
+        id: "sec-assessment-results",
+        sectionType: REPORT_SECTION_TYPES.ASSESSMENT_RESULTS,
+        title: "Assessment Results",
+        content: "### Voice Quality Assessment\n\nBased on clinical observation and perceptual voice analysis, Brandon's voice exhibited intermittent hoarseness and a slightly breathy quality. Pitch and loudness were generally appropriate for his age and gender, but occasional vocal fry was noted. He demonstrated mild vocal fatigue after sustained speaking tasks. During the vocal hygiene interview, Brandon reported infrequent water intake and occasional yelling during play.\n\n### Oral Mechanism Examination\n\nResults of the oral mechanism examination were within normal limits for speech production. All structures (lips, tongue, jaw, palate) appeared symmetrical and moved with adequate range, strength, and coordination.\n\n### Language Sample Analysis\n\nAnalysis of Brandon's spontaneous speech revealed age-appropriate vocabulary, sentence structure, and grammatical skills. Articulation was clear and intelligible in conversational speech. No significant disfluencies were observed. His pragmatic language skills were also age-appropriate, demonstrating good turn-taking, topic maintenance, and conversational repair strategies.\n\n### Classroom Observation\n\nDuring classroom observation, Brandon participated actively in discussions. His voice was audible, but instances of increased vocal effort and occasional hoarseness were noted during periods of sustained talking or when speaking over background noise. He demonstrated appropriate social communication skills with peers and teachers.\n\n### Summary of Findings\n\nBrandon presents with a mild voice disorder characterized by intermittent hoarseness and vocal fatigue. His oral motor skills, articulation, language, and fluency are within normal limits. The voice difficulties appear to be primarily related to vocal behaviors and habits rather than structural or neurological issues. Further assessment results require additional evaluation and documentation.",
+        points: [
+          {
+            heading: "Voice Quality",
+            points: [
+              "Intermittent hoarseness",
+              "Slightly breathy quality",
+              "Occasional vocal fry",
+              "Mild vocal fatigue after sustained speaking"
+            ]
+          },
+          {
+            heading: "Oral Mechanism",
+            points: [
+              "WNL for speech production",
+              "Symmetrical structures, adequate range, strength, coordination"
+            ]
+          },
+          {
+            heading: "Language Sample",
+            points: [
+              "Age-appropriate vocabulary, sentence structure, grammar",
+              "Clear and intelligible articulation",
+              "No significant disfluencies",
+              "Age-appropriate pragmatic skills"
+            ]
+          },
+          {
+            heading: "Classroom Observation",
+            points: [
+              "Active participation",
+              "Audible voice, but increased vocal effort/hoarseness during sustained talking/noise",
+              "Appropriate social communication"
+            ]
+          },
+          {
+            heading: "Summary",
+            points: [
+              "Mild voice disorder (intermittent hoarseness, vocal fatigue)",
+              "Related to vocal behaviors/habits, not structural/neurological"
+            ]
+          }
+        ],
+        order: 4,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: true,
+        generationPrompt: "Generate a comprehensive assessment results section that presents and interprets standardized test scores and describes the student's performance in relevant speech and language domains.",
+        ai_directive: "Interpret scores clearly. Use standard score, percentile rank, and descriptive categories. Include both strengths and weaknesses."
+      },
+      {
+        id: "sec-conclusion",
+        sectionType: REPORT_SECTION_TYPES.CONCLUSION,
+        title: "Conclusion",
+        content: "Brandon Brewer presents with a mild voice disorder characterized by intermittent hoarseness and vocal fatigue. His oral motor skills, articulation, language, and fluency are within normal limits. The voice difficulties appear to be primarily related to vocal behaviors and habits rather than structural or neurological issues. These difficulties adversely affect his communication in situations requiring sustained vocal use, such as classroom participation and social interactions. Based on the results of this evaluation, Brandon qualifies for speech and language services to address his voice disorder.",
+        points: [
+          "Mild voice disorder (intermittent hoarseness, vocal fatigue)",
+          "Oral motor, articulation, language, fluency WNL",
+          "Voice difficulties related to vocal behaviors/habits",
+          "Adversely affects communication (sustained vocal use, classroom, social)",
+          "Qualifies for speech and language services"
+        ],
+        order: 5,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: true,
+        generationPrompt: "Generate a conclusion paragraph that summarizes the student's speech and language profile, educational impact, and eligibility determination.",
+        ai_directive: "Summarize key findings. State eligibility clearly based on criteria."
+      },
+      {
+        id: "sec-recommendations",
+        sectionType: REPORT_SECTION_TYPES.RECOMMENDATIONS,
+        title: "Recommendations",
+        content: "The following recommendations are made based on the results of this evaluation:\n\n1. Direct speech-language therapy services: Focus on vocal hygiene education, resonant voice therapy techniques, and strategies to reduce vocal misuse/abuse.\n2. Collaboration with classroom teachers: Provide strategies for modifying the classroom environment to support vocal health (e.g., amplification, reducing background noise, encouraging appropriate vocal volume).\n3. Parent education: Provide resources and strategies for promoting healthy vocal habits at home.\n4. Monitor vocal quality: Regular monitoring of vocal quality and fatigue to track improvement and prevent further vocal trauma.",
+        points: [
+          "Direct SLP therapy: vocal hygiene, resonant voice therapy, reduce misuse/abuse",
+          "Collaboration with teachers: classroom modifications (amplification, noise reduction, appropriate volume)",
+          "Parent education: healthy vocal habits at home",
+          "Monitor vocal quality/fatigue"
+        ],
+        order: 6,
+        isRequired: true,
+        isGenerated: true,
+        isCompleted: true,
+        generationPrompt: "Generate specific recommendations for the student based on assessment results, including service delivery recommendations, intervention targets, and progress monitoring approaches.",
+        ai_directive: "Provide actionable, measurable recommendations. Include both direct and indirect services."
+      }
+    ],
+    tags: ["voice", "initial", "evaluation"],
+    finalizedDate: undefined,
+    printVersion: undefined,
+    relatedAssessmentIds: [],
+    relatedEligibilityIds: []
+  }
+];
+
+export const seedData = {
+  reportTemplates: seedReportTemplates,
+  reports: seedReports
+};

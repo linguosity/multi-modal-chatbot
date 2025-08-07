@@ -2,29 +2,38 @@
  * Utility functions to clean data and prevent circular references
  */
 
-export function removeCircularReferences(obj: any, seen = new WeakSet()): any {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
+export function removeCircularReferences(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) {
+    return input;
   }
 
-  if (seen.has(obj)) {
-    return '[Circular Reference]';
-  }
+  const root = Array.isArray(input) ? [] : {};
+  const queue: Array<[any, any, string | number]> = [[root, input, ""]];
+  const seen = new WeakMap<any, any>();
 
-  seen.add(obj);
+  while (queue.length) {
+    const [cloneParent, original, key] = queue.shift()!;
 
-  if (Array.isArray(obj)) {
-    return obj.map(item => removeCircularReferences(item, seen));
-  }
+    if (typeof original !== "object" || original === null) {
+      cloneParent[key] = original;
+      continue;
+    }
 
-  const cleaned: any = {};
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      cleaned[key] = removeCircularReferences(obj[key], seen);
+    if (seen.has(original)) {
+      cloneParent[key] = "[Circular Reference]";
+      continue;
+    }
+
+    const clone: any = Array.isArray(original) ? [] : {};
+    seen.set(original, clone);
+    cloneParent[key] = clone;
+
+    for (const k of Object.keys(original)) {
+      queue.push([clone, original[k], k]);
     }
   }
 
-  return cleaned;
+  return root;
 }
 
 export function safeStringify(obj: any, space?: number): string {
@@ -41,24 +50,41 @@ export function safeStringify(obj: any, space?: number): string {
   }
 }
 
-export function hasCircularReference(obj: any, seen = new WeakSet()): boolean {
-  if (obj === null || typeof obj !== 'object') {
+// Safe debug function that doesn't walk deep structures unless needed
+export function safeDebug(obj: unknown, space = 2): string {
+  try {
+    return JSON.stringify(obj, (_, v) =>
+      typeof v === "object" && v !== null ? v : v,
+      space
+    );
+  } catch {
+    return "[Unserialisable]";
+  }
+}
+
+export function hasCircularReference(input: unknown): boolean {
+  if (typeof input !== "object" || input === null) {
     return false;
   }
 
-  if (seen.has(obj)) {
-    return true;
-  }
+  const queue: unknown[] = [input];
+  const seen = new WeakSet();
 
-  seen.add(obj);
+  while (queue.length) {
+    const current = queue.shift()!;
 
-  if (Array.isArray(obj)) {
-    return obj.some(item => hasCircularReference(item, seen));
-  }
+    if (typeof current !== "object" || current === null) {
+      continue;
+    }
 
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key) && hasCircularReference(obj[key], seen)) {
+    if (seen.has(current)) {
       return true;
+    }
+
+    seen.add(current);
+
+    for (const value of Object.values(current)) {
+      queue.push(value);
     }
   }
 

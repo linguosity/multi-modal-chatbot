@@ -62,14 +62,28 @@ export const ReportSectionCard: React.FC<Props> = ({
 
   // Handle content changes (only update local state, save on blur)
   const handleContentChange = useCallback((newContent: string) => {
+    console.log('🔄 ReportSectionCard handleContentChange:', {
+      sectionId: section.id,
+      sectionTitle: section.title,
+      contentLength: newContent.length,
+      contentPreview: newContent.substring(0, 100) + (newContent.length > 100 ? '...' : ''),
+      willSave: false
+    });
     // Just update local state, don't save yet
     onUpdateSectionAction(section.id, newContent, false); // Don't save on every keystroke
-  }, [section.id, onUpdateSectionAction]);
+  }, [section.id, section.title, onUpdateSectionAction]);
 
   // Handle blur - save the content
   const handleContentBlur = useCallback((newContent: string) => {
+    console.log('💾 ReportSectionCard handleContentBlur (SAVING):', {
+      sectionId: section.id,
+      sectionTitle: section.title,
+      contentLength: newContent.length,
+      contentPreview: newContent.substring(0, 100) + (newContent.length > 100 ? '...' : ''),
+      willSave: true
+    });
     onUpdateSectionAction(section.id, newContent, true); // Save on blur
-  }, [section.id, onUpdateSectionAction]);
+  }, [section.id, section.title, onUpdateSectionAction]);
 
   // Handle section click to clear update indicator
   const handleSectionClick = useCallback(() => {

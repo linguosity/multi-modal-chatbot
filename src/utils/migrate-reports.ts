@@ -18,13 +18,13 @@ export function convertPointsToRichText(points: DataPoint[]): string {
       let html = `<h${headingLevel}>${point.heading}</h${headingLevel}>`;
       
       // Add prose template if available
-      if (point.prose_template) {
+      if ('prose_template' in point && point.prose_template) {
         html += `<p>${point.prose_template}</p>`;
       }
       
       // Add nested points
-      if (point.points && point.points.length > 0) {
-        html += point.points.map(nestedPoint => convertPoint(nestedPoint, level + 1)).join('');
+      if ('points' in point && Array.isArray(point.points) && point.points.length > 0) {
+        html += point.points.map((nestedPoint: any) => convertPoint(nestedPoint, level + 1)).join('');
       }
       
       return html;

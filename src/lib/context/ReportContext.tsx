@@ -92,6 +92,18 @@ export const ReportProvider: React.FC<ReportProviderProps> = ({ children, initia
   const handleSave = async (reportToSave: Report) => {
     // Don't set loading to true for auto-saves to prevent UI disruption
     if (reportToSave) {
+      console.log('💾 ReportContext handleSave called:', {
+        reportId: reportToSave.id,
+        sectionsCount: reportToSave.sections?.length || 0,
+        sections: reportToSave.sections?.map(s => ({
+          id: s.id,
+          title: s.title,
+          contentLength: s.content?.length || 0,
+          contentPreview: s.content?.substring(0, 50) + (s.content && s.content.length > 50 ? '...' : ''),
+          hasStructuredData: !!s.structured_data && Object.keys(s.structured_data).length > 0
+        }))
+      });
+      
       // Clean the report data to prevent circular references
       const cleanedReport = hasCircularReference(reportToSave) 
         ? removeCircularReferences(reportToSave)

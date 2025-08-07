@@ -60,7 +60,7 @@ async function handleMultiModalAssessment(
       while (retryCount <= maxRetries) {
         try {
           response = await anthropic.messages.create({
-            model: "claude-3-7-sonnet-20250219", // Claude 3.7 Sonnet with PDF support
+            model: "claude-opus-4-1-20250805", // Claude Opus 4.1 - latest model
             max_tokens: 16384, // Increased for PDF analysis (doubled from 8192)
             system: systemMessage,
             tools: tools,
@@ -898,9 +898,9 @@ Generate rich text content based on the provided context. You MUST call the 'upd
       return await handleMultiModalAssessment(messages, systemMessageContent, tools, report, supabase, reportId, processedFiles);
     } else {
       // Single tool call for traditional generation
-      console.log('Creating Anthropic message with the following parameters:', { model: "claude-3-5-sonnet-20241022", max_tokens: 8192, system: systemMessageContent, tools, messages, tool_choice: { type: "tool", name: targetTool } });
+      console.log('Creating Anthropic message with the following parameters:', { model: "claude-opus-4-1-20250805", max_tokens: 8192, system: systemMessageContent, tools, messages, tool_choice: { type: "tool", name: targetTool } });
       const response = await anthropic.messages.create({
-        model: "claude-3-7-sonnet-20250219", // Claude 3.7 Sonnet with PDF support
+        model: "claude-opus-4-1-20250805", // Claude Opus 4.1 - latest model
         max_tokens: 8192, // Increased for longer content
         system: systemMessageContent,
         tools: tools,

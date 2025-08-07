@@ -18,12 +18,13 @@ export interface SectionProgressItem {
   errorMessage?: string
 }
 
-interface SectionProgressProps extends Omit<NavigationComponentProps, 'items'> {
+interface SectionProgressProps extends Omit<NavigationComponentProps, 'items' | 'variant' | 'onNavigate'> {
   sections: SectionProgressItem[]
   variant?: 'default' | 'compact' | 'detailed'
   showProgress?: boolean
   showEstimates?: boolean
   groupBy?: 'status' | 'category' | 'none'
+  onNavigate?: (section: SectionProgressItem) => void
 }
 
 const statusConfig = {

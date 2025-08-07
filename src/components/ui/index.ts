@@ -8,15 +8,15 @@ export type { ButtonProps } from './button'
 export { BaseModal } from './base-modal'
 export type { BaseModalProps } from './base-modal'
 
+export { ConfirmationDialog } from './confirmation-dialog'
+export type { ConfirmationDialogProps } from './confirmation-dialog'
+
 export { FormField } from './form-field'
-export type { FormFieldProps } from './form-field'
 
 // Navigation components
-export { Breadcrumb, BreadcrumbItem, BreadcrumbSeparator } from './breadcrumb'
-export type { BreadcrumbProps, BreadcrumbItemProps } from './breadcrumb'
+export { Breadcrumb } from './breadcrumb'
 
 export { SectionProgress } from './section-progress'
-export type { SectionProgressProps } from './section-progress'
 
 // Loading and state components
 export { AutoSaveIndicator, useAutoSave } from './auto-save-indicator'
@@ -33,7 +33,6 @@ export type {
 } from './loading-state'
 
 export { ProgressIndicator } from './progress-indicator'
-export type { ProgressIndicatorProps } from './progress-indicator'
 
 // Form validation components
 export { FormValidation, FieldValidation, ValidationSummary } from './form-validation'
@@ -101,7 +100,5 @@ export type {
 
 // Utility components
 export { SplitButton } from './split-button'
-export type { SplitButtonProps } from './split-button'
 
-export { Toast } from './toast'
-export type { ToastProps } from './toast'
+export type { Toast } from './toast'

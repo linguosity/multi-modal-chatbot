@@ -1,6 +1,7 @@
 'use client'
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { BreadcrumbItem } from '@/components/ui/breadcrumb'
 import type { SectionProgressItem } from '@/components/ui/section-progress'
@@ -38,7 +39,7 @@ export function useNavigation() {
 }
 
 interface NavigationProviderProps {
-  children: React.ReactNode
+  children: ReactNode
 }
 
 export function NavigationProvider({ children }: NavigationProviderProps) {
@@ -56,36 +57,36 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
 
   // Update navigation state based on pathname changes
   useEffect(() => {
-    setState(prev => ({ ...prev, isNavigating: false }))
+    setState((prev: NavigationState) => ({ ...prev, isNavigating: false }))
   }, [pathname])
 
   const setBreadcrumbs = useCallback((breadcrumbs: BreadcrumbItem[]) => {
-    setState(prev => ({ ...prev, breadcrumbs }))
+    setState((prev: NavigationState) => ({ ...prev, breadcrumbs }))
   }, [])
 
   const setSectionProgress = useCallback((sectionProgress: SectionProgressItem[]) => {
-    setState(prev => ({ ...prev, sectionProgress }))
+    setState((prev: NavigationState) => ({ ...prev, sectionProgress }))
   }, [])
 
   const setCurrentSection = useCallback((currentSection?: string) => {
-    setState(prev => ({ ...prev, currentSection }))
+    setState((prev: NavigationState) => ({ ...prev, currentSection }))
   }, [])
 
   const setReportContext = useCallback((reportId: string, reportTitle: string) => {
-    setState(prev => ({ ...prev, reportId, reportTitle }))
+    setState((prev: NavigationState) => ({ ...prev, reportId, reportTitle }))
   }, [])
 
   const navigateToSection = useCallback((sectionId: string) => {
     if (!state.reportId) return
     
-    setState(prev => ({ ...prev, isNavigating: true, currentSection: sectionId }))
+    setState((prev: NavigationState) => ({ ...prev, isNavigating: true, currentSection: sectionId }))
     router.push(`/dashboard/reports/${state.reportId}/${sectionId}`)
   }, [state.reportId, router])
 
   const navigateToBreadcrumb = useCallback((item: BreadcrumbItem) => {
     if (!item.href) return
     
-    setState(prev => ({ ...prev, isNavigating: true }))
+    setState((prev: NavigationState) => ({ ...prev, isNavigating: true }))
     router.push(item.href!)
   }, [router])
 
@@ -94,9 +95,9 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     status: SectionProgressItem['status'], 
     progress?: number
   ) => {
-    setState(prev => ({
+    setState((prev: NavigationState) => ({
       ...prev,
-      sectionProgress: prev.sectionProgress.map(section =>
+      sectionProgress: prev.sectionProgress.map((section: SectionProgressItem) =>
         section.id === sectionId
           ? { 
               ...section, 

@@ -19,6 +19,9 @@ import SourcesGrid from '@/components/SourcesGrid'
 import { getClinicalTypographyClass } from '@/lib/design-system/typography-migration'
 import { cn } from '@/lib/design-system/utils'
 import { useKeyboardNavigation } from '@/lib/context/NavigationContext'
+import { safeStringify } from '@/lib/utils/safeStringify'
+import type { Json } from '@/lib/types/json'
+import type { SectionSchema } from '@/lib/structured-schemas'
 
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
@@ -28,8 +31,8 @@ export default function SectionPage() {
   const [mode, setMode] = useState<'data' | 'template' | 'sources'>('data')
   const [showJsonDebug] = useState(false)
   const [sectionContent, setSectionContent] = useState('')
-  const [currentSchema, setCurrentSchema] = useState<unknown>(null)
-  const [structuredData, setStructuredData] = useState<Record<string, unknown>>({})
+  const [currentSchema, setCurrentSchema] = useState<SectionSchema | null>(null)
+  const [structuredData, setStructuredData] = useState<Json>({})
   
   
   const [isNavigating, setIsNavigating] = useState(false)
@@ -43,6 +46,16 @@ export default function SectionPage() {
 
   const sectionSchema = section ? getSectionSchemaForType(section.sectionType, settings.preferredState) : null
   const hasStructuredSchema = !!sectionSchema
+  
+  console.log('🔧 Section schema debug:', {
+    sectionId,
+    sectionTitle: section?.title,
+    sectionType: section?.sectionType,
+    hasSchema: !!sectionSchema,
+    hasCurrentSchema: !!currentSchema,
+    mode,
+    preferredState: settings.preferredState
+  });
 
   // Setup keyboard navigation
   useKeyboardNavigation(
@@ -58,16 +71,24 @@ export default function SectionPage() {
   // Initialize schema state
   useEffect(() => {
     if (sectionSchema && !currentSchema) {
+      console.log('🔧 Setting currentSchema:', sectionSchema);
       setCurrentSchema(sectionSchema)
     }
   }, [sectionSchema, currentSchema])
 
-  // Memoize initial data to prevent infinite re-renders
+  // Memoize initial data to prevent unnecessary re-renders
   const memoizedInitialData = useMemo(() => {
-    // Use local structured data state instead of section data to avoid circular updates
-    console.log(`📊 Using local structured_data for ${section?.title || 'Unknown Section'} (${Object.keys(structuredData).length} keys)`);
-    return structuredData;
-  }, [structuredData, section?.title])
+    if (!section) return {}
+    // Always use fresh data from the section
+    const baseData = section.structured_data || {}
+    console.log('🔄 SectionPage memoizedInitialData updated:', {
+      sectionId: section.id,
+      sectionTitle: section.title,
+      dataKeys: Object.keys(baseData),
+      timestamp: new Date().toISOString()
+    });
+    return baseData
+  }, [section?.structured_data, section?.id, section?.title])
 
   // Initialize section content and structured data from report
   useEffect(() => {
@@ -98,12 +119,31 @@ export default function SectionPage() {
 
   // Handle content changes
   const handleContentChange = useCallback((newContent: string) => {
+    console.log('🔄 SectionPage handleContentChange:', {
+      sectionId,
+      sectionTitle: section?.title,
+      contentLength: newContent.length,
+      contentPreview: newContent.substring(0, 100) + (newContent.length > 100 ? '...' : ''),
+      timestamp: new Date().toISOString()
+    });
     setSectionContent(newContent)
-  }, [])
+  }, [sectionId, section?.title])
 
   // Save function for autosave
   const saveSection = useCallback(async (showToast = false) => {
     if (!report) return
+    
+    console.log('💾 SectionPage saveSection called:', {
+      sectionId,
+      sectionTitle: section?.title,
+      contentLength: sectionContent.length,
+      contentPreview: sectionContent.substring(0, 100) + (sectionContent.length > 100 ? '...' : ''),
+      hasStructuredData: Object.keys(structuredData).length > 0,
+      structuredDataKeys: Object.keys(structuredData),
+      structuredData: process.env.NEXT_PUBLIC_DEBUG === 'true' ? safeStringify(structuredData, 2) : '[Debug disabled]',
+      showToast,
+      timestamp: new Date().toISOString()
+    });
     
     const updatedReport = {
       ...report,
@@ -119,6 +159,7 @@ export default function SectionPage() {
       )
     }
     
+    console.log('💾 SectionPage calling handleSave with updated report');
     await handleSave(updatedReport)
     
     // Show toast notification for manual saves
@@ -127,13 +168,35 @@ export default function SectionPage() {
     }
   }, [report, sectionId, sectionContent, structuredData, handleSave, showAIUpdateToast])
 
-  // Setup autosave with better UX timing - only for emergency backup
+  // Setup autosave with better UX timing - much more responsive
   const { hasUnsavedChanges } = useAutosave({
     data: { content: sectionContent, structuredData },
     onSave: async () => await saveSection(false), // No toast for auto-saves
-    debounceMs: 30000, // 30 seconds - reasonable debounce for structured data
+    debounceMs: 3000, // 3 seconds - much more responsive
     enabled: !!section
   })
+
+  // Save on page unload/navigation - synchronous for reliability
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (hasUnsavedChanges) {
+        // Synchronous save before leaving
+        saveSection(false)
+      }
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasUnsavedChanges) {
+        // Synchronous save when tab becomes hidden
+        saveSection(false)
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [hasUnsavedChanges, saveSection])
 
   // Keyboard shortcuts for saving
   useEffect(() => {
@@ -283,11 +346,22 @@ export default function SectionPage() {
                 <div className="w-full overflow-x-hidden">
                   {hasStructuredSchema && currentSchema && mode === 'template' ? (
                     <DynamicStructuredBlock
+                      key={`template-${section.id}`}
                       schema={currentSchema}
                       initialData={memoizedInitialData}
                       mode={mode}
                       sectionId={section.id}
                       onChange={(newStructuredData, generatedText) => {
+                        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+                          console.log('🔧 SectionPage DynamicStructuredBlock onChange (template mode):', {
+                            sectionId,
+                            sectionTitle: section?.title,
+                            newStructuredDataKeys: Object.keys(newStructuredData || {}),
+                            newStructuredData: safeStringify(newStructuredData, 2),
+                            generatedTextLength: generatedText.length,
+                            timestamp: new Date().toISOString()
+                          });
+                        }
                         setStructuredData(newStructuredData)
                         handleContentChange(generatedText)
                       }}
@@ -302,11 +376,22 @@ export default function SectionPage() {
                     />
                   ) : hasStructuredSchema && currentSchema && mode === 'data' ? (
                     <DynamicStructuredBlock
+                      key={`data-${section.id}`}
                       schema={currentSchema}
                       initialData={memoizedInitialData}
                       mode={mode}
                       sectionId={section.id}
                       onChange={(newStructuredData, generatedText) => {
+                        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+                          console.log('🔧 SectionPage DynamicStructuredBlock onChange (data mode):', {
+                            sectionId,
+                            sectionTitle: section?.title,
+                            newStructuredDataKeys: Object.keys(newStructuredData || {}),
+                            newStructuredData: safeStringify(newStructuredData, 2),
+                            generatedTextLength: generatedText.length,
+                            timestamp: new Date().toISOString()
+                          });
+                        }
                         setStructuredData(newStructuredData)
                         handleContentChange(generatedText)
                       }}
@@ -447,6 +532,26 @@ export default function SectionPage() {
           </motion.div>
         </div>
       </div>
+
+      {/* Debug Section - only show in development */}
+      {process.env.NODE_ENV === 'development' && showJsonDebug && (
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Debug Information</h3>
+          <pre className="p-4 bg-white rounded border text-xs overflow-auto max-h-96">
+            {safeStringify({
+              id: section?.id,
+              title: section?.title,
+              sectionType: section?.sectionType,
+              hasStructuredSchema,
+              currentSchemaKeys: currentSchema ? Object.keys(currentSchema) : [],
+              structuredDataKeys: Object.keys(structuredData),
+              contentLength: sectionContent.length,
+              mode,
+              hasUnsavedChanges
+            }, 2)}
+          </pre>
+        </div>
+      )}
     </div>
   )
 }

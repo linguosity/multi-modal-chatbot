@@ -32,13 +32,27 @@ export default function TiptapEditor({
     content: content,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
+      const newContent = editor.getHTML();
+      console.log('📝 TiptapEditor onChange:', {
+        sectionType,
+        contentLength: newContent.length,
+        contentPreview: newContent.substring(0, 100) + (newContent.length > 100 ? '...' : ''),
+        timestamp: new Date().toISOString()
+      });
       if (onChange) {
-        onChange(editor.getHTML());
+        onChange(newContent);
       }
     },
     onBlur: ({ editor }) => {
+      const newContent = editor.getHTML();
+      console.log('💾 TiptapEditor onBlur (save trigger):', {
+        sectionType,
+        contentLength: newContent.length,
+        contentPreview: newContent.substring(0, 100) + (newContent.length > 100 ? '...' : ''),
+        timestamp: new Date().toISOString()
+      });
       if (onBlur) {
-        onBlur(editor.getHTML());
+        onBlur(newContent);
       }
     },
     editable: editable,

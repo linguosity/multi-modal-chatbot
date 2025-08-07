@@ -8,11 +8,11 @@ export const TRANSITION_DURATIONS = {
 } as const
 
 export const EASING = {
-  easeOut: 'cubic-bezier(0.0, 0.0, 0.2, 1)',
-  easeIn: 'cubic-bezier(0.4, 0.0, 1, 1)',
-  easeInOut: 'cubic-bezier(0.4, 0.0, 0.2, 1)',
-  bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-  clinical: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' // Professional, smooth easing
+  easeOut: [0.0, 0.0, 0.2, 1],
+  easeIn: [0.4, 0.0, 1, 1],
+  easeInOut: [0.4, 0.0, 0.2, 1],
+  bounce: [0.68, -0.55, 0.265, 1.55],
+  clinical: [0.25, 0.46, 0.45, 0.94] // Professional, smooth easing
 } as const
 
 // Framer Motion variants for common animations
@@ -170,11 +170,11 @@ export const loadingAnimations = {
   bounce: {
     '0%, 100%': { 
       transform: 'translateY(-25%)',
-      animationTimingFunction: 'cubic-bezier(0.8, 0, 1, 1)'
+      animationTimingFunction: 'ease-in'
     },
     '50%': { 
       transform: 'translateY(0)',
-      animationTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)'
+      animationTimingFunction: 'ease-out'
     }
   },
   shimmer: {
@@ -272,11 +272,11 @@ export const createStaggeredAnimation = (
 export const accessibleFocus = {
   ring: {
     boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
-    transition: `box-shadow ${TRANSITION_DURATIONS.fast}ms ${EASING.easeOut}`
+    transition: `box-shadow ${TRANSITION_DURATIONS.fast}ms ease-out`
   },
   clinicalRing: {
     boxShadow: '0 0 0 2px rgba(96, 165, 250, 0.5)',
-    transition: `box-shadow ${TRANSITION_DURATIONS.fast}ms ${EASING.clinical}`
+    transition: `box-shadow ${TRANSITION_DURATIONS.fast}ms ease-out`
   }
 }
 

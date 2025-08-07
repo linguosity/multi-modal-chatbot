@@ -17,6 +17,14 @@ const tokenMapFromMeta = (meta: any = {}) => ({
 
 export function hydrateSection({ html, data, reportMeta }: Input) {
   console.log("🔍 hydrateSection: Starting hydration");
+  console.log("🔍 Input HTML length:", html?.length || 0);
+  console.log("🔍 Input data keys:", Object.keys(data || {}));
+  
+  // If no HTML content, return empty
+  if (!html || html.trim() === '') {
+    console.log("🔍 No HTML content to hydrate");
+    return '';
+  }
   
   // Check for circular references in inputs
   if (hasCircularReference(data)) {
@@ -37,7 +45,61 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
     out = out.replaceAll(key, String(val ?? key));
   }
 
-  // 2) Replace <span data-field="..."> with structured_data values
+  // 2) Replace curly brace placeholders like {first_name}, {last_name}, etc.
+  out = out.replace(
+    /\{([^}]+)\}/g,
+    (_match, fieldName) => {
+      let value = getPath(data, fieldName);
+      
+      // Handle special cases and provide fallbacks
+      if (value === undefined || value === null || value === '') {
+        // Try alternative field names or provide contextual defaults
+        switch (fieldName) {
+          case 'first_name':
+            value = getPath(data, 'firstName') || getPath(reportMeta, 'studentBio.firstName') || '';
+            break;
+          case 'last_name':
+            value = getPath(data, 'lastName') || getPath(reportMeta, 'studentBio.lastName') || '';
+            break;
+          case 'date_of_birth':
+            value = getPath(data, 'dateOfBirth') || getPath(reportMeta, 'studentBio.dateOfBirth') || '';
+            break;
+          case 'student_id':
+            value = getPath(data, 'studentId') || getPath(reportMeta, 'studentBio.studentId') || '';
+            break;
+          case 'primary_languages':
+            value = getPath(data, 'primaryLanguages') || getPath(data, 'home_languages') || '';
+            break;
+          case 'report_date':
+          case 'evaluation_dates':
+            value = getPath(data, 'evaluation_dates') || getPath(data, 'report_date') || 
+                   (reportMeta?.createdAt ? new Date(reportMeta.createdAt).toLocaleDateString() : '');
+            break;
+          case 'evaluator_name':
+            value = getPath(data, 'evaluator_name') || getPath(reportMeta, 'evaluatorName') || '';
+            break;
+          case 'evaluator_credentials':
+            value = getPath(data, 'evaluator_credentials') || getPath(reportMeta, 'evaluatorCredentials') || '';
+            break;
+          case 'school_name':
+            value = getPath(data, 'school_name') || getPath(reportMeta, 'schoolName') || '';
+            break;
+          case 'eligibility_status':
+            value = getPath(data, 'eligibility_status') || getPath(reportMeta, 'eligibilityStatus') || '';
+            break;
+        }
+      }
+      
+      if (value !== undefined && value !== null && value !== '') {
+        return escapeHtml(String(value));
+      }
+      
+      // Return empty string for missing data instead of showing placeholder
+      return '';
+    }
+  );
+
+  // 3) Replace <span data-field="..."> with structured_data values
   //    (simple string replace—no DOM on the server)
   out = out.replace(
     /<span\s+data-field="([^"]+)"[^>]*>(.*?)<\/span>/g,
@@ -47,7 +109,7 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
     }
   );
 
-  // 3) If your section uses DataPointSchema "points", render them
+  // 4) If your section uses DataPointSchema "points", render them
   if (Array.isArray(data?.points)) {
     console.log("🔍 hydrateSection: Rendering data points");
     
@@ -67,6 +129,8 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
   }
 
   console.log("✅ hydrateSection: Hydration completed");
+  console.log("🔍 Output HTML length:", out?.length || 0);
+  console.log("🔍 Output preview:", out?.substring(0, 100) + (out?.length > 100 ? '...' : ''));
   return out;
 }
 

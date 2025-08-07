@@ -5,8 +5,9 @@
       "dom.iterable",
       "esnext"
     ],
+    "types": ["react", "react-dom", "node"],
     "allowJs": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
@@ -27,7 +28,7 @@
         "./src/*"
       ]
     },
-    "target": "ES2017"
+    "target": "ES2018"
   },
   "include": [
     "next-env.d.ts",

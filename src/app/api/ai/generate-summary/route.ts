@@ -69,7 +69,7 @@ Examples of good summaries:
 Your summary:`
 
     const response = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307',
+      model: 'claude-opus-4-1-20250805',
       max_tokens: 100,
       messages: [
         {
