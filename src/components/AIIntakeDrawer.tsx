@@ -1,26 +1,23 @@
 'use client'
 
-import React, { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Brain, FileText, Upload, Sparkles, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { Brain, FileText, Upload, Sparkles, CheckCircle, Loader2, GripVertical, X } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useProgressToasts } from '@/lib/context/ProgressToastContext'
-import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
-import { eventBus } from '@/lib/event-bus'
-interface StructuredData {
-  studentName: string
-  assessmentDate: string
-  testResults: string[]
-  observations: string
+import { useReport } from '@/lib/context/ReportContext'
+import { getSectionSchemaForType } from '@/lib/structured-schemas'
+interface FileMeta {
+  id: string
+  file: File
+  kind: 'pdf' | 'image' | 'audio' | 'text' | 'document'
+  pageEstimate?: number
 }
 
 interface AIIntakeDrawerProps {
-  onProcessData?: (data: string | Record<string, unknown>, type: 'structured' | 'unstructured') => void
+  onProcessData?: (data: string | Record<string, unknown>) => void
 }
 
 export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
@@ -28,55 +25,129 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
 }) => {
   const pathname = usePathname()
   const { processLogLine, clearAllToasts } = useProgressToasts()
-  const { addRecentUpdate } = useRecentUpdates()
+  const { report } = useReport()
   
+  // UI State
   const [isOpen, setIsOpen] = useState(false)
-  const [unstructuredInput, setUnstructuredInput] = useState('')
-  const [structuredData, setStructuredData] = useState<StructuredData>({
-    studentName: '',
-    assessmentDate: '',
-    testResults: [],
-    observations: ''
-  })
-  const [showPreview, setShowPreview] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isDragActive, setIsDragActive] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  
+  // Input State
+  const [rawText, setRawText] = useState('')
+  const [files, setFiles] = useState<FileMeta[]>([])
+  
+  // Processing State
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([])
+  const [replaceMode, setReplaceMode] = useState(false)
+  const [dryRun, setDryRun] = useState(false)
+  
+  // Results State
   const [processingResults, setProcessingResults] = useState<{
     successful: number
     failed: number
     sections: Array<{ sectionId: string; confidence: number }>
   } | null>(null)
 
-  const handleProcessUnstructured = async () => {
-    if (!unstructuredInput.trim()) return
-    
+  // Helper functions
+  const getFileKind = (file: File): FileMeta['kind'] => {
+    if (file.type.startsWith('image/')) return 'image'
+    if (file.type === 'application/pdf') return 'pdf'
+    if (file.type.startsWith('audio/')) return 'audio'
+    if (file.type.startsWith('text/')) return 'text'
+    return 'document'
+  }
+
+  const estimatePdfPages = (file: File) => Math.max(1, Math.ceil(file.size / (50 * 1024)))
+
+  const handleFiles = (newFiles: File[]) => {
+    setIsImporting(true)
+    const fileMetas: FileMeta[] = newFiles.map(file => ({
+      id: Math.random().toString(36).substring(2, 11),
+      file,
+      kind: getFileKind(file),
+      pageEstimate: file.type === 'application/pdf' ? estimatePdfPages(file) : undefined
+    }))
+    setFiles(prev => [...prev, ...fileMetas])
+    // Briefly show importing indicator to signal file capture
+    setTimeout(() => setIsImporting(false), 150)
+  }
+
+  const handleDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const dt = e.dataTransfer
+    if (!dt) return
+    const dropped: File[] = []
+    // Prefer items to filter for files
+    if (dt.items && dt.items.length) {
+      for (let i = 0; i < dt.items.length; i++) {
+        const item = dt.items[i]
+        if (item.kind === 'file') {
+          const f = item.getAsFile()
+          if (f) dropped.push(f)
+        }
+      }
+    } else if (dt.files && dt.files.length) {
+      for (let i = 0; i < dt.files.length; i++) {
+        dropped.push(dt.files[i])
+      }
+    }
+    if (dropped.length) handleFiles(dropped)
+    setIsDragActive(false)
+  }
+
+  const removeFile = (id: string) => {
+    setFiles(prev => prev.filter(f => f.id !== id))
+  }
+
+  // Initialize selection with all sections when drawer opens and none selected
+  useEffect(() => {
+    if (isOpen && report?.sections && selectedSectionIds.length === 0) {
+      setSelectedSectionIds(report.sections.map(s => s.id))
+    }
+  }, [isOpen, report])
+
+  const canRun = (rawText.trim() || files.length > 0) && selectedSectionIds.length > 0
+
+  const runAI = async () => {
     setIsProcessing(true)
-    setProcessingResults(null)
     clearAllToasts()
     
     try {
-      // Extract report ID from pathname
       const reportId = pathname.split('/')[3]
       
-      // Start progress tracking
-      processLogLine('🔍 AI Intake Processing Started')
-      processLogLine('📝 Analyzing unstructured assessment data...')
+      // Create FormData for file uploads
+      const formData = new FormData()
+      formData.append('reportId', reportId)
+      formData.append('sectionIds', JSON.stringify(selectedSectionIds))
+      formData.append('replace', replaceMode.toString())
+      formData.append('dryRun', dryRun.toString())
+      formData.append('text', rawText)
+
+      // Attach sectionInfo and sectionSchemas as fallbacks (DB-agnostic mode)
+      if (report?.sections && selectedSectionIds.length > 0) {
+        const selected = report.sections.filter(s => selectedSectionIds.includes(s.id))
+        const sectionInfo = selected.map(s => ({ id: s.id, title: s.title, section_type: s.sectionType }))
+        const sectionSchemas: Record<string, unknown> = {}
+        for (const s of selected) {
+          const schema = getSectionSchemaForType(s.sectionType || '')
+          if (schema) sectionSchemas[s.id] = schema
+        }
+        formData.append('sectionInfo', JSON.stringify(sectionInfo))
+        if (Object.keys(sectionSchemas).length > 0) {
+          formData.append('sectionSchemas', JSON.stringify(sectionSchemas))
+        }
+      }
       
-      // Simulate processing steps with progress updates
-      setTimeout(() => processLogLine('🤖 Extracting student information...'), 500)
-      setTimeout(() => processLogLine('📊 Identifying assessment results...'), 1000)
-      setTimeout(() => processLogLine('🏥 Processing health history...'), 1500)
-      setTimeout(() => processLogLine('👨‍👩‍👧‍👦 Analyzing family background...'), 2000)
+      // Add files to FormData
+      files.forEach((fileMeta, index) => {
+        formData.append(`file_${index}`, fileMeta.file)
+      })
       
       const response = await fetch('/api/ai/process-intake', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          data: unstructuredInput,
-          type: 'unstructured',
-          reportId
-        })
+        body: formData
       })
       
       const result = await response.json()
@@ -84,167 +155,93 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       if (result.success) {
         setProcessingResults(result.results)
         
-        // Process each updated section with streaming toasts
-        result.results.sections.forEach((section: any, index: number) => {
+        // Display granular update results as progress toasts (simulate procedural stacking)
+        const updates: any[] = (result.results.updateResults && Array.isArray(result.results.updateResults)) ? result.results.updateResults : []
+        updates.forEach((u: any, idx: number) => {
+          const fp = u.fieldPath || 'section'
+          const action = replaceMode ? 'replace' : (u.merge_strategy || 'append')
+          // Create a processing toast first
+          processLogLine(`📝 Processing update: ${u.sectionId}.${fp} ... ${action}`)
+          // Then mark completion shortly after to simulate progress
           setTimeout(() => {
-            // Emit processing update event
-            eventBus.emit('processing-update', {
-              id: section.sectionId,
-              sectionId: section.sectionId,
-              fieldLabel: `Section ${index + 1}`,
-              verb: 'updating',
-              timestamp: Date.now()
-            })
-            
-            // Mark section as recently updated with high importance
-            addRecentUpdate(
-              section.sectionId, 
-              ['ai_extracted_data'], 
-              'ai_update', 
-              'critical'
-            )
-            
-            // Complete the processing
-            setTimeout(() => {
-              eventBus.emit('processing-complete', {
-                id: section.sectionId,
-                success: true,
-                timestamp: Date.now()
-              })
-              
-              processLogLine(`✅ Updated section with ${section.confidence}% confidence`)
-            }, 1000)
-          }, index * 300)
+            if (u.success) {
+              processLogLine(`✅ Updated ${u.sectionId}.${fp}`)
+            } else {
+              processLogLine(`❌ Failed to update ${u.sectionId}.${fp}`)
+            }
+          }, 300 + idx * 120)
         })
         
-        processLogLine(`🎉 Successfully processed ${result.results.successful} sections`)
-        onProcessData?.(unstructuredInput, 'unstructured')
+        onProcessData?.(rawText)
         
-        // Auto-close after successful processing
-        setTimeout(() => {
-          setIsOpen(false)
-          setUnstructuredInput('')
-          setProcessingResults(null)
-        }, 4000)
+        // In dryRun, keep drawer open to allow applying proposed updates
+        if (!dryRun) {
+          setTimeout(() => {
+            setIsOpen(false)
+            setRawText('')
+            setFiles([])
+            setProcessingResults(null)
+          }, 4000)
+        }
       } else {
         processLogLine(`❌ Processing failed: ${result.error}`)
-        console.error('Processing failed:', result.error)
       }
     } catch (error) {
       processLogLine(`❌ Error during processing: ${error}`)
-      console.error('Error processing data:', error)
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const handleProcessStructured = async () => {
+  const applyProposedUpdates = async () => {
+    if (!processingResults || !(processingResults as any).proposedUpdates) return
     setIsProcessing(true)
-    setProcessingResults(null)
-    clearAllToasts()
-    
     try {
-      // Extract report ID from pathname
       const reportId = pathname.split('/')[3]
-      
-      // Start progress tracking
-      processLogLine('🔍 AI Intake Processing Started')
-      processLogLine('📋 Processing structured assessment data...')
-      
-      // Simulate processing steps
-      setTimeout(() => processLogLine('👤 Processing student information...'), 300)
-      setTimeout(() => processLogLine('🏥 Processing health observations...'), 600)
-      setTimeout(() => processLogLine('📅 Processing assessment dates...'), 900)
-      
-      const response = await fetch('/api/ai/process-intake', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          data: structuredData,
-          type: 'structured',
-          reportId
-        })
-      })
-      
+      const formData = new FormData()
+      formData.append('reportId', reportId)
+      formData.append('sectionIds', JSON.stringify(selectedSectionIds))
+      formData.append('replace', replaceMode.toString())
+      // include same section context
+      if (report?.sections && selectedSectionIds.length > 0) {
+        const selected = report.sections.filter(s => selectedSectionIds.includes(s.id))
+        const sectionInfo = selected.map(s => ({ id: s.id, title: s.title, section_type: s.sectionType }))
+        const sectionSchemas: Record<string, unknown> = {}
+        for (const s of selected) {
+          const schema = getSectionSchemaForType(s.sectionType || '')
+          if (schema) sectionSchemas[s.id] = schema
+        }
+        formData.append('sectionInfo', JSON.stringify(sectionInfo))
+        if (Object.keys(sectionSchemas).length > 0) {
+          formData.append('sectionSchemas', JSON.stringify(sectionSchemas))
+        }
+      }
+      // attach proposed updates from server dry run
+      const updates = (processingResults as any).proposedUpdates
+      formData.append('applyUpdates', JSON.stringify(updates))
+      const response = await fetch('/api/ai/process-intake', { method: 'POST', body: formData })
       const result = await response.json()
-      
       if (result.success) {
-        setProcessingResults(result.results)
-        
-        // Process each updated section with streaming toasts
-        result.results.sections.forEach((section: any, index: number) => {
-          setTimeout(() => {
-            // Emit processing update event
-            eventBus.emit('processing-update', {
-              id: section.sectionId,
-              sectionId: section.sectionId,
-              fieldLabel: `Section ${index + 1}`,
-              verb: 'updating',
-              timestamp: Date.now()
-            })
-            
-            // Mark section as recently updated
-            addRecentUpdate(
-              section.sectionId, 
-              ['structured_data_import'], 
-              'ai_update', 
-              'notice'
-            )
-            
-            // Complete the processing
-            setTimeout(() => {
-              eventBus.emit('processing-complete', {
-                id: section.sectionId,
-                success: true,
-                timestamp: Date.now()
-              })
-              
-              processLogLine(`✅ Updated section with ${section.confidence}% confidence`)
-            }, 800)
-          }, index * 200)
-        })
-        
-        processLogLine(`🎉 Successfully processed ${result.results.successful} sections`)
-        onProcessData?.(structuredData, 'structured')
-        
-        // Auto-close after successful processing
+        processLogLine(`✅ Applied ${result.results.successful} updates`)
         setTimeout(() => {
           setIsOpen(false)
-          setStructuredData({
-            studentName: '',
-            assessmentDate: '',
-            testResults: [],
-            observations: ''
-          })
+          setRawText('')
+          setFiles([])
           setProcessingResults(null)
-        }, 4000)
+        }, 1200)
       } else {
-        processLogLine(`❌ Processing failed: ${result.error}`)
-        console.error('Processing failed:', result.error)
+        processLogLine(`❌ Failed to apply updates: ${result.error}`)
       }
-    } catch (error) {
-      processLogLine(`❌ Error during processing: ${error}`)
-      console.error('Error processing data:', error)
     } finally {
       setIsProcessing(false)
     }
-  }
-
-  const mockStructuredPreview = {
-    sections: [
-      { title: 'Background Information', confidence: 95 },
-      { title: 'Assessment Results', confidence: 88 },
-      { title: 'Clinical Observations', confidence: 92 }
-    ]
   }
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         <Button 
-          variant="outline" 
+          variant="default" 
           size="sm"
           className="flex items-center gap-2"
         >
@@ -255,168 +252,197 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       
       <SheetContent side="right" className="w-[600px] sm:max-w-[600px]">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5" />
-            AI Assessment Intake
-          </SheetTitle>
-          <SheetDescription>
-            Process assessment data using AI to automatically populate report sections
-          </SheetDescription>
+          <SheetTitle>AI Assessment Intake</SheetTitle>
         </SheetHeader>
 
-        <div className="mt-6 h-full">
-          <Tabs defaultValue="unstructured" className="h-full flex flex-col">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="unstructured" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Unstructured
-              </TabsTrigger>
-              <TabsTrigger value="structured" className="flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                Structured
-              </TabsTrigger>
-            </TabsList>
+        <div className="flex flex-col gap-6 h-full mt-6">
 
-            <TabsContent value="unstructured" className="flex-1 flex flex-col gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Raw Assessment Data</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Paste your assessment notes, observations, or test results. AI will structure this data automatically.
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Textarea
-                    placeholder="Example: Student showed difficulty with /r/ sound production during conversation. GFTA-3 results: /r/ in initial position 20% accuracy, medial 45%, final 60%. Stimulability testing positive with tactile cues..."
-                    value={unstructuredInput}
-                    onChange={(e) => setUnstructuredInput(e.target.value)}
-                    className="min-h-[200px] resize-none"
-                  />
-                  
-                  <div className="flex items-center justify-between">
-                    <Badge variant="secondary" className="text-xs">
-                      {unstructuredInput.length} characters
-                    </Badge>
-                    
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowPreview(!showPreview)}
-                        className="flex items-center gap-2"
-                      >
-                        {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        {showPreview ? 'Hide' : 'Preview'}
-                      </Button>
-                      
-                      <Button
-                        onClick={handleProcessUnstructured}
-                        disabled={!unstructuredInput.trim() || isProcessing}
-                        className="flex items-center gap-2"
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Sparkles className="h-4 w-4" />
-                        )}
-                        {isProcessing ? 'Processing...' : 'Process with AI'}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {showPreview && unstructuredInput && (
-                    <Card className="bg-muted/50">
-                      <CardHeader>
-                        <CardTitle className="text-sm">AI Preview</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {mockStructuredPreview.sections.map((section, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 bg-background rounded">
-                            <span className="text-sm">{section.title}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {section.confidence}% confidence
-                            </Badge>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="structured" className="flex-1 flex flex-col gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Structured Data Entry</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Enter assessment data in organized fields for precise AI processing.
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Student Name</label>
-                      <input
-                        type="text"
-                        className="w-full mt-1 px-3 py-2 border rounded-md"
-                        value={structuredData.studentName}
-                        onChange={(e) => setStructuredData(prev => ({
-                          ...prev,
-                          studentName: e.target.value
-                        }))}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium">Assessment Date</label>
-                      <input
-                        type="date"
-                        className="w-full mt-1 px-3 py-2 border rounded-md"
-                        value={structuredData.assessmentDate}
-                        onChange={(e) => setStructuredData(prev => ({
-                          ...prev,
-                          assessmentDate: e.target.value
-                        }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Clinical Observations</label>
-                    <Textarea
-                      className="mt-1"
-                      placeholder="Detailed observations during assessment..."
-                      value={structuredData.observations}
-                      onChange={(e) => setStructuredData(prev => ({
-                        ...prev,
-                        observations: e.target.value
-                      }))}
+          {/* Target Sections */}
+          {report?.sections && report.sections.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Target Sections</label>
+              <div className="max-h-40 overflow-auto border rounded-md p-2 space-y-1">
+                {report.sections.map((s) => (
+                  <label key={s.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedSectionIds.includes(s.id)}
+                      onChange={(e) => {
+                        setSelectedSectionIds(prev => e.target.checked ? Array.from(new Set([...prev, s.id])) : prev.filter(id => id !== s.id))
+                      }}
                     />
-                  </div>
+                    <span className="truncate">{s.title}</span>
+                    <span className="text-xs text-gray-500">({s.sectionType})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={handleProcessStructured}
-                      disabled={isProcessing}
-                      className="flex items-center gap-2"
+          {/* Dropzone */}
+          <div
+            className={[
+              'relative border-2 border-dashed rounded-lg p-6 text-center transition-colors',
+              isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+            ].join(' ')}
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragActive(true) }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragActive(true) }}
+            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragActive(false) }}
+            onDrop={handleDrop}
+          >
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.wav,.mp3"
+              onChange={(e) => handleFiles(Array.from(e.target.files || []))}
+              className="hidden"
+              id="file-upload"
+            />
+            <label htmlFor="file-upload" className="cursor-pointer">
+              <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">
+                {isDragActive ? 'Release to add files' : 'Drop files here or click to upload'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                PDF, TXT, DOCX, JPG/PNG, WAV/MP3
+              </p>
+            </label>
+
+            {isDragActive && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="rounded-md border border-blue-300 bg-white/70 px-3 py-1 text-sm text-blue-700">
+                  Drop to upload
+                </div>
+              </div>
+            )}
+
+            {isImporting && (
+              <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <Loader2 className="h-3 w-3 animate-spin" /> Importing files...
+              </div>
+            )}
+          </div>
+
+          {/* Text input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Raw Assessment Notes
+            </label>
+            <Textarea
+              rows={8}
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder="Paste your assessment notes, observations, or test results here..."
+              className="resize-none"
+            />
+          </div>
+
+          {/* Attachment list */}
+          {files.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-gray-700">Attachments ({files.length})</h3>
+              <div className="space-y-1">
+                {files.map((fileMeta) => (
+                  <div key={fileMeta.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                    <GripVertical className="h-4 w-4 text-gray-400 cursor-grab" />
+                    
+                    {/* File icon */}
+                    {fileMeta.kind === 'pdf' && <FileText className="h-4 w-4 text-red-500" />}
+                    {fileMeta.kind === 'image' && <FileText className="h-4 w-4 text-blue-500" />}
+                    {fileMeta.kind === 'audio' && <FileText className="h-4 w-4 text-green-500" />}
+                    {fileMeta.kind === 'text' && <FileText className="h-4 w-4 text-gray-500" />}
+                    {fileMeta.kind === 'document' && <FileText className="h-4 w-4 text-purple-500" />}
+                    
+                    {/* File info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {fileMeta.file.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {(fileMeta.file.size / 1024 / 1024).toFixed(1)} MB
+                        {fileMeta.kind === 'pdf' && fileMeta.pageEstimate ? ` • ≈ ${fileMeta.pageEstimate} pages` : ''}
+                      </p>
+                    </div>
+                    
+                    {/* Remove button */}
+                    <button
+                      onClick={() => removeFile(fileMeta.id)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                     >
-                      {isProcessing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      {isProcessing ? 'Processing...' : 'Generate Report Sections'}
-                    </Button>
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Section selection and controls */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Target Sections
+              </label>
+              <select
+                multiple
+                value={selectedSectionIds}
+                onChange={(e) => setSelectedSectionIds(Array.from(e.target.selectedOptions, option => option.value))}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                size={4}
+              >
+                {report?.sections.map(section => (
+                  <option key={section.id} value={section.id}>
+                    {section.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+          {/* Replace mode switch */}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={replaceMode}
+              onChange={(e) => setReplaceMode(e.target.checked)}
+              className="rounded"
+            />
+            Replace existing content
+          </label>
+
+          {/* Dry run switch */}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={dryRun}
+              onChange={(e) => setDryRun(e.target.checked)}
+              className="rounded"
+            />
+            Preview only (dry run)
+          </label>
+
+            {/* Process button */}
+            <Button
+              disabled={!canRun || isProcessing}
+              onClick={runAI}
+              className="w-full"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Process with AI
+                </>
+              )}
+            </Button>
+          </div>
 
           {/* Processing Results */}
           {processingResults && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
                 <h3 className="font-medium text-green-800">Processing Complete!</h3>
@@ -427,21 +453,16 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
                 {processingResults.failed > 0 && (
                   <p className="text-orange-600">⚠️ {processingResults.failed} sections failed to update</p>
                 )}
-                
-                <div className="mt-2">
-                  <p className="font-medium mb-1">Updated sections:</p>
-                  <div className="space-y-1">
-                    {processingResults.sections.map((section, index) => (
-                      <div key={index} className="flex items-center justify-between text-xs">
-                        <span>Section {index + 1}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {section.confidence}% confidence
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
+
+              {/* Apply proposed updates after dry run */}
+              {(resultIsDryRun(processingResults) && (processingResults as any).proposedUpdates) && (
+                <div className="mt-3">
+                  <Button size="sm" onClick={applyProposedUpdates}>
+                    Apply these updates
+                  </Button>
+                </div>
+              )}
               
               <p className="text-xs text-green-600 mt-2">
                 This drawer will close automatically in a few seconds...
@@ -452,4 +473,9 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       </SheetContent>
     </Sheet>
   )
+}
+
+// Helper: determine if results were from dry run
+function resultIsDryRun(r: any): boolean {
+  return r && r.mode === 'dryRun'
 }

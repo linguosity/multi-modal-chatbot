@@ -1,5 +1,15 @@
 # Structured AI Processing Requirements
 
+## ⚠️ CRITICAL DEVELOPMENT WARNING
+
+**Stack Overflow Risk**: This feature processes deeply nested report data structures. All implementations MUST use iterative algorithms, never recursive ones. See `DEVELOPMENT_GUIDELINES.md` for mandatory patterns and code review checklist.
+
+**Mandatory Before Implementation:**
+- [ ] Review `DEVELOPMENT_GUIDELINES.md`
+- [ ] Use iterative traversal for all object processing
+- [ ] Never use `JSON.stringify` in useEffect dependencies
+- [ ] Gate debug logging behind `process.env.NEXT_PUBLIC_DEBUG`
+
 ## Introduction
 
 This feature will evolve the AI assistant from HTML-based content updates to structured JSON-based data processing. Instead of generating HTML content for report sections, the AI will directly update specific fields within the structured data schemas, providing more precise control, better data integrity, and seamless integration with the existing schema system.

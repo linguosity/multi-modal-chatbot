@@ -2,6 +2,7 @@ import { RetryButton } from '@/components/RetryButton';
 // src/app/dashboard/reports/[id]/view/page.tsx
 import { getReportForView } from '@/lib/server/getReportForView';
 import ReportView from './ReportView';
+import { ReportProvider } from '@/lib/context/ReportContext';
 import { safeLog, hasCircularReference } from '@/lib/safe-logger';
 
 // Safe clone function that breaks circular references with depth limiting
@@ -137,7 +138,12 @@ export default async function Page({
     console.log("🔍 Debug - Report metadata:", report.metadata);
     console.log("🔍 Debug - Total sections:", safeSections.length);
     
-    return <ReportView />;
+    // Provide the hydrated report to the client via nested ReportProvider
+    return (
+      <ReportProvider initialReport={safeReport as any}>
+        <ReportView />
+      </ReportProvider>
+    );
     
   } catch (error) {
     console.error("❌ Error in report view page:", error);

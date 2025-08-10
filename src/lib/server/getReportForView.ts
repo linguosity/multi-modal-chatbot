@@ -92,15 +92,64 @@ export async function getReportForView(reportId: string): Promise<Report | null>
     })) : []
   });
 
-  // Transform the database response to match our frontend types
-  const report: Report = {
-    ...reportData,
-    sections: Array.isArray(reportData.sections) ? reportData.sections.map((s: any) => ({
+  // Prefer row-based sections from report_sections as source of truth
+  let rowSections: Array<{ id: string; title: string; section_type?: string | null; structured_data: any }> = [];
+  try {
+    const { data: rsData, error: rsError } = await supabase
+      .from('report_sections')
+      .select('id, title, section_type, structured_data')
+      .eq('report_id', reportId);
+    if (rsError) {
+      console.warn('⚠️ Unable to fetch report_sections, falling back to embedded sections:', rsError.message);
+    } else if (rsData) {
+      rowSections = rsData as any[];
+    }
+  } catch (e) {
+    console.warn('⚠️ Exception fetching report_sections, falling back to embedded sections');
+  }
+
+  // Build a map for embedded sections (to source content/order when available)
+  const embeddedSections: any[] = Array.isArray(reportData.sections) ? (reportData.sections as any[]) : [];
+  const embeddedIndexById = new Map<string, number>();
+  const embeddedById = new Map<string, any>();
+  embeddedSections.forEach((s: any, idx: number) => {
+    if (s && s.id) {
+      embeddedIndexById.set(s.id, idx);
+      embeddedById.set(s.id, s);
+    }
+  });
+
+  // Transform to frontend types using report_sections as canonical when present
+  let transformedSections: Section[] = [];
+  if (rowSections.length > 0) {
+    transformedSections = rowSections.map((row, i) => {
+      const matchingEmbedded = embeddedById.get(row.id);
+      const order = embeddedIndexById.has(row.id) ? (embeddedIndexById.get(row.id) || 0) : i;
+      return {
+        id: row.id,
+        report_id: reportData.id,
+        sectionType: (row.section_type as any) || matchingEmbedded?.sectionType || matchingEmbedded?.section_type,
+        title: row.title || matchingEmbedded?.title || 'Untitled Section',
+        order,
+        content: matchingEmbedded?.content || '',
+        structured_data: row.structured_data || matchingEmbedded?.structured_data,
+        hydratedHtml: matchingEmbedded?.hydratedHtml,
+        studentBio: matchingEmbedded?.studentBio,
+        isCompleted: matchingEmbedded?.isCompleted || false,
+        isRequired: matchingEmbedded?.isRequired || false,
+        isGenerated: matchingEmbedded?.isGenerated || false,
+      } as Section;
+    });
+    // Sort by derived order for stable display
+    transformedSections.sort((a, b) => (a.order || 0) - (b.order || 0));
+  } else {
+    // Fallback to embedded sections when report_sections are unavailable
+    transformedSections = embeddedSections.map((s: any, idx: number) => ({
       id: s.id,
       report_id: s.report_id || reportData.id,
-      sectionType: s.sectionType || s.section_type, // Handle both camelCase and snake_case
+      sectionType: s.sectionType || s.section_type,
       title: s.title,
-      order: s.order || 0,
+      order: s.order ?? idx,
       content: s.content,
       structured_data: s.structured_data,
       hydratedHtml: s.hydratedHtml,
@@ -108,7 +157,13 @@ export async function getReportForView(reportId: string): Promise<Report | null>
       isCompleted: s.isCompleted || false,
       isRequired: s.isRequired || false,
       isGenerated: s.isGenerated || false,
-    })) : [],
+    }));
+  }
+
+  // Transform the database response to match our frontend types
+  const report: Report = {
+    ...reportData,
+    sections: transformedSections,
   };
 
   if (error) {
@@ -220,6 +275,7 @@ export async function getReportForView(reportId: string): Promise<Report | null>
           // For sections with structured data that have specific renderers, prefer structured rendering
           const hasStructuredRenderer = (
             (s.sectionType === 'assessment_results' && (safeStructuredData as any).assessment_items && Array.isArray((safeStructuredData as any).assessment_items)) ||
+            (s.sectionType === 'assessment_tools' && (safeStructuredData as any).tools && Array.isArray((safeStructuredData as any).tools)) ||
             (s.sectionType === 'validity_statement' && Object.keys(safeStructuredData).length > 0) ||
             (s.sectionType === 'recommendations' && Object.keys(safeStructuredData).length > 0)
           );

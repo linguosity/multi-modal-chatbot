@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
+// import { extractPdfTextFromArrayBuffer } from '@/lib/pdf'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,13 +59,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File size exceeds 32MB limit' }, { status: 400 })
     }
 
-    // Convert to base64
-    const arrayBuffer = await file.arrayBuffer()
-    const base64Content = Buffer.from(arrayBuffer).toString('base64')
+    // Upload PDF to Anthropic Files API (beta) and let Claude handle extraction
+    console.log(`📄 Processing PDF via Claude: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`)
+    const uploaded = await anthropic.beta.files.upload({ file })
 
-    console.log(`📄 Processing PDF: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`)
-
-    // Use Claude's PDF support with document content block
+    // Define tool for structured updates
     const reportSchemaTool = {
       name: "save_assessment_data",
       description: "Extracts and saves structured data from a speech-language assessment report.",
@@ -104,8 +101,8 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-4-1-20250805',
+    const response = await anthropic.beta.messages.create({
+      model: process.env.CLAUDE_MODEL || 'claude-opus-4-1-20250805',
       max_tokens: 4000,
       temperature: 0.1,
       system: systemPrompt,
@@ -115,30 +112,27 @@ export async function POST(request: NextRequest) {
           content: [
             {
               type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: base64Content,
-              },
               title: file.name,
+              source: { type: 'file', file_id: uploaded.id },
             },
             {
               type: 'text',
-              text: "Please extract the key information from the attached report using the save_assessment_data tool. You must provide a section_id for each update from the list in the system prompt.",
-            },
-          ],
-        },
+              text: 'Please extract key information and return updates via save_assessment_data only.'
+            }
+          ]
+        }
       ],
       tools: [reportSchemaTool],
-      tool_choice: { type: 'tool', name: 'save_assessment_data' },
-    });
+      tool_choice: { type: 'tool', name: 'save_assessment_data' }
+    })
 
     const toolCall = response.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
-    );
+      (block): block is { type: 'tool_use'; id: string; name: string; input: any } =>
+        (block as any).type === 'tool_use'
+    )
 
     if (!toolCall) {
-      throw new Error('No tool use found in response from Claude');
+      throw new Error('No tool use found in response from model');
     }
 
     return NextResponse.json({

@@ -1,13 +1,15 @@
 // Structured schemas for different section types
 
-export interface FieldSchema {
+import type { FieldContract } from '@/types/field-contracts'
+
+export interface FieldSchema extends FieldContract {
   key: string;
   label: string;
-  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select';
+  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select' | 'paragraph' | 'enum' | 'table';
   required?: boolean;
-  options?: string[]; // For dropdown/select fields
+  options?: string[]; // For dropdown/select fields or enums
   placeholder?: string;
-  children?: FieldSchema[]; // For nested objects
+  children?: FieldSchema[]; // For nested objects or array item shape
   title?: string; // For object types that need a title
 }
 
@@ -63,7 +65,10 @@ export const HEADER_SECTION: SectionSchema = {
       key: 'age',
       label: 'Age',
       type: 'string',
-      placeholder: 'Auto-calculated or enter manually...'
+      placeholder: 'Auto-calculated or enter manually...',
+      // Demo: show computed mode badge (behind NEXT_PUBLIC_SHOW_PROVENANCE)
+      mode: 'computed',
+      compute: { fn: 'ageFromDOB', dependsOn: ['date_of_birth'] },
     },
     {
       key: 'student_id',
@@ -104,27 +109,38 @@ export const HEADER_SECTION: SectionSchema = {
       label: 'Evaluator Name',
       type: 'string',
       placeholder: 'Enter evaluator full name...',
-      required: true
+      required: true,
+      // Typically constant per user
+      mode: 'locked'
     },
     {
       key: 'evaluator_credentials',
       label: 'Evaluator Credentials',
       type: 'string',
       placeholder: 'M.S., CCC-SLP, etc...',
-      required: true
+      required: true,
+      // Demo: locked field badge
+      mode: 'locked'
     },
     {
       key: 'school_name',
       label: 'School Name',
       type: 'string',
       placeholder: 'Enter school name...',
-      required: true
+      required: true,
+      // Often constant per user
+      mode: 'locked'
     },
     {
       key: 'eligibility_status',
       label: 'Eligibility Status',
       type: 'select',
-      options: ['Eligible', 'Not Eligible', 'Pending', 'Re-evaluation Required', 'Initial Evaluation']
+      options: ['Eligible', 'Not Eligible', 'Pending', 'Re-evaluation Required', 'Initial Evaluation'],
+      // Demo: AI-extracted badge + sample provenance chip
+      mode: 'ai_extracted',
+      source_refs: [
+        { artifactId: 'sample.pdf', page: 3, confidence: 0.86, note: 'IEP page 3' }
+      ]
     }
   ]
 };
@@ -290,6 +306,26 @@ export const ASSESSMENT_RESULTS_SECTION: SectionSchema = {
       label: 'Fluency Notes',
       type: 'string',
       placeholder: 'Summarize fluency findings...'
+    }
+  ]
+};
+
+// Assessment Tools Section
+export const ASSESSMENT_TOOLS_SECTION: SectionSchema = {
+  key: 'assessment_tools',
+  title: 'Assessment Tools',
+  fields: [
+    {
+      key: 'tools',
+      label: 'Tools',
+      type: 'array',
+      children: [
+        { key: 'title', label: 'Title', type: 'string', required: true },
+        { key: 'administered_date', label: 'Administered Date', type: 'date' },
+        { key: 'completed', label: 'Completed', type: 'boolean' },
+        { key: 'domains_assessed', label: 'Domains Assessed', type: 'array' },
+        { key: 'notes', label: 'Notes', type: 'string' }
+      ]
     }
   ]
 };

@@ -102,12 +102,7 @@ class ProgressToastDispatcher {
       toast.status = success ? 'success' : 'error';
       toast.errors = success ? undefined : event.errors;
       
-      // Auto-remove success toasts after delay
-      if (success) {
-        setTimeout(() => {
-          this.removeToast(id);
-        }, 2000);
-      }
+      // Don't auto-remove toasts - let user dismiss them manually
       
       this.notifyHandlers();
     }
@@ -143,7 +138,7 @@ class ProgressToastDispatcher {
     this.notifyHandlers();
   }
 
-  private removeToast(id: string): void {
+  removeToast(id: string): void {
     this.toasts.delete(id);
     this.notifyHandlers();
   }

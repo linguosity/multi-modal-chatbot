@@ -147,10 +147,11 @@ export async function transcribeAudio(file: File): Promise<string> {
   }
 
   try {
+    const model = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe';
     const transcription = await openai.audio.transcriptions.create({
-      file: file,
-      model: 'whisper-1',
-      language: 'en', // Can be made configurable
+      file,
+      model,
+      language: 'en',
       response_format: 'text',
     });
 
@@ -257,16 +258,34 @@ export function filesToClaudeContent(processedFiles: ProcessedFile[]): Array<{ t
         }
       });
     } else if (file.processingMethod === 'claude-pdf') {
-      // Use proper document block for PDF support
-      content.push({
-        type: "document",
-        source: {
-          type: "base64",
-          media_type: file.type,
-          data: file.content
-        },
-        title: file.name // Optional: helps Claude understand context
-      });
+      // Only use document block for actual PDFs
+      if (file.type === 'application/pdf') {
+        content.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: file.type,
+            data: file.content
+          },
+          title: file.name
+        });
+      } else {
+        // For text files, decode base64 and send as text
+        try {
+          const textContent = Buffer.from(file.content, 'base64').toString('utf-8');
+          content.push({
+            type: "text",
+            text: `Content from ${file.name}:\n${textContent}`
+          });
+        } catch (error) {
+          console.error(`Failed to decode text file ${file.name}:`, error);
+          // Fallback to treating as text
+          content.push({
+            type: "text",
+            text: `Content from ${file.name}:\n${file.content}`
+          });
+        }
+      }
     } else if (file.processingMethod === 'whisper-transcription') {
       // Audio transcript
       content.push({

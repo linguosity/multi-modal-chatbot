@@ -178,10 +178,57 @@ export function renderStructuredData(data: any, sectionType: string): string {
 
   switch (sectionType) {
     case 'assessment_results':
-      if (data.assessment_items && Array.isArray(data.assessment_items)) {
-        return renderAssessmentTable(data.assessment_items);
+      {
+        let html = '';
+        if (data.assessment_items && Array.isArray(data.assessment_items) && data.assessment_items.length > 0) {
+          html += renderAssessmentTable(data.assessment_items);
+        }
+        const noteFields = [
+          { key: 'expressive_language_notes', label: 'Expressive Language Notes' },
+          { key: 'receptive_language_notes', label: 'Receptive Language Notes' },
+          { key: 'pragmatic_language_notes', label: 'Pragmatic Language Notes' },
+          { key: 'articulation_notes', label: 'Articulation/Phonology Notes' },
+          { key: 'voice_notes', label: 'Voice Notes' },
+          { key: 'fluency_notes', label: 'Fluency Notes' },
+        ];
+        const notesHtml = noteFields
+          .map(({ key, label }) => (data[key] ? `<div class="clinical-note"><strong>${label}:</strong> ${data[key]}</div>` : ''))
+          .join('');
+        html += notesHtml;
+        return html;
       }
-      break;
+    
+    case 'assessment_tools':
+      {
+        if (data.tools && Array.isArray(data.tools) && data.tools.length > 0) {
+          const rows = data.tools.map((t: any) => `
+            <tr>
+              <td class="test-name">${t.title || t.tool_name || 'N/A'}</td>
+              <td>${t.administered_date || t.date || 'N/A'}</td>
+              <td>${typeof t.completed === 'boolean' ? (t.completed ? 'Yes' : 'No') : 'N/A'}</td>
+              <td>${Array.isArray(t.domains_assessed) ? t.domains_assessed.join(', ') : (t.domains_assessed || '')}</td>
+              <td>${t.notes || ''}</td>
+            </tr>
+          `).join('');
+          return `
+            <div class="assessment-results-table">
+              <table class="assessment-table">
+                <thead>
+                  <tr>
+                    <th class="test-name">Tool</th>
+                    <th>Date</th>
+                    <th>Completed</th>
+                    <th>Domains</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `;
+        }
+        break;
+      }
       
     case 'validity_statement':
       return renderValidityStatement(data);

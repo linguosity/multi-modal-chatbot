@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic from '@/lib/ai/anthropic-compat'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
-
-// Validate API key on startup
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('❌ ANTHROPIC_API_KEY environment variable is not set')
-}
+const anthropic = new Anthropic({})
 
 
 export async function POST(request: NextRequest) {

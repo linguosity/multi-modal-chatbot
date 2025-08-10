@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic from '@/lib/ai/anthropic-compat'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+const anthropic = new Anthropic({})
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,7 +67,7 @@ Examples of good summaries:
 Your summary:`
 
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-1-20250805',
+      model: 'gpt-5',
       max_tokens: 100,
       messages: [
         {

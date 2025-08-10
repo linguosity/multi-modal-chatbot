@@ -1,5 +1,15 @@
 # AI Assessment Processing Requirements
 
+## ⚠️ CRITICAL DEVELOPMENT WARNING
+
+**Stack Overflow Risk**: This feature processes complex assessment data and nested report structures. All implementations MUST use iterative algorithms, never recursive ones. See `DEVELOPMENT_GUIDELINES.md` for mandatory patterns.
+
+**Mandatory Before Implementation:**
+- [ ] Review `DEVELOPMENT_GUIDELINES.md` 
+- [ ] Use iterative traversal for document processing
+- [ ] Never use `JSON.stringify` in useEffect dependencies
+- [ ] Gate debug logging behind environment flags
+
 ## Introduction
 
 This feature will enhance the AI assistant to intelligently process assessment documents, notes, images, and PDFs to automatically populate report sections with structured data. The system will use Claude's tool use capabilities to extract relevant information and map it to appropriate report sections, with visual feedback showing which sections and fields were updated.

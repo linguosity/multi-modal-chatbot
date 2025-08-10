@@ -163,6 +163,46 @@ export type Database = {
         }
         Relationships: []
       }
+      ,
+      user_settings: {
+        Row: {
+          user_id: string
+          preferred_state: string | null
+          evaluator_name: string | null
+          evaluator_credentials: string | null
+          school_name: string | null
+          asha_number: string | null
+          state_license_number: string | null
+          show_toast_notifications: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          user_id: string
+          preferred_state?: string | null
+          evaluator_name?: string | null
+          evaluator_credentials?: string | null
+          school_name?: string | null
+          asha_number?: string | null
+          state_license_number?: string | null
+          show_toast_notifications?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          preferred_state?: string | null
+          evaluator_name?: string | null
+          evaluator_credentials?: string | null
+          school_name?: string | null
+          asha_number?: string | null
+          state_license_number?: string | null
+          show_toast_notifications?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       speech_language_reports: {
         Row: {
           created_at: string | null

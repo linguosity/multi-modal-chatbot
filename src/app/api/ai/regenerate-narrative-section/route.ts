@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic from '@/lib/ai/anthropic-compat'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+const anthropic = new Anthropic({})
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,7 +34,7 @@ INSTRUCTIONS:
 REVISED TEXT:`
 
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-1-20250805',
+      model: 'gpt-5',
       max_tokens: 1000,
       temperature: 0.4, // Slightly higher for variation
       messages: [
@@ -49,7 +47,7 @@ REVISED TEXT:`
 
     const content = response.content[0]
     if (content.type !== 'text') {
-      throw new Error('Unexpected response type from Claude')
+      throw new Error('Unexpected response type from model')
     }
 
     return NextResponse.json({

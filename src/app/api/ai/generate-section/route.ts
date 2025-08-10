@@ -1,13 +1,140 @@
 import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic from '@/lib/ai/anthropic-compat'
 import { processMultipleFiles, filesToClaudeContent, ProcessedFile } from '@/lib/file-processing';
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver';
-import { getSectionSchemaForType } from '@/lib/structured-schemas';
+import { getSectionSchemaForType, SectionSchema } from '@/lib/structured-schemas';
+import { StructuredDataMerger } from '@/lib/structured-data-merger';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const anthropic = new Anthropic({});
+
+/**
+ * Builds comprehensive system message with complete report structure context
+ * for structured data processing
+ */
+async function buildStructuredSystemMessage(
+  report: { sections: Section[] }, 
+  supabase: any // eslint-disable-line @typescript-eslint/no-explicit-any
+): Promise<string> {
+  // Get all available schemas for section types
+  const availableSchemas: Record<string, SectionSchema> = {};
+  
+  // Fetch section types from database to get complete schema information
+  const { data: _sectionTypes } = await supabase
+    .from('report_section_types')
+    .select('*');
+  
+  // Build schema map
+  for (const section of report.sections) {
+    if (section.sectionType) {
+      const schema = getSectionSchemaForType(section.sectionType);
+      if (schema) {
+        availableSchemas[section.sectionType] = schema;
+      }
+    }
+  }
+
+  // Build complete report structure with schemas
+  const reportStructure = JSON.stringify(
+    report.sections.map(section => ({
+      id: section.id,
+      title: section.title,
+      sectionType: section.sectionType,
+      structured_data: section.structured_data || {},
+      schema: availableSchemas[section.sectionType || ''] || null,
+      ai_directive: section.ai_directive || null
+    })), 
+    null, 
+    2
+  );
+
+  const schemaDefinitions = JSON.stringify(availableSchemas, null, 2);
+
+  return `You are an expert Speech-Language Pathologist (SLP) conducting comprehensive assessment analysis with clinical expertise and advanced structured data processing capabilities.
+
+TASK: Analyze the provided assessment content and update specific fields in the structured JSON data model using precise field paths and merge strategies.
+
+CLINICAL ANALYSIS FRAMEWORK:
+As an SLP, you follow this natural assessment reasoning process:
+
+1. QUANTITATIVE DATA EXTRACTION (Priority 1):
+   - Standard scores, percentiles, age equivalents from formal tests
+   - Raw scores and scaled scores where available
+   - Confidence intervals and standard error measurements
+   - Subtest breakdowns for comprehensive assessments
+
+2. QUALITATIVE BEHAVIORAL OBSERVATIONS (Priority 2):
+   - Student cooperation and attention during testing
+   - Response strategies (self-correction, requesting repetition)
+   - Error patterns and consistency across tasks
+   - Fatigue effects and optimal performance conditions
+
+3. DOMAIN-SPECIFIC CLINICAL PATTERNS (Priority 3):
+   - Receptive vs. Expressive language discrepancies
+   - Phonological vs. Articulation error patterns
+   - Pragmatic strengths in structured vs. unstructured contexts
+   - Voice quality, fluency, and prosodic features
+
+4. FUNCTIONAL IMPACT ASSESSMENT (Priority 4):
+   - Academic performance implications
+   - Social communication effectiveness
+   - Home vs. school performance differences
+   - Compensatory strategies already in use
+
+CURRENT REPORT STRUCTURE:
+${reportStructure}
+
+AVAILABLE SCHEMA DEFINITIONS:
+${schemaDefinitions}
+
+STRUCTURED DATA PROCESSING APPROACH:
+1. First, use 'analyze_assessment_content' to identify which specific fields should be updated based on clinical priorities
+2. Then, use 'update_report_data' to make precise field-level updates following clinical reasoning
+3. Focus on extracting structured data points rather than generating prose
+4. Maintain data types and follow schema constraints
+5. Populate assessment_items with complete test data (scores, dates, interpretations)
+6. Generate domain-specific clinical summaries in appropriate text fields
+
+FIELD PATH NOTATION:
+- Use dot notation for nested fields: "assessment_results.assessment_items.0.standard_score"
+- Array indices: "assessment_results.assessment_items.0" (for first assessment item)
+- Object properties: "validity_statement.student_cooperation.cooperative"
+- Complex paths: "assessment_results.assessment_items.0.domains_assessed.0" (first domain in first assessment)
+
+MERGE STRATEGIES:
+- "replace": Completely overwrite the existing value (use for scores, dates, definitive data)
+- "append": Add to existing arrays or concatenate strings (use for observations, notes, lists)
+- "merge": Combine objects while preserving existing properties (use for complex nested structures)
+
+DATA EXTRACTION PRIORITIES:
+1. Test scores and standardized assessment results → assessment_results.assessment_items
+2. Demographic and background information → header section fields
+3. Clinical observations and findings → domain-specific notes fields
+4. Recommendations and service needs → recommendations section
+5. Eligibility and diagnostic information → conclusion and eligibility sections
+
+VALIDATION REQUIREMENTS:
+- Respect field types (string, number, boolean, array, object, date)
+- Follow enum constraints where defined (check options arrays in schemas)
+- Maintain required field requirements
+- Preserve data relationships and dependencies
+- Ensure score ranges are realistic (Standard Scores: 40-160, Percentiles: 1-99)
+
+CLINICAL VALIDATION RULES:
+- Verify age-appropriate test selections
+- Check for logical consistency across domains
+- Maintain professional terminology and objectivity
+- Ensure assessment dates are logical and recent
+- Validate that test scores align with qualitative descriptions
+
+ERROR HANDLING:
+- If a field path doesn't exist in the schema, skip that update and note the error
+- If data type validation fails, attempt type coercion before rejecting
+- If merge conflicts occur, prioritize higher confidence updates
+- Continue processing other updates even if some fail
+
+You MUST start with 'analyze_assessment_content' to plan your field updates based on clinical analysis, then proceed with 'update_report_data' to implement the structured updates.`;
+}
 
 // Define section type for consistency
 type Section = {
@@ -21,6 +148,48 @@ type Section = {
   lastUpdated?: string;
 };
 
+// Enhanced request interface for structured data processing
+interface StructuredProcessingRequest {
+  reportId: string;
+  sectionId?: string;
+  unstructuredInput?: string;
+  files?: File[];
+  generation_type: 'structured_data_processing' | 'multi_modal_assessment' | 'prose' | 'points';
+  target_sections?: string[];
+  processing_mode?: 'analysis_only' | 'update_only' | 'full_processing';
+}
+
+// Enhanced response interface for structured data processing
+interface StructuredProcessingResponse {
+  success: boolean;
+  updatedSections: string[];
+  analysisResult?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  processedFiles?: Array<{
+    name: string;
+    type: string;
+    size: number;
+    processingMethod: string;
+  }>;
+  message: string;
+  apiIssues?: boolean;
+  processing_mode: 'analysis_only' | 'update_only' | 'full_processing';
+  target_sections: string[];
+  iterations_completed: number;
+  fieldUpdateResults?: Array<{
+    field_path: string;
+    success: boolean;
+    merge_result?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    error?: string;
+  }>;
+  statistics?: {
+    total_updates: number;
+    successful_updates: number;
+    failed_updates: number;
+    validation_errors: number;
+    processing_errors: number;
+  };
+}
+
 /**
  * Handles multi-modal assessment processing with conversation loop
  */
@@ -31,13 +200,28 @@ async function handleMultiModalAssessment(
   report: { sections: Section[] },
   supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   reportId: string,
-  processedFiles: ProcessedFile[]
+  processedFiles: ProcessedFile[],
+  processing_mode?: 'analysis_only' | 'update_only' | 'full_processing',
+  target_sections?: string[]
 ): Promise<NextResponse> {
   const conversationMessages = [...messages];
   const updatedSections: string[] = [];
   let analysisResult: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const maxIterations = 10; // Prevent infinite loops
+  const maxIterations = processing_mode === 'analysis_only' ? 1 : 10; // Limit iterations for analysis-only mode
   let iteration = 0;
+  
+  // Filter target sections if specified
+  const targetSectionIds = target_sections || report.sections.map(s => s.id);
+  console.log(`🎯 Target sections: ${targetSectionIds.join(', ')}`);
+  console.log(`🔧 Processing mode: ${processing_mode || 'full_processing'}`);
+  
+  // Adjust system message based on processing mode
+  let adjustedSystemMessage = systemMessage;
+  if (processing_mode === 'analysis_only') {
+    adjustedSystemMessage += '\n\nIMPORTANT: You are in ANALYSIS ONLY mode. Only use the "analyze_assessment_content" tool to analyze the content. Do NOT make any actual updates to the report data.';
+  } else if (processing_mode === 'update_only') {
+    adjustedSystemMessage += '\n\nIMPORTANT: You are in UPDATE ONLY mode. Skip the analysis phase and proceed directly to updating report data using "update_report_data" tool.';
+  }
 
   while (iteration < maxIterations) {
     iteration++;
@@ -59,14 +243,24 @@ async function handleMultiModalAssessment(
       
       while (retryCount <= maxRetries) {
         try {
+          // Determine tool choice based on processing mode and iteration
+          let toolChoice: any = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (processing_mode === 'analysis_only') {
+            toolChoice = { type: "tool", name: "analyze_assessment_content" };
+          } else if (processing_mode === 'update_only') {
+            toolChoice = { type: "tool", name: "update_report_data" };
+          } else if (iteration === 1) {
+            // Default behavior: force analyze_assessment_content on first iteration
+            toolChoice = { type: "tool", name: "analyze_assessment_content" };
+          }
+
           response = await anthropic.messages.create({
             model: "claude-opus-4-1-20250805", // Claude Opus 4.1 - latest model
             max_tokens: 16384, // Increased for PDF analysis (doubled from 8192)
-            system: systemMessage,
+            system: adjustedSystemMessage,
             tools: tools,
             messages: conversationMessages,
-            // Force Claude to use analyze_assessment_content on first iteration
-            ...(iteration === 1 ? { tool_choice: { type: "tool", name: "analyze_assessment_content" } } : {})
+            ...(toolChoice ? { tool_choice: toolChoice } : {})
           });
           
           // Success - break out of retry loop
@@ -125,6 +319,12 @@ async function handleMultiModalAssessment(
         analysisResult = toolUse.input;
         console.log(`📊 Analysis result keys: ${Object.keys(analysisResult || {}).join(', ')}`);
         toolResult = { success: true, message: "Analysis complete", data: analysisResult };
+        
+        // If in analysis-only mode, stop here
+        if (processing_mode === 'analysis_only') {
+          console.log('🛑 Analysis-only mode: stopping after analysis');
+          break;
+        }
       } else if (toolUse.name === 'update_report_section') {
       const { section_id, content } = toolUse.input as { 
         section_id: string; 
@@ -147,6 +347,13 @@ async function handleMultiModalAssessment(
         toolResult = { success: false, message: `Section ${section_id} not found` };
       }
     } else if (toolUse.name === 'update_report_data') {
+      // Check if updates are allowed in current processing mode
+      if (processing_mode === 'analysis_only') {
+        console.log('🛑 Analysis-only mode: skipping data updates');
+        toolResult = { success: false, message: 'Data updates not allowed in analysis-only mode' };
+        continue;
+      }
+      
       // New structured data processing
       console.log('🔍 Raw tool input:', JSON.stringify(toolUse.input, null, 2));
       
@@ -207,8 +414,11 @@ async function handleMultiModalAssessment(
       }
 
       const fieldResolver = new StructuredFieldPathResolver();
+      const dataMerger = new StructuredDataMerger();
       const processedUpdates: string[] = [];
       const errors: string[] = [];
+      const validationErrors: string[] = [];
+      const fieldUpdateResults: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       console.log('🔄 Processing structured data updates:', updates.length, 'updates');
       
@@ -234,6 +444,12 @@ async function handleMultiModalAssessment(
           
           console.log(`📝 Processing update: ${update.section_id}.${update.field_path} = ${JSON.stringify(update.value)} (${update.merge_strategy})`);
           
+          // Check if this section is in the target sections list
+          if (!targetSectionIds.includes(update.section_id)) {
+            console.log(`⏭️ Skipping update for ${update.section_id} - not in target sections`);
+            continue;
+          }
+
           const sectionIndex = (report.sections as Section[]).findIndex((sec: Section) => sec.id === update.section_id);
           
           if (sectionIndex === -1) {
@@ -251,49 +467,103 @@ async function handleMultiModalAssessment(
             console.log('🆕 Initialized empty structured_data');
           }
 
-          // Get the schema for validation (optional for now)
+          // Get the schema for validation
           const schema = getSectionSchemaForType(section.sectionType || '');
           console.log(`📊 Schema available: ${schema ? 'Yes' : 'No'}`);
           
-          // Apply the field update based on merge strategy
-          let updatedData;
-          const currentValue = fieldResolver.getFieldValue(section.structured_data, update.field_path);
-          console.log(`🔍 Current value at ${update.field_path}:`, JSON.stringify(currentValue));
+          // Validate field path against schema
+          if (schema && !fieldResolver.validateFieldPath(update.field_path, schema)) {
+            const validationResult = fieldResolver.validateFieldPathDetailed(update.field_path, schema);
+            console.error(`❌ Invalid field path ${update.field_path}:`, validationResult.errors);
+            validationErrors.push(`Invalid field path ${update.field_path}: ${validationResult.errors.join(', ')}`);
+            continue;
+          }
           
-          switch (update.merge_strategy) {
-            case 'replace':
-              updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, update.value);
-              console.log(`🔄 REPLACE: Set ${update.field_path} to ${JSON.stringify(update.value)}`);
-              break;
-            case 'append':
-              if (Array.isArray(currentValue)) {
-                const newArray = Array.isArray(update.value) ? [...currentValue, ...update.value] : [...currentValue, update.value];
-                updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, newArray);
-                console.log(`➕ APPEND (array): Added to ${update.field_path}, new length: ${newArray.length}`);
-              } else if (typeof currentValue === 'string') {
-                const separator = currentValue && !currentValue.endsWith('.') ? '. ' : '';
-                const newValue = currentValue + separator + update.value;
-                updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, newValue);
-                console.log(`➕ APPEND (string): Concatenated to ${update.field_path}`);
-              } else {
-                // Fall back to replace for non-appendable types
-                updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, update.value);
-                console.log(`🔄 APPEND→REPLACE: Non-appendable type, replaced ${update.field_path}`);
+          // Get current value and field schema for smart merging
+          const currentValue = fieldResolver.getFieldValue(section.structured_data, update.field_path);
+          const fieldSchema = schema ? fieldResolver.getFieldSchema(update.field_path, schema) : null;
+          
+          console.log(`🔍 Current value at ${update.field_path}:`, JSON.stringify(currentValue));
+          console.log(`📋 Field schema:`, fieldSchema ? `${fieldSchema.type} (${fieldSchema.label})` : 'Not available');
+          
+          // Use smart merging if we have field schema
+          let updatedData;
+          if (fieldSchema) {
+            const mergeResult = dataMerger.mergeFieldUpdate(
+              currentValue,
+              update.value,
+              update.merge_strategy,
+              fieldSchema,
+              update.confidence
+            );
+            
+            if (mergeResult.success) {
+              updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, mergeResult.mergedValue);
+              console.log(`✅ SMART MERGE (${update.merge_strategy}): ${update.field_path} updated successfully`);
+              
+              // Log warnings and conflicts
+              if (mergeResult.warnings) {
+                console.warn(`⚠️ Merge warnings for ${update.field_path}:`, mergeResult.warnings);
               }
-              break;
-            case 'merge':
-              if (typeof currentValue === 'object' && typeof update.value === 'object' && !Array.isArray(currentValue) && !Array.isArray(update.value)) {
-                const mergedValue = { ...currentValue, ...update.value };
-                updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, mergedValue);
-                console.log(`🔀 MERGE: Merged objects at ${update.field_path}`);
-              } else {
-                // Fall back to replace for non-mergeable types
-                updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, update.value);
-                console.log(`🔄 MERGE→REPLACE: Non-mergeable type, replaced ${update.field_path}`);
+              if (mergeResult.conflicts) {
+                console.warn(`⚠️ Merge conflicts for ${update.field_path}:`, mergeResult.conflicts);
               }
-              break;
-            default:
-              throw new Error(`Unknown merge strategy: ${update.merge_strategy}`);
+              
+              fieldUpdateResults.push({
+                field_path: update.field_path,
+                success: true,
+                merge_result: mergeResult
+              });
+            } else {
+              console.error(`❌ Smart merge failed for ${update.field_path}:`, mergeResult.warnings);
+              errors.push(`Smart merge failed for ${update.field_path}: ${mergeResult.warnings?.join(', ')}`);
+              continue;
+            }
+          } else {
+            // Fallback to basic merging without schema validation
+            console.log(`⚠️ No schema available for ${update.field_path}, using basic merge logic`);
+            
+            switch (update.merge_strategy) {
+              case 'replace':
+                updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, update.value);
+                console.log(`🔄 REPLACE: Set ${update.field_path} to ${JSON.stringify(update.value)}`);
+                break;
+              case 'append':
+                if (Array.isArray(currentValue)) {
+                  const newArray = Array.isArray(update.value) ? [...currentValue, ...update.value] : [...currentValue, update.value];
+                  updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, newArray);
+                  console.log(`➕ APPEND (array): Added to ${update.field_path}, new length: ${newArray.length}`);
+                } else if (typeof currentValue === 'string') {
+                  const separator = currentValue && !currentValue.endsWith('.') ? '. ' : '';
+                  const newValue = currentValue + separator + update.value;
+                  updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, newValue);
+                  console.log(`➕ APPEND (string): Concatenated to ${update.field_path}`);
+                } else {
+                  // Fall back to replace for non-appendable types
+                  updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, update.value);
+                  console.log(`🔄 APPEND→REPLACE: Non-appendable type, replaced ${update.field_path}`);
+                }
+                break;
+              case 'merge':
+                if (typeof currentValue === 'object' && typeof update.value === 'object' && !Array.isArray(currentValue) && !Array.isArray(update.value)) {
+                  const mergedValue = { ...currentValue, ...update.value };
+                  updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, mergedValue);
+                  console.log(`🔀 MERGE: Merged objects at ${update.field_path}`);
+                } else {
+                  // Fall back to replace for non-mergeable types
+                  updatedData = fieldResolver.setFieldValue(section.structured_data, update.field_path, update.value);
+                  console.log(`🔄 MERGE→REPLACE: Non-mergeable type, replaced ${update.field_path}`);
+                }
+                break;
+              default:
+                throw new Error(`Unknown merge strategy: ${update.merge_strategy}`);
+            }
+            
+            fieldUpdateResults.push({
+              field_path: update.field_path,
+              success: true,
+              merge_result: { success: true, strategy: update.merge_strategy }
+            });
           }
 
           // Log the change
@@ -305,8 +575,6 @@ async function handleMultiModalAssessment(
           report.sections[sectionIndex].isGenerated = true;
           report.sections[sectionIndex].lastUpdated = new Date().toISOString();
           
-          console.log(`💾 Section ${update.section_id} updated with new structured_data:`, JSON.stringify(updatedData, null, 2));
-          
           processedUpdates.push(`${update.section_id}.${update.field_path}`);
           
           // Track which sections were updated
@@ -316,6 +584,12 @@ async function handleMultiModalAssessment(
         } catch (error) {
           console.error(`❌ Failed to update ${update.section_id}.${update.field_path}:`, error);
           errors.push(`Failed to update ${update.section_id}.${update.field_path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          
+          fieldUpdateResults.push({
+            field_path: update.field_path,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
         }
       }
       
@@ -323,20 +597,50 @@ async function handleMultiModalAssessment(
         processedUpdates,
         updatedSections,
         errors,
-        processing_summary
+        validationErrors,
+        processing_summary,
+        fieldUpdateResults
       });
 
-      if (errors.length > 0) {
+      const totalErrors = errors.length + validationErrors.length;
+      const successfulUpdates = fieldUpdateResults.filter(r => r.success).length;
+      
+      if (totalErrors > 0) {
+        const allErrors = [...errors, ...validationErrors];
         toolResult = { 
           success: processedUpdates.length > 0, 
-          message: `Processed ${processedUpdates.length} updates with ${errors.length} errors: ${errors.join(', ')}`,
-          data: { processedUpdates, errors, processing_summary }
+          message: `Processed ${successfulUpdates} updates successfully, ${totalErrors} failed: ${allErrors.slice(0, 3).join(', ')}${allErrors.length > 3 ? '...' : ''}`,
+          data: { 
+            processedUpdates, 
+            errors: allErrors, 
+            validationErrors,
+            processing_summary,
+            fieldUpdateResults,
+            statistics: {
+              total_updates: updates.length,
+              successful_updates: successfulUpdates,
+              failed_updates: totalErrors,
+              validation_errors: validationErrors.length,
+              processing_errors: errors.length
+            }
+          }
         };
       } else {
         toolResult = { 
           success: true, 
-          message: `Successfully processed ${processedUpdates.length} field updates`,
-          data: { processedUpdates, processing_summary }
+          message: `Successfully processed ${processedUpdates.length} field updates with enhanced validation`,
+          data: { 
+            processedUpdates, 
+            processing_summary,
+            fieldUpdateResults,
+            statistics: {
+              total_updates: updates.length,
+              successful_updates: successfulUpdates,
+              failed_updates: 0,
+              validation_errors: 0,
+              processing_errors: 0
+            }
+          }
         };
       }
     } else {
@@ -390,25 +694,56 @@ async function handleMultiModalAssessment(
   // Update the report in the database if any sections were modified
   if (updatedSections.length > 0) {
     console.log(`💾 Updating database for report ${reportId} with ${updatedSections.length} modified sections:`, updatedSections);
-    
+
+    // 1) Persist embedded JSON for backward compatibility with any consumers still reading it
     const { error: updateError } = await supabase
       .from('reports')
       .update({ sections: report.sections })
       .eq('id', reportId);
 
     if (updateError) {
-      console.error('❌ Database update failed:', updateError);
+      console.error('❌ Database update failed (reports.sections):', updateError);
       throw new Error(`Failed to update report in database: ${updateError.message}`);
     }
-    
-    console.log('✅ Database update successful');
+
+    // 2) Persist structured_data into canonical row-based table (report_sections)
+    try {
+      for (const sectionId of updatedSections) {
+        const sec = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
+        const sd = (sec as any)?.structured_data;
+        if (sd !== undefined) {
+          const { error: rsErr } = await supabase
+            .from('report_sections')
+            .update({ structured_data: sd as any })
+            .eq('id', sectionId)
+            .eq('report_id', reportId);
+          if (rsErr) {
+            console.warn(`⚠️ Failed to update report_sections for ${sectionId}:`, rsErr.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Error while syncing structured_data to report_sections:', e instanceof Error ? e.message : String(e));
+    }
+
+    console.log('✅ Database updates successful');
   } else {
     console.log('ℹ️ No sections were modified, skipping database update');
   }
 
   // Determine if processing was limited by API issues
   const hadApiIssues = !analysisResult && processedFiles.length > 0;
-  const baseMessage = `Successfully processed ${processedFiles.length} files and updated ${updatedSections.length} sections`;
+  
+  // Build message based on processing mode
+  let baseMessage: string;
+  if (processing_mode === 'analysis_only') {
+    baseMessage = `Successfully analyzed ${processedFiles.length} files${analysisResult ? ' with detailed analysis results' : ''}`;
+  } else if (processing_mode === 'update_only') {
+    baseMessage = `Successfully updated ${updatedSections.length} sections with structured data processing`;
+  } else {
+    baseMessage = `Successfully processed ${processedFiles.length} files and updated ${updatedSections.length} sections`;
+  }
+  
   const apiIssueMessage = hadApiIssues ? ' (Note: AI analysis was limited due to temporary API overload - please try again in a few minutes for full processing)' : '';
   
   const response = {
@@ -422,7 +757,10 @@ async function handleMultiModalAssessment(
       processingMethod: f.processingMethod
     })),
     message: baseMessage + apiIssueMessage,
-    apiIssues: hadApiIssues
+    apiIssues: hadApiIssues,
+    processing_mode: processing_mode || 'full_processing',
+    target_sections: targetSectionIds,
+    iterations_completed: iteration
   };
   
   console.log('🚀 Sending response to client:', JSON.stringify(response, null, 2));
@@ -433,8 +771,8 @@ async function handleMultiModalAssessment(
 export async function POST(request: Request) {
   const supabase = await createRouteSupabase();
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return new NextResponse(JSON.stringify({ error: 'Server configuration error: Anthropic API key missing.' }), { status: 500 });
+  if (!process.env.OPENAI_API_KEY) {
+    return new NextResponse(JSON.stringify({ error: 'Server configuration error: OpenAI API key missing.' }), { status: 500 });
   }
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -448,6 +786,8 @@ export async function POST(request: Request) {
   let sectionId: string | undefined;
   let unstructuredInput: string | undefined;
   let generation_type: string;
+  let target_sections: string[] | undefined;
+  let processing_mode: 'analysis_only' | 'update_only' | 'full_processing' | undefined;
   const files: File[] = [];
 
   const contentType = request.headers.get('content-type');
@@ -459,9 +799,11 @@ export async function POST(request: Request) {
     sectionId = formData.get('sectionId') as string | undefined;
     unstructuredInput = formData.get('unstructuredInput') as string | undefined;
     generation_type = formData.get('generation_type') as string;
+    target_sections = formData.get('target_sections') ? JSON.parse(formData.get('target_sections') as string) : undefined;
+    processing_mode = formData.get('processing_mode') as 'analysis_only' | 'update_only' | 'full_processing' | undefined;
     
     // Extract files from FormData
-    for (const [key, value] of formData.entries()) {
+    for (const [key, value] of Array.from(formData.entries())) {
       if (key.startsWith('file_') && value instanceof File) {
         files.push(value);
       }
@@ -473,6 +815,8 @@ export async function POST(request: Request) {
     sectionId = body.sectionId;
     unstructuredInput = body.unstructuredInput;
     generation_type = body.generation_type;
+    target_sections = body.target_sections;
+    processing_mode = body.processing_mode;
   }
 
   if (!reportId || !generation_type) {
@@ -664,78 +1008,10 @@ export async function POST(request: Request) {
   let targetTool = "";
 
   if (generation_type === 'structured_data_processing') {
-    // New structured data processing approach
-    const reportStructure = JSON.stringify(
-      (report.sections as Section[]).map(section => ({
-        id: section.id,
-        title: section.title,
-        sectionType: section.sectionType,
-        structured_data: section.structured_data || {},
-        schema: getSectionSchemaForType(section.sectionType || '')
-      })), 
-      null, 
-      2
-    );
-
-    systemMessageContent = `You are an expert Speech-Language Pathologist conducting comprehensive assessment analysis with clinical expertise.
-
-CLINICAL ANALYSIS FRAMEWORK:
-As an SLP, you follow this natural assessment reasoning process:
-
-1. QUANTITATIVE DATA EXTRACTION (Priority 1):
-   - Standard scores, percentiles, age equivalents from formal tests
-   - Raw scores and scaled scores where available
-   - Confidence intervals and standard error measurements
-   - Subtest breakdowns for comprehensive assessments
-
-2. QUALITATIVE BEHAVIORAL OBSERVATIONS (Priority 2):
-   - Student cooperation and attention during testing
-   - Response strategies (self-correction, requesting repetition)
-   - Error patterns and consistency across tasks
-   - Fatigue effects and optimal performance conditions
-
-3. DOMAIN-SPECIFIC CLINICAL PATTERNS (Priority 3):
-   - Receptive vs. Expressive language discrepancies
-   - Phonological vs. Articulation error patterns
-   - Pragmatic strengths in structured vs. unstructured contexts
-   - Voice quality, fluency, and prosodic features
-
-4. FUNCTIONAL IMPACT ASSESSMENT (Priority 4):
-   - Academic performance implications
-   - Social communication effectiveness
-   - Home vs. school performance differences
-   - Compensatory strategies already in use
-
-CURRENT REPORT STRUCTURE:
-${reportStructure}
-
-CLINICAL EXTRACTION STRATEGY:
-- STANDARDIZED TESTS → Extract all scores + clinical interpretation + error analysis
-- INFORMAL ASSESSMENTS → Focus on functional patterns + contextual performance
-- OBSERVATIONS → Document behaviors + environmental factors + social interactions
-- INTERVIEWS → Capture concerns + developmental history + current impact
-- WORK SAMPLES → Analyze error patterns + strategy use + progress indicators
-
-STRUCTURED DATA PROCESSING:
-1. Start with 'analyze_assessment_content' to identify clinical priorities
-2. Use 'update_report_data' for comprehensive field updates following clinical reasoning
-3. Populate assessment_items with complete test data (scores, dates, interpretations)
-4. Generate domain-specific clinical summaries (not just data dumps)
-5. Create assessment_tools_list from populated assessment_items
-
-FIELD NOTATION & MERGE STRATEGIES:
-- Dot notation: "assessment_results.assessment_items.0.standard_score"
-- Replace: Complete overwrite (for scores, dates, definitive data)
-- Append: Add to arrays or extend text (for observations, recommendations)
-- Merge: Combine objects preserving existing data (for complex structures)
-
-CLINICAL VALIDATION:
-- Ensure score ranges are realistic (SS: 40-160, %ile: 1-99)
-- Verify age-appropriate test selections
-- Check for logical consistency across domains
-- Maintain professional terminology and objectivity
-
-Begin with clinical analysis, then proceed with structured data updates.`;
+    // Enhanced structured data processing approach with complete report context
+    const reportStructure = buildStructuredSystemMessage(report, supabase);
+    
+    systemMessageContent = await reportStructure;
     targetTool = 'analyze_assessment_content';
   } else if (generation_type === 'multi_modal_assessment') {
     // Legacy multi-modal assessment processing (HTML-based)
@@ -889,13 +1165,23 @@ Generate rich text content based on the provided context. You MUST call the 'upd
     ];
 
     console.log("📤 Sending messages to Anthropic:");
-    console.log("📄 File content blocks:", messagesContent.filter(c => c.type === 'document').map(c => ({ type: c.type, title: c.title || 'untitled', size: c.source?.data?.length || 0 })));
+    console.log("📄 File content blocks:", messagesContent.filter(c => c.type === 'document').map(c => ({ type: c.type, title: c.title || 'untitled', size: (c.source as any)?.data?.length || 0 })));
     console.log("💬 System message length:", systemMessageContent.length);
     console.log("🔧 Tools count:", tools.length);
 
     if (generation_type === 'structured_data_processing' || generation_type === 'multi_modal_assessment') {
       // Multi-tool conversation loop for assessment processing
-      return await handleMultiModalAssessment(messages, systemMessageContent, tools, report, supabase, reportId, processedFiles);
+      return await handleMultiModalAssessment(
+        messages, 
+        systemMessageContent, 
+        tools, 
+        report, 
+        supabase, 
+        reportId, 
+        processedFiles,
+        processing_mode,
+        target_sections
+      );
     } else {
       // Single tool call for traditional generation
       console.log('Creating Anthropic message with the following parameters:', { model: "claude-opus-4-1-20250805", max_tokens: 8192, system: systemMessageContent, tools, messages, tool_choice: { type: "tool", name: targetTool } });

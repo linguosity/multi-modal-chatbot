@@ -20,19 +20,21 @@ interface SettingsFormData {
   preferredState: string
   evaluatorName: string
   evaluatorCredentials: string
-  schoolName: string
+  selectedSiteId: string | ''
+  newSiteName: string
   showToastNotifications: boolean
 }
 
 export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
-  const { settings, updateSettings } = useUserSettings()
+  const { settings, updateSettings, schoolSites, addSchoolSite, setDefaultSite, refresh } = useUserSettings()
   const availableStates = getAvailableStates()
   
   const formState = useFormState<SettingsFormData>({
     preferredState: settings.preferredState,
     evaluatorName: settings.evaluatorName,
     evaluatorCredentials: settings.evaluatorCredentials,
-    schoolName: settings.schoolName,
+    selectedSiteId: '',
+    newSiteName: '',
     showToastNotifications: settings.showToastNotifications
   })
 
@@ -43,14 +45,38 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
         preferredState: settings.preferredState,
         evaluatorName: settings.evaluatorName,
         evaluatorCredentials: settings.evaluatorCredentials,
-        schoolName: settings.schoolName,
+        selectedSiteId: formState.data.selectedSiteId, // keep current selection
+        newSiteName: '',
         showToastNotifications: settings.showToastNotifications
       })
     }
-  }, [isOpen, settings.preferredState, settings.evaluatorName, settings.evaluatorCredentials, settings.schoolName, settings.showToastNotifications])
+    // Intentionally exclude schoolSites to avoid wiping typed fields when adding a site
+  }, [isOpen, settings.preferredState, settings.evaluatorName, settings.evaluatorCredentials, settings.showToastNotifications])
 
-  const handleSave = () => {
-    updateSettings(formState.data)
+  // When school sites change, only set a default selection if none is chosen yet
+  useEffect(() => {
+    if (!isOpen) return
+    if (!formState.data.selectedSiteId) {
+      const defaultSite = schoolSites.find(s => s.is_default) || schoolSites[0]
+      if (defaultSite) {
+        formState.updateField('selectedSiteId', defaultSite.id)
+      }
+    }
+  }, [isOpen, schoolSites])
+
+  const handleSave = async () => {
+    // Persist evaluator + preferences
+    await updateSettings({
+      preferredState: formState.data.preferredState,
+      evaluatorName: formState.data.evaluatorName,
+      evaluatorCredentials: formState.data.evaluatorCredentials,
+      showToastNotifications: formState.data.showToastNotifications,
+    })
+    // Set default site if changed
+    if (formState.data.selectedSiteId) {
+      await setDefaultSite(formState.data.selectedSiteId)
+    }
+    await refresh()
     onClose()
   }
 
@@ -120,16 +146,35 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
             />
           </div>
 
-          <FormField
-            label="School/Organization"
-            name="schoolName"
-            type="text"
-            value={formState.data.schoolName}
-            onChange={(value) => formState.updateField('schoolName', value)}
-            placeholder="School or organization name"
-            helpText="Institution where evaluations are conducted"
-            data-testid="school-name-input"
-          />
+          {/* School Sites: select default and add new */}
+          <div className="space-y-3">
+            <SelectField
+              label="School Site"
+              name="selectedSiteId"
+              value={formState.data.selectedSiteId}
+              onChange={(value) => formState.updateField('selectedSiteId', value)}
+              helpText="Select your default site for new reports"
+              options={[{ value: '', label: '(no site selected)' }, ...schoolSites.map(s => ({ value: s.id, label: s.name + (s.is_default ? ' • default' : '') }))]}
+            />
+            <div className="flex gap-2 items-end">
+              <FormField
+                label="Add New Site"
+                name="newSiteName"
+                type="text"
+                value={formState.data.newSiteName}
+                onChange={(value) => formState.updateField('newSiteName', value)}
+                placeholder="e.g., Lincoln Elementary"
+              />
+              <Button
+                onClick={async () => {
+                  const name = formState.data.newSiteName.trim()
+                  if (!name) return
+                  await addSchoolSite(name, schoolSites.length === 0)
+                  formState.updateField('newSiteName', '')
+                }}
+              >Add</Button>
+            </div>
+          </div>
 
           {/* State Information Preview */}
           {formState.data.preferredState && (

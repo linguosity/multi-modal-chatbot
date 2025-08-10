@@ -12,6 +12,10 @@ import { AssessmentToolsDisplay } from './AssessmentToolsDisplay'
 import { AssessmentToolsGrid } from './AssessmentToolsGrid'
 import { safeStringify } from '@/lib/utils/safeStringify'
 import type { Json } from '@/lib/types/json'
+import { useUserSettings } from '@/lib/context/UserSettingsContext'
+import FieldModeBadge from '@/components/ui/field-mode-badge'
+import ProvenanceChips from '@/components/ui/provenance-chips'
+import type { FieldMode, SourceRef } from '@/types/field-contracts'
 
 interface FieldSchema {
   key: string
@@ -21,6 +25,9 @@ interface FieldSchema {
   options?: string[] // For select/dropdown fields
   placeholder?: string
   children?: FieldSchema[] // For nested objects
+  // Optional AI/compute metadata (non-invasive)
+  mode?: FieldMode
+  source_refs?: SourceRef[]
 }
 
 interface SectionSchema {
@@ -61,6 +68,15 @@ export default function DynamicStructuredBlock({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [previewRef, setPreviewRef] = useState<SourceRef | null>(null);
+  const { settings } = useUserSettings()
+
+  // Map locked header fields to user settings keys
+  const LOCKED_FIELD_SETTINGS_MAP: Record<string, keyof typeof settings> = {
+    evaluator_name: 'evaluatorName',
+    evaluator_credentials: 'evaluatorCredentials',
+    school_name: 'schoolName',
+  }
   
   // Initialization guard to prevent infinite loops
   const initializedRef = useRef(false);
@@ -121,10 +137,43 @@ export default function DynamicStructuredBlock({
   // Initialize data only once on mount
   useEffect(() => {
     if (!initializedRef.current) {
-      setData(mergedInitialData);
+      // Prefill locked fields from user settings on first mount
+      const withLockedDefaults = { ...mergedInitialData } as any
+      for (const f of schema.fields) {
+        if ((f as any).mode === 'locked') {
+          const settingsKey = LOCKED_FIELD_SETTINGS_MAP[f.key]
+          const settingsVal = settingsKey ? (settings as any)[settingsKey] : undefined
+          if ((withLockedDefaults[f.key] === '' || withLockedDefaults[f.key] == null) && settingsVal) {
+            withLockedDefaults[f.key] = settingsVal
+          }
+        }
+      }
+      setData(withLockedDefaults)
       initializedRef.current = true;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run on mount
+
+  // When user settings change, populate locked fields that are still empty (non-destructive)
+  useEffect(() => {
+    const next = { ...(data as any) }
+    let changed = false
+    for (const f of schema.fields) {
+      if ((f as any).mode === 'locked') {
+        const settingsKey = LOCKED_FIELD_SETTINGS_MAP[f.key]
+        const settingsVal = settingsKey ? (settings as any)[settingsKey] : undefined
+        const currentVal = next[f.key]
+        if ((currentVal === '' || currentVal == null) && settingsVal) {
+          next[f.key] = settingsVal
+          changed = true
+        }
+      }
+    }
+    if (changed) {
+      setData(next)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.evaluatorName, settings.evaluatorCredentials, settings.schoolName])
 
   // Handle external initialData changes after initialization
   const prevMerged = useRef<Json | null>(null);
@@ -217,7 +266,20 @@ export default function DynamicStructuredBlock({
   // Render field based on type
   const renderField = (field: FieldSchema, value: any, path: string[] = []): React.ReactNode => {
     const fieldPath = [...path, field.key].join('.')
-    
+    const SHOW_PROVENANCE = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE
+      ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true'
+      : process.env.NODE_ENV !== 'production')
+
+    const LabelRow = ({ children }: { children?: React.ReactNode }) => (
+      <div className="flex items-center gap-2">
+        <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
+        {SHOW_PROVENANCE && field.mode && (
+          <FieldModeBadge mode={field.mode} />
+        )}
+        {children}
+      </div>
+    )
+
     const updateFieldValue = (newValue: any, shouldTriggerSave = false) => {
       // Only log when actually saving, not on every keystroke
       if (shouldTriggerSave) {
@@ -257,11 +319,12 @@ export default function DynamicStructuredBlock({
       }
     }
 
+    const isLocked = (field as any).mode === 'locked'
     switch (field.type) {
       case 'boolean':
         return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-2 h-fit">
-            <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
+            <LabelRow />
             <div className="flex">
               <button
                 onClick={() => updateFieldValue(true)}
@@ -284,6 +347,13 @@ export default function DynamicStructuredBlock({
                 No
               </button>
             </div>
+            {SHOW_PROVENANCE && field.source_refs?.length ? (
+              <ProvenanceChips 
+                sources={field.source_refs} 
+                className="mt-1"
+                onOpenPreview={(ref) => setPreviewRef(ref)}
+              />
+            ) : null}
           </div>
         ))
 
@@ -297,31 +367,52 @@ export default function DynamicStructuredBlock({
               className="rounded"
             />
             <label className="text-sm text-gray-700">{field.label}</label>
+            {SHOW_PROVENANCE && field.mode && (
+              <FieldModeBadge mode={field.mode} />
+            )}
+            {SHOW_PROVENANCE && field.source_refs?.length ? (
+              <ProvenanceChips 
+                sources={field.source_refs} 
+                className="ml-2"
+                onOpenPreview={(ref) => setPreviewRef(ref)}
+              />
+            ) : null}
           </div>
         ))
 
       case 'date':
         return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-1">
-            <label className="text-sm text-gray-700">{field.label}:</label>
+            <LabelRow />
             <input
               type="date"
               value={value || ''}
               onChange={(e) => updateFieldValue(e.target.value, false)}
               onBlur={(e) => updateFieldValue(e.target.value, true)}
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              disabled={isLocked}
+              title={isLocked ? 'Locked by user settings' : undefined}
             />
+            {SHOW_PROVENANCE && field.source_refs?.length ? (
+              <ProvenanceChips 
+                sources={field.source_refs} 
+                className="mt-1"
+                onOpenPreview={(ref) => setPreviewRef(ref)}
+              />
+            ) : null}
           </div>
         ))
 
       case 'select':
         return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-1">
-            <label className="text-sm text-gray-700">{field.label}:</label>
+            <LabelRow />
             <select
               value={value || ''}
               onChange={(e) => updateFieldValue(e.target.value, true)}
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              disabled={isLocked}
+              title={isLocked ? 'Locked by user settings' : undefined}
             >
               <option value="">Select an option...</option>
               {(field.options || []).map((option, index) => (
@@ -330,13 +421,20 @@ export default function DynamicStructuredBlock({
                 </option>
               ))}
             </select>
+            {SHOW_PROVENANCE && field.source_refs?.length ? (
+              <ProvenanceChips 
+                sources={field.source_refs} 
+                className="mt-1"
+                onOpenPreview={(ref) => setPreviewRef(ref)}
+              />
+            ) : null}
           </div>
         ))
 
       case 'number':
         return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-1">
-            <label className="text-sm text-gray-700">{field.label}:</label>
+            <LabelRow />
             <input
               type="number"
               value={value || 0}
@@ -344,7 +442,16 @@ export default function DynamicStructuredBlock({
               onBlur={(e) => updateFieldValue(parseFloat(e.target.value) || 0, true)}
               placeholder={field.placeholder}
               className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              disabled={isLocked}
+              title={isLocked ? 'Locked by user settings' : undefined}
             />
+            {SHOW_PROVENANCE && field.source_refs?.length ? (
+              <ProvenanceChips 
+                sources={field.source_refs} 
+                className="mt-1"
+                onOpenPreview={(ref) => setPreviewRef(ref)}
+              />
+            ) : null}
           </div>
         ))
 
@@ -353,7 +460,12 @@ export default function DynamicStructuredBlock({
           return wrapWithHighlight(fieldPath, (
             <div key={fieldPath}>
               <div className="space-y-1">
-                <h4 className="text-[var(--text-base)] font-medium text-gray-700">Assessment Tools Used</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-[var(--text-base)] font-medium text-gray-700">Assessment Tools Used</h4>
+                  {process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' && field.mode && (
+                    <FieldModeBadge mode={field.mode} />
+                  )}
+                </div>
                 
                 {/* Assessment Items List */}
                 {(Array.isArray(value) ? value : []).map((item: any, idx: number) => (
@@ -539,6 +651,20 @@ export default function DynamicStructuredBlock({
                   Add {field.label.slice(0, -1)} {/* Remove 's' from plural */}
                 </button>
               </div>
+              {(() => {
+                const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
+                if (!show) return null
+                const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
+                const runtimeRefs: SourceRef[] = runtime
+                  .filter((r: any) => r && r.field_path === fieldPath)
+                  .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                return runtimeRefs.length ? (
+                  <ProvenanceChips
+                    sources={runtimeRefs}
+                    onOpenPreview={(ref) => setPreviewRef(ref)}
+                  />
+                ) : null
+              })()}
               
               <div className="space-y-4">
                 {arrayValue.map((item: any, index: number) => (
@@ -605,6 +731,20 @@ export default function DynamicStructuredBlock({
                   {value.length} item{value.length !== 1 ? 's' : ''}: {value.join(', ')}
                 </div>
               )}
+              {(() => {
+                const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
+                if (!show) return null
+                const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
+                const runtimeRefs: SourceRef[] = runtime
+                  .filter((r: any) => r && r.field_path === fieldPath)
+                  .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                return runtimeRefs.length ? (
+                  <ProvenanceChips
+                    sources={runtimeRefs}
+                    onOpenPreview={(ref) => setPreviewRef(ref)}
+                  />
+                ) : null
+              })()}
             </div>
           ))
         }
@@ -612,7 +752,12 @@ export default function DynamicStructuredBlock({
       case 'object':
         return (
           <div key={fieldPath} className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-700">{field.label}</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-medium text-gray-700">{field.label}</h4>
+              {process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' && field.mode && (
+                <FieldModeBadge mode={field.mode} />
+              )}
+            </div>
             <div className="pl-4 border-l-2 border-gray-200 space-y-2">
               {field.children?.map(childField => (
                 <React.Fragment key={childField.key}>
@@ -626,7 +771,7 @@ export default function DynamicStructuredBlock({
       default: // string
         return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className="space-y-2 h-fit">
-            <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
+            <LabelRow />
             <textarea
               value={value || ''}
               onChange={(e) => updateFieldValue(e.target.value, false)}
@@ -634,7 +779,25 @@ export default function DynamicStructuredBlock({
               placeholder={field.placeholder}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
+              disabled={isLocked}
+              title={isLocked ? 'Locked by user settings' : undefined}
             />
+            {(() => {
+              const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
+              if (!show) return null
+              const schemaRefs = field.source_refs || []
+              const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
+              const runtimeRefs: SourceRef[] = runtime
+                .filter((r: any) => r && r.field_path === fieldPath)
+                .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+              const combined = [...schemaRefs, ...runtimeRefs]
+              return combined.length ? (
+                <ProvenanceChips
+                  sources={combined}
+                  onOpenPreview={(ref) => setPreviewRef(ref)}
+                />
+              ) : null
+            })()}
           </div>
         ))
     }
@@ -667,6 +830,28 @@ export default function DynamicStructuredBlock({
         />
       ) : (
         <div className="p-6">
+          {(() => {
+            const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
+            if (!show) return null
+            const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
+            const sectionRefs: SourceRef[] = Array.from(new Map(
+              runtime
+                .filter((r: any) => r && r.artifactId)
+                .map((r: any) => [r.artifactId, { artifactId: r.artifactId, confidence: r.confidence } as SourceRef])
+            ).values())
+            if (sectionRefs.length === 0) return null
+            return (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-medium text-gray-700">Sources</h4>
+                </div>
+                <ProvenanceChips
+                  sources={sectionRefs}
+                  onOpenPreview={(ref) => setPreviewRef(ref)}
+                />
+              </div>
+            )
+          })()}
           {/* Dynamic Fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 items-start">
             {schema.fields.map(field => (
@@ -692,6 +877,38 @@ export default function DynamicStructuredBlock({
         }}
         sectionType={schema.key}
         />
+
+      {/* Provenance Preview (lightweight) */}
+      {previewRef && (
+        <BaseModal
+          isOpen={!!previewRef}
+          title="Source Preview"
+          onClose={() => setPreviewRef(null)}
+          actions={<></>}
+        >
+          <div className="p-4 space-y-2 text-sm">
+            <div className="text-slate-700"><span className="font-medium">Artifact:</span> {previewRef.artifactId}</div>
+            {previewRef.page !== undefined && (
+              <div className="text-slate-700"><span className="font-medium">Page:</span> {previewRef.page}</div>
+            )}
+            {previewRef.timestamp && (
+              <div className="text-slate-700"><span className="font-medium">Time:</span> {`${Math.floor(previewRef.timestamp.startSec/60)}:${String(Math.round(previewRef.timestamp.startSec%60)).padStart(2,'0')} – ${Math.floor(previewRef.timestamp.endSec/60)}:${String(Math.round(previewRef.timestamp.endSec%60)).padStart(2,'0')}`}</div>
+            )}
+            {previewRef.confidence !== undefined && (
+              <div className="text-slate-700"><span className="font-medium">Confidence:</span> {Math.round(previewRef.confidence*100)}%</div>
+            )}
+            {previewRef.note && (
+              <div className="text-slate-700"><span className="font-medium">Note:</span> {previewRef.note}</div>
+            )}
+            {previewRef.region && (
+              <div className="text-slate-700"><span className="font-medium">Region:</span> x:{previewRef.region.x}, y:{previewRef.region.y}, w:{previewRef.region.width}, h:{previewRef.region.height}</div>
+            )}
+            <div className="mt-3 text-slate-500">
+              Preview of the exact page/region can be wired to your Sources viewer. This is a safe placeholder.
+            </div>
+          </div>
+        </BaseModal>
+      )}
     </div>
   )
 }

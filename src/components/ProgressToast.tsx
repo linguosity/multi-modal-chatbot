@@ -81,7 +81,7 @@ export default function ProgressToast({ toast, onDismiss }: ProgressToastProps) 
         )}
       </div>
       
-      {(toast.status === 'error' || toast.status === 'timeout') && onDismiss && (
+      {onDismiss && (
         <button
           onClick={() => onDismiss(toast.id)}
           className="flex-shrink-0 p-1 hover:bg-white/50 rounded transition-colors"

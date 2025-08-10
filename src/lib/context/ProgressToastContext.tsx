@@ -40,10 +40,8 @@ export function ProgressToastProvider({ children }: { children: React.ReactNode 
   }
 
   const dismissToast = (id: string) => {
-    // Remove specific toast
-    const currentToasts = progressToastDispatcher.getActiveToasts()
-    currentToasts.delete(id)
-    setToasts(Array.from(currentToasts.values()))
+    // Remove specific toast using the dispatcher's method
+    progressToastDispatcher.removeToast(id)
   }
 
   return (
