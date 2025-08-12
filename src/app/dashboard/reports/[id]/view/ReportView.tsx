@@ -1,7 +1,9 @@
 'use client';
-import React, { Fragment } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 import { useReport } from '@/lib/context/ReportContext';
 import { renderStructuredData, formatDate } from '@/lib/report-renderer';
+import { hydrateSection } from '@/lib/render/hydrateSection';
+import { safeStringify } from '@/lib/utils/safeStringify';
 
 interface StudentInfo {
   firstName?: string;
@@ -107,9 +109,16 @@ function StudentInfoTable({ studentInfo, evaluationDate, evaluator }: {
 
 export default function ReportView() { // Removed props
   const { report } = useReport(); // Use the hook to get the report
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
-  if (!report) {
-    return <div>Loading report...</div>; // Or some other loading state
+  // Avoid flicker by delaying render until client hydration completes
+  if (!mounted || !report) {
+    return (
+      <div className="report-container">
+        <div className="text-sm text-gray-500">Loading report…</div>
+      </div>
+    )
   }
 
   // Extract student info with same priority as StudentBioCard
@@ -192,7 +201,7 @@ export default function ReportView() { // Removed props
   
   return (
     <div className="report-container">
-            <style jsx global>{`
+      <style jsx global>{`
         /* Professional Report Styling */
         .report-container {
           font-family: 'Inter', 'Times New Roman', serif;
@@ -531,8 +540,82 @@ export default function ReportView() { // Removed props
               className="tiptap"
               dangerouslySetInnerHTML={{
                 __html: (() => {
-                  const htmlToRender = section.hydratedHtml || (section.structured_data ? renderStructuredData(section.structured_data, section.sectionType) : '');
-                  console.log('🖼️ ReportView rendering section:', {
+                  let source: 'server_prehydration' | 'client_hydration' | 'structured_renderer' | 'raw' = 'raw';
+                  // Prefer pre-hydrated HTML when available
+                  if (section.hydratedHtml && section.hydratedHtml.trim() !== '') {
+                    try {
+                      const ai = (section as any).structured_data?.assessment_items;
+                      if (Array.isArray(ai)) {
+                        const sample = ai.slice(0, 3).map((it: any) => it?.tool_name || it?.title || it?.name || '[unnamed]');
+                        console.log(`🔎 Client: Section '${section.title}' server prehydrated, assessment_items sample:`, sample);
+                      }
+                    } catch {}
+                    source = 'server_prehydration';
+                    return section.hydratedHtml;
+                  }
+
+                  const hasStructured = !!section.structured_data && Object.keys(section.structured_data || {}).length > 0;
+                  const hasPlaceholders = typeof section.content === 'string' && /\{[^}]+\}|\[[^\]]+\]/.test(section.content);
+
+                  // Determine effective type once for decision logic
+                  const normalizeType = (t?: string | null, title?: string) => {
+                    const tnorm = (t || '').toString().trim().toLowerCase();
+                    if (tnorm) return tnorm;
+                    const name = (title || '').toString().trim().toLowerCase();
+                    switch (name) {
+                      case 'assessment results': return 'assessment_results';
+                      case 'assessment tools': return 'assessment_tools';
+                      case 'validity statement': return 'validity_statement';
+                      case 'recommendations': return 'recommendations';
+                      case 'student information': return 'student_information';
+                      case 'eligibility checklist': return 'eligibility_checklist';
+                      default: return tnorm;
+                    }
+                  }
+                  const effectiveType = normalizeType(section.sectionType as any, section.title)
+
+                  // If this is a known structured section, prefer structured renderer over template hydration
+                  const isKnownStructured = ['assessment_results','assessment_tools','validity_statement','recommendations'].includes(effectiveType)
+                  // Hydrate templates if either it's not a known structured section OR there is no structured data to render
+                  if (hasPlaceholders && (!isKnownStructured || !hasStructured)) {
+                    try {
+                      console.log(`🧪 Client: Hydrating template for section '${section.title}', hasStructured=${hasStructured}`);
+                      const hydrated = hydrateSection({
+                        html: section.content || '',
+                        data: section.structured_data || {},
+                        reportMeta: (report as any) || {},
+                      });
+                      console.log(`🧪 Client: Hydrated length=${hydrated?.length || 0}, preview=`, hydrated?.substring(0, 160));
+                      if (hydrated && hydrated.trim() !== '') {
+                        source = 'client_hydration';
+                        return hydrated;
+                      }
+                    } catch {}
+                  } else if (hasPlaceholders && isKnownStructured) {
+                    console.log(`ℹ️ Client: Skipping template hydration for known structured section '${section.title}' (type=${effectiveType})`)
+                  }
+
+                  // Otherwise, use structured renderers when applicable
+                  if (hasStructured) {
+                    try {
+                      const ai = (section as any).structured_data?.assessment_items;
+                      if (Array.isArray(ai)) {
+                        const sample = ai.slice(0, 3).map((it: any) => it?.tool_name || it?.title || it?.name || '[unnamed]');
+                        console.log(`🔎 Client: Section '${section.title}' type=${effectiveType} assessment_items sample:`, sample);
+                      }
+                    } catch {}
+                    const rendered = renderStructuredData(section.structured_data, effectiveType, { report });
+                    if (rendered && rendered.trim() !== '') {
+                      source = 'structured_renderer';
+                      return rendered;
+                    }
+                  }
+
+                  // Fallback to raw content or empty
+                  const htmlToRender = section.content || '';
+                  const DEBUG = process?.env?.NEXT_PUBLIC_DEBUG === 'true';
+                  if (DEBUG) {
+                    console.log('🖼️ ReportView rendering section:', {
                     sectionId: section.id,
                     sectionTitle: section.title,
                     originalContentLength: section.content?.length || 0,
@@ -541,8 +624,10 @@ export default function ReportView() { // Removed props
                     hydratedHtmlPreview: section.hydratedHtml?.substring(0, 100) + (section.hydratedHtml && section.hydratedHtml.length > 100 ? '...' : ''),
                     finalHtmlLength: htmlToRender.length,
                     finalHtmlPreview: htmlToRender.substring(0, 100) + (htmlToRender.length > 100 ? '...' : ''),
-                    hasStructuredData: !!section.structured_data && Object.keys(section.structured_data).length > 0
+                    hasStructuredData: !!section.structured_data && Object.keys(section.structured_data).length > 0,
+                    renderSource: source
                   });
+                  }
                   return htmlToRender;
                 })()
               }}

@@ -265,6 +265,22 @@ export async function getReportForView(reportId: string): Promise<Report | null>
         });
         
         let hydratedHtml;
+        let renderSource: 'server_prehydration' | 'client_hydration' | 'structured_renderer' | 'raw' = 'raw';
+        const normalizeType = (t?: string | null, title?: string) => {
+          const tnorm = (t || '').toString().trim().toLowerCase();
+          if (tnorm) return tnorm;
+          const name = (title || '').toString().trim().toLowerCase();
+          switch (name) {
+            case 'assessment results': return 'assessment_results';
+            case 'assessment tools': return 'assessment_tools';
+            case 'validity statement': return 'validity_statement';
+            case 'recommendations': return 'recommendations';
+            case 'student information': return 'student_information';
+            case 'eligibility checklist': return 'eligibility_checklist';
+            default: return tnorm;
+          }
+        }
+        const effectiveType = normalizeType(s.sectionType as any, s.title);
         try {
           // Check if this section has actual user content (not just template placeholders)
           const hasUserContent = s.content && s.content.trim() !== '' && 
@@ -274,44 +290,67 @@ export async function getReportForView(reportId: string): Promise<Report | null>
           
           // For sections with structured data that have specific renderers, prefer structured rendering
           const hasStructuredRenderer = (
-            (s.sectionType === 'assessment_results' && (safeStructuredData as any).assessment_items && Array.isArray((safeStructuredData as any).assessment_items)) ||
-            (s.sectionType === 'assessment_tools' && (safeStructuredData as any).tools && Array.isArray((safeStructuredData as any).tools)) ||
-            (s.sectionType === 'validity_statement' && Object.keys(safeStructuredData).length > 0) ||
-            (s.sectionType === 'recommendations' && Object.keys(safeStructuredData).length > 0)
+            (effectiveType === 'assessment_results' && (safeStructuredData as any).assessment_items && Array.isArray((safeStructuredData as any).assessment_items)) ||
+            (effectiveType === 'assessment_tools' && (safeStructuredData as any).tools && Array.isArray((safeStructuredData as any).tools)) ||
+            (effectiveType === 'validity_statement' && Object.keys(safeStructuredData).length > 0) ||
+            (effectiveType === 'recommendations' && Object.keys(safeStructuredData).length > 0)
           );
-          
-          if (hasUserContent) {
+
+          // Debug: summarize assessment_items for traceability
+          try {
+            const ai = (safeStructuredData as any).assessment_items;
+            if (Array.isArray(ai)) {
+              const sample = ai.slice(0, 3).map((it: any) => it?.tool_name || it?.title || it?.name || '[unnamed]');
+              console.log(`🔎 Section ${index} '${s.title}' type=${effectiveType} assessment_items sample:`, sample);
+            }
+          } catch {}
+
+          // Prefer structured renderer for known types to avoid leaking raw placeholders
+          if (hasStructuredRenderer) {
+            console.log(`🔍 Section ${index} (${effectiveType}) has structured data, using structured rendering`);
+            const { renderStructuredData } = await import('@/lib/report-renderer');
+            hydratedHtml = renderStructuredData(safeStructuredData, effectiveType, { report });
+            renderSource = 'structured_renderer'
+          } else if (hasUserContent) {
             // User has typed actual content - use it directly with minimal hydration
             console.log(`🔍 Section ${index} has user content, using direct content with hydration`);
             hydratedHtml = hydrateSection(hydrationInput);
-          } else if (hasStructuredRenderer) {
-            console.log(`🔍 Section ${index} (${s.sectionType}) has structured data, using structured rendering`);
-            const { renderStructuredData } = await import('@/lib/report-renderer');
-            hydratedHtml = renderStructuredData(safeStructuredData, s.sectionType);
+            renderSource = 'server_prehydration'
           } else if (Object.keys(safeStructuredData).length > 0) {
             // Has structured data but no specific renderer - create basic display
             console.log(`🔍 Section ${index} has structured data but no specific renderer, creating basic display`);
             hydratedHtml = createBasicStructuredDataDisplay(safeStructuredData, s.title);
+            renderSource = 'structured_renderer'
           } else {
             // No user content and no structured data - try hydration anyway in case it's a template
             hydratedHtml = hydrateSection(hydrationInput);
+            renderSource = 'server_prehydration'
           }
           
           // Final fallback if still empty
           if (!hydratedHtml || hydratedHtml.trim() === '') {
             hydratedHtml = s.content || `<p><em>No content available for ${s.title}</em></p>`;
+            renderSource = 'raw'
           }
         } catch (hydrationError) {
           console.error(`❌ Error during hydrateSection for section ${index}:`, hydrationError);
           // Fallback to original content if hydration fails
           hydratedHtml = s.content || `<p><em>Error hydrating section: ${s.title}</em></p>`;
+          renderSource = 'raw'
         }
         
         const hydratedSection = {
           ...s, // Keep all existing fields
           structured_data: safeStructuredData, // Use the safe copy
           hydratedHtml,
+          renderSource,
         };
+
+        // Debug: log final render source and preview
+        try {
+          console.log(`🧾 Section ${index} '${hydratedSection.title}' final renderSource=${hydratedSection.renderSource}, type=${effectiveType}, htmlLen=${hydratedSection.hydratedHtml?.length || 0}`);
+          console.log('🧾 HTML preview:', (hydratedSection.hydratedHtml || '').substring(0, 160));
+        } catch {}
         
         return hydratedSection;
       } catch (hydrationError) {

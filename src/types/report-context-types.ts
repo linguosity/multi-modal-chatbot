@@ -13,4 +13,5 @@ export interface ReportContextType {
   showJson: boolean;
   setShowJson: (show: boolean) => void;
   loading: boolean;
+  realtime?: { broadcast?: string; pg?: string };
 }

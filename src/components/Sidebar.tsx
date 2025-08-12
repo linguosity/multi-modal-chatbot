@@ -6,6 +6,7 @@ import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useReport } from "@/lib/context/ReportContext";
+import { useRecentUpdates } from "@/lib/context/RecentUpdatesContext";
 import { useState } from "react";
 
 export default function Sidebar() {
@@ -15,6 +16,7 @@ export default function Sidebar() {
   const inReport = pathname.startsWith("/dashboard/reports/") && id;
 
   const { report } = useReport();
+  const { isRecentlyUpdated, getFieldChanges } = useRecentUpdates();
   const [isTocOpen, setIsTocOpen] = useState(true);
 
   const NavLink = ({ href, icon: Icon, children, isActive }: any) => (
@@ -129,7 +131,16 @@ export default function Sidebar() {
                           pathname.endsWith(`/${section.id}`) && "font-semibold text-gray-900 bg-gray-100"
                         )}
                       >
-                        {section.title}
+                        <span className="inline-flex items-center gap-2">
+                          {section.title}
+                          {isRecentlyUpdated(section.id) && (
+                            <span
+                              className="inline-flex items-center justify-center w-1.5 h-1.5 rounded-full bg-blue-500/80"
+                              title={`${getFieldChanges(section.id).length || 1} recent update(s)`}
+                              aria-label="Recently updated"
+                            />
+                          )}
+                        </span>
                       </Link>
                     ))}
                   </div>

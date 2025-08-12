@@ -7,13 +7,75 @@ type Input = {
   reportMeta?: Record<string, any>;
 };
 
-const tokenMapFromMeta = (meta: any = {}) => ({
-  '[Student Name]': meta?.studentBio?.firstName
-    ? `${meta.studentBio.firstName} ${meta.studentBio.lastName ?? ''}`.trim()
-    : '[Student Name]',
-  '[Evaluation Date]': meta?.evaluationDate ?? '[Evaluation Date]',
-  // add more global tokens as needed…
-});
+const tokenMapFromMeta = (meta: any = {}) => {
+  // Support both meta.studentBio and meta.metadata.studentBio shapes
+  const bio = meta?.studentBio || meta?.metadata?.studentBio || {};
+  const first = bio.firstName || '';
+  const last = bio.lastName || '';
+  const fullName = `${first} ${last}`.trim();
+
+  return {
+    '[Student Name]': fullName || '[Student Name]',
+    '[Evaluation Date]': meta?.evaluationDate || meta?.createdAt
+      ? new Date(meta?.evaluationDate || meta?.createdAt).toLocaleDateString()
+      : '[Evaluation Date]',
+    // add more global tokens as needed…
+  };
+};
+
+function isPrimitive(v: any) {
+  return (
+    typeof v === 'string' ||
+    typeof v === 'number' ||
+    typeof v === 'boolean'
+  );
+}
+
+function summarizeObject(obj: any): string {
+  if (!obj || typeof obj !== 'object') return String(obj ?? '');
+  // Prefer common display fields
+  const name = obj.title || obj.tool_name || obj.name || obj.label;
+  if (name) {
+    const score = obj.standard_score ?? obj.score ?? undefined;
+    return score !== undefined ? `${name} (${score})` : String(name);
+  }
+  // Shallow key: value for primitives
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (isPrimitive(v)) parts.push(`${k.replace(/_/g, ' ')}: ${v}`);
+  }
+  return parts.length ? parts.join(', ') : JSON.stringify(obj);
+}
+
+function formatValueForPlaceholder(value: any, fieldName?: string): string {
+  // Booleans → Yes/No
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  // Nullish/empty
+  if (value === undefined || value === null) return '';
+  // Arrays
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '';
+    // Primitives: join
+    if (value.every(isPrimitive)) return value.join(', ');
+    // Objects: try to summarize
+    // Special case: assessment items-like arrays
+    if (
+      fieldName && /assessment[_-]?items?/i.test(fieldName) &&
+      value.every(v => typeof v === 'object')
+    ) {
+      return value
+        .map((it: any) => summarizeObject(it))
+        .join('; ');
+    }
+    return value.map(v => (typeof v === 'object' ? summarizeObject(v) : String(v))).join('; ');
+  }
+  // Objects
+  if (typeof value === 'object') {
+    return summarizeObject(value);
+  }
+  // Default to string
+  return String(value);
+}
 
 export function hydrateSection({ html, data, reportMeta }: Input) {
   console.log("🔍 hydrateSection: Starting hydration");
@@ -50,11 +112,26 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
     /\{([^}]+)\}/g,
     (_match, fieldName) => {
       let value = getPath(data, fieldName);
+      try {
+        const kind = Array.isArray(value) ? 'array' : typeof value
+        if (kind === 'array') {
+          const sample = (value as any[]).slice(0,3).map((it) => (typeof it === 'object' ? (it?.title || (it as any)?.tool_name || (it as any)?.name || '[obj]') : String(it)))
+          console.log(`🧩 hydrateSection: placeholder {${fieldName}} value=array sample=`, sample)
+        } else {
+          console.log(`🧩 hydrateSection: placeholder {${fieldName}} type=${kind}`)
+        }
+      } catch {}
       
       // Handle special cases and provide fallbacks
       if (value === undefined || value === null || value === '') {
         // Try alternative field names or provide contextual defaults
         switch (fieldName) {
+          case 'student_name': {
+            const first = getPath(data, 'first_name') || getPath(reportMeta, 'studentBio.firstName') || '';
+            const last = getPath(data, 'last_name') || getPath(reportMeta, 'studentBio.lastName') || '';
+            value = `${first} ${last}`.trim();
+            break;
+          }
           case 'first_name':
             value = getPath(data, 'firstName') || getPath(reportMeta, 'studentBio.firstName') || '';
             break;
@@ -91,7 +168,9 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
       }
       
       if (value !== undefined && value !== null && value !== '') {
-        return escapeHtml(String(value));
+        const formatted = formatValueForPlaceholder(value, fieldName)
+        try { console.log(`🧩 hydrateSection: formatted {${fieldName}} ->`, formatted.substring(0,120)) } catch {}
+        return escapeHtml(formatted);
       }
       
       // Return empty string for missing data instead of showing placeholder
@@ -105,7 +184,7 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
     /<span\s+data-field="([^"]+)"[^>]*>(.*?)<\/span>/g,
     (_m, field, fallback) => {
       const v = getPath(data, field); // e.g., "standardized_tests"
-      return escapeHtml(String(v ?? fallback ?? ''));
+      return escapeHtml(formatValueForPlaceholder(v ?? fallback ?? ''));
     }
   );
 

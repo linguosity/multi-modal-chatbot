@@ -7,8 +7,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Brain, FileText, Upload, Sparkles, CheckCircle, Loader2, GripVertical, X } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useProgressToasts } from '@/lib/context/ProgressToastContext'
+import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 import { useReport } from '@/lib/context/ReportContext'
 import { getSectionSchemaForType } from '@/lib/structured-schemas'
+import { v4 as uuidv4 } from 'uuid'
 interface FileMeta {
   id: string
   file: File
@@ -25,7 +27,8 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
 }) => {
   const pathname = usePathname()
   const { processLogLine, clearAllToasts } = useProgressToasts()
-  const { report } = useReport()
+  const { addRecentUpdate } = useRecentUpdates()
+  const { report, refreshReport } = useReport()
   
   // UI State
   const [isOpen, setIsOpen] = useState(false)
@@ -114,9 +117,30 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
     setIsProcessing(true)
     clearAllToasts()
     
+    // Close the drawer immediately so toasts are visible (unless dry run)
+    if (!dryRun) {
+      setIsOpen(false)
+    }
+    
+    // Emit staged progress toasts to indicate work while request runs
+    const firstSectionId = selectedSectionIds[0] || '00000000-0000-0000-0000-000000000000'
+    const stage = (slug: string, delay: number) => {
+      setTimeout(() => {
+        // Use a deterministic synthetic field to match toast parser
+        processLogLine(`📝 Processing update: ${firstSectionId}.${slug} ... replace`)
+      }, delay)
+    }
+    stage('uploading_files', 0)
+    stage('extracting_text', 900)
+    stage('analyzing_with_ai', 1800)
+    stage('applying_updates', 2700)
+    
     try {
       const reportId = pathname.split('/')[3]
-      
+      // Optional SSE progress subscription
+      const enableSse = process?.env?.NEXT_PUBLIC_ENABLE_SSE_PROGRESS === 'true'
+      const operationId = enableSse ? uuidv4() : null
+
       // Create FormData for file uploads
       const formData = new FormData()
       formData.append('reportId', reportId)
@@ -124,6 +148,23 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       formData.append('replace', replaceMode.toString())
       formData.append('dryRun', dryRun.toString())
       formData.append('text', rawText)
+      if (operationId) formData.append('operationId', operationId)
+
+      // Subscribe to SSE before sending request
+      let es: EventSource | null = null
+      if (operationId) {
+        try {
+          es = new EventSource(`/api/stream/${operationId}`)
+          es.onmessage = (evt) => {
+            if (!evt?.data) return
+            // Route raw server log lines into the toast pipeline
+            processLogLine(evt.data)
+          }
+          es.onerror = () => {
+            // Silent; stream may close naturally at end
+          }
+        } catch {}
+      }
 
       // Attach sectionInfo and sectionSchemas as fallbacks (DB-agnostic mode)
       if (report?.sections && selectedSectionIds.length > 0) {
@@ -154,6 +195,15 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       
       if (result.success) {
         setProcessingResults(result.results)
+        // Force a refresh to ensure UI sees latest DB changes in case realtime misses
+        try { await refreshReport() } catch {}
+
+        // Mark staged steps as completed for non-SSE flows
+        const completeStage = (slug: string) => processLogLine(`✅ Updated ${firstSectionId}.${slug}`)
+        completeStage('uploading_files')
+        completeStage('extracting_text')
+        completeStage('analyzing_with_ai')
+        completeStage('applying_updates')
         
         // Display granular update results as progress toasts (simulate procedural stacking)
         const updates: any[] = (result.results.updateResults && Array.isArray(result.results.updateResults)) ? result.results.updateResults : []
@@ -166,6 +216,7 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
           setTimeout(() => {
             if (u.success) {
               processLogLine(`✅ Updated ${u.sectionId}.${fp}`)
+              try { addRecentUpdate(u.sectionId, [fp], 'ai_update', 'notice') } catch {}
             } else {
               processLogLine(`❌ Failed to update ${u.sectionId}.${fp}`)
             }
@@ -174,22 +225,31 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
         
         onProcessData?.(rawText)
         
-        // In dryRun, keep drawer open to allow applying proposed updates
-        if (!dryRun) {
-          setTimeout(() => {
-            setIsOpen(false)
-            setRawText('')
-            setFiles([])
-            setProcessingResults(null)
-          }, 4000)
-        }
+        // Reset input state after a brief delay
+        setTimeout(() => {
+          setRawText('')
+          setFiles([])
+          setProcessingResults(null)
+        }, 1500)
       } else {
+        // Mark staged steps as failed for visibility
+        processLogLine(`❌ Failed to update ${firstSectionId}.applying_updates`)
+        processLogLine(`❌ Failed to update ${firstSectionId}.analyzing_with_ai`)
+        processLogLine(`❌ Failed to update ${firstSectionId}.extracting_text`)
+        processLogLine(`❌ Failed to update ${firstSectionId}.uploading_files`)
         processLogLine(`❌ Processing failed: ${result.error}`)
       }
     } catch (error) {
+      // Mark staged steps as failed for visibility
+      processLogLine(`❌ Failed to update ${firstSectionId}.applying_updates`)
+      processLogLine(`❌ Failed to update ${firstSectionId}.analyzing_with_ai`)
+      processLogLine(`❌ Failed to update ${firstSectionId}.extracting_text`)
+      processLogLine(`❌ Failed to update ${firstSectionId}.uploading_files`)
       processLogLine(`❌ Error during processing: ${error}`)
     } finally {
       setIsProcessing(false)
+      // Close SSE stream if open
+      try { /* @ts-ignore */ es?.close?.() } catch {}
     }
   }
 
@@ -255,7 +315,8 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
           <SheetTitle>AI Assessment Intake</SheetTitle>
         </SheetHeader>
 
-        <div className="flex flex-col gap-6 h-full mt-6">
+        {/* Scrollable content area to ensure submit is reachable on small screens */}
+        <div className="flex flex-col gap-6 mt-6 h-[calc(100vh-8rem)] overflow-y-auto pr-1">
 
           {/* Target Sections */}
           {report?.sections && report.sections.length > 0 && (

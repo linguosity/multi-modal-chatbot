@@ -322,6 +322,9 @@ export const ASSESSMENT_TOOLS_SECTION: SectionSchema = {
       children: [
         { key: 'title', label: 'Title', type: 'string', required: true },
         { key: 'administered_date', label: 'Administered Date', type: 'date' },
+        { key: 'measure_type', label: 'Measure Type', type: 'string', placeholder: 'Standardized, Observation, Interview, Narrative...' },
+        { key: 'target_population', label: 'Target Population', type: 'string', placeholder: 'Age range / setting' },
+        { key: 'purpose', label: 'Purpose / Notes', type: 'string', placeholder: 'Brief description of tool purpose' },
         { key: 'completed', label: 'Completed', type: 'boolean' },
         { key: 'domains_assessed', label: 'Domains Assessed', type: 'array' },
         { key: 'notes', label: 'Notes', type: 'string' }

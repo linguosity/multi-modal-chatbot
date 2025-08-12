@@ -51,6 +51,10 @@ export function getScoreClass(score: number | string): string {
  */
 export function renderAssessmentTable(items: AssessmentItem[]): string {
   if (!items || items.length === 0) return '';
+  try {
+    const sample = items.slice(0, 3).map((it) => it.tool_name || it.title || '[unnamed]');
+    console.log('📊 renderAssessmentTable items sample:', sample);
+  } catch {}
 
   const rows = items.map(item => `
     <tr>
@@ -85,8 +89,15 @@ export function renderAssessmentTable(items: AssessmentItem[]): string {
 /**
  * Render validity statement with structured data
  */
-export function renderValidityStatement(data: ValidityData): string {
-  const studentName = data.student_name || '[Student Name]';
+export function renderValidityStatement(data: ValidityData, opts?: { report?: any }): string {
+  // Prefer explicit student name in data, else derive from report metadata
+  let studentName = data.student_name || '';
+  if (!studentName && opts?.report) {
+    try {
+      studentName = extractStudentName(opts.report);
+    } catch {}
+  }
+  if (!studentName) studentName = '[Student Name]';
   const cooperation = data.cooperation_level || 'cooperative';
   const validityRating = data.validity_rating || 'valid';
   
@@ -173,43 +184,190 @@ export function renderRecommendations(data: RecommendationData): string {
 /**
  * Main function to render structured data based on section type
  */
-export function renderStructuredData(data: any, sectionType: string): string {
+// Helper to make arrays/objects readable in generic render path
+function summarizeValue(value: any): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '';
+    if (value.every(v => typeof v !== 'object')) return value.join(', ');
+    return value.map((v: any) => summarizeValue(v)).join('; ');
+  }
+  if (typeof value === 'object') {
+    const name = (value && (value.title || value.tool_name || value.name || value.label)) as string | undefined;
+    if (name) {
+      const score = (value as any).standard_score ?? (value as any).score;
+      return score !== undefined ? `${name} (${score})` : String(name);
+    }
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v !== 'object') parts.push(`${k.replace(/_/g, ' ')}: ${summarizeValue(v)}`);
+    }
+    return parts.length ? parts.join(', ') : JSON.stringify(value);
+  }
+  return String(value);
+}
+
+export function renderStructuredData(data: any, sectionType: string, opts?: { report?: any }): string {
   if (!data) return '';
 
   switch (sectionType) {
     case 'assessment_results':
       {
         let html = '';
-        if (data.assessment_items && Array.isArray(data.assessment_items) && data.assessment_items.length > 0) {
-          html += renderAssessmentTable(data.assessment_items);
+        let suppressNotes = false;
+        try {
+          const ai = (data as any).assessment_items;
+          if (Array.isArray(ai)) {
+            const sample = ai.slice(0, 3).map((it: any) => it?.tool_name || it?.title || it?.name || '[unnamed]');
+            console.log('📊 assessment_results: assessment_items sample:', sample);
+          }
+        } catch {}
+        // Prefer domain_summary if present
+        if (Array.isArray((data as any).domain_summary) && (data as any).domain_summary.length > 0) {
+          const rows = (data as any).domain_summary.map((d: any) => {
+            const skill = (d.domain || '').toString().replace(/\b\w/g, (c: string) => c.toUpperCase())
+            const canDo = Array.isArray(d.can_do) ? d.can_do.join('; ') : (d.can_do || '')
+            const support = Array.isArray(d.support_needed) ? d.support_needed.join('; ') : (d.support_needed || '')
+            const ctx = Array.isArray(d.contexts) && d.contexts.length ? ` [${d.contexts.join(', ')}]` : ''
+            const src = Array.isArray(d.sources) && d.sources.length ? (d.sources[0].split('/').pop() || 'OBS') : 'OBS'
+            return `
+              <tr>
+                <td>${skill}</td>
+                <td>${canDo || ''}</td>
+                <td>${support || ''}${ctx}</td>
+                <td>•</td>
+                <td>${src}</td>
+              </tr>
+            `
+          }).join('')
+          if (rows.trim()) {
+            html += `
+              <div class="assessment-results-table">
+                <table class="assessment-table">
+                  <thead>
+                    <tr>
+                      <th>Skill</th>
+                      <th>Can Do</th>
+                      <th>Support Needed</th>
+                      <th>Support</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rows}
+                  </tbody>
+                </table>
+              </div>
+            `
+            suppressNotes = true
+          }
+        } else {
+          // Domain-first summary table (fallback using note fields)
+          const domains = [
+            { key: 'receptive_language_notes', label: 'Receptive' },
+            { key: 'expressive_language_notes', label: 'Expressive' },
+            { key: 'pragmatic_language_notes', label: 'Pragmatics' },
+            { key: 'articulation_notes', label: 'Articulation' },
+            { key: 'voice_notes', label: 'Voice' },
+            { key: 'fluency_notes', label: 'Fluency' },
+          ];
+          const hasAnyDomain = domains.some(d => data[d.key])
+          if (hasAnyDomain) {
+            const rows = domains.map(d => {
+              const growth = data[d.key] || ''
+              if (!growth) return ''
+              // Derive simple source label from provenance, if present
+              let sourceLabel = ''
+              try {
+                const prov = Array.isArray(data.__provenance) ? data.__provenance : []
+                const first = prov.find((p: any) => (p?.field_path || '').endsWith(d.key)) || prov[0]
+                if (first?.artifactId) sourceLabel = first.artifactId.split('/').pop() || 'OBS'
+              } catch {}
+              return `
+                <tr>
+                  <td>${d.label}</td>
+                  <td>${growth}</td>
+                  <td></td>
+                  <td>•</td>
+                  <td>${sourceLabel || 'OBS'}</td>
+                </tr>
+              `
+            }).join('')
+            if (rows.trim()) {
+              html += `
+                <div class="assessment-results-table">
+                  <table class="assessment-table">
+                    <thead>
+                      <tr>
+                        <th>Skill</th>
+                        <th>Can Do</th>
+                        <th>Support Needed</th>
+                        <th>Support</th>
+                        <th>Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rows}
+                    </tbody>
+                  </table>
+                </div>
+              `
+              suppressNotes = true
+            }
+          }
         }
-        const noteFields = [
-          { key: 'expressive_language_notes', label: 'Expressive Language Notes' },
-          { key: 'receptive_language_notes', label: 'Receptive Language Notes' },
-          { key: 'pragmatic_language_notes', label: 'Pragmatic Language Notes' },
-          { key: 'articulation_notes', label: 'Articulation/Phonology Notes' },
-          { key: 'voice_notes', label: 'Voice Notes' },
-          { key: 'fluency_notes', label: 'Fluency Notes' },
-        ];
-        const notesHtml = noteFields
-          .map(({ key, label }) => (data[key] ? `<div class="clinical-note"><strong>${label}:</strong> ${data[key]}</div>` : ''))
-          .join('');
-        html += notesHtml;
+        // Results: only standardized items table belongs here; observations now render in Assessment Tools.
+        if (data.assessment_items && Array.isArray(data.assessment_items) && data.assessment_items.length > 0) {
+          const items = data.assessment_items as any[]
+          const standardized = items.filter(it => (
+            typeof it?.standard_score === 'number' || typeof it?.percentile === 'number' || (Array.isArray(it?.subtest_scores) && it.subtest_scores.length > 0)
+          ))
+          if (standardized.length > 0) {
+            html += renderAssessmentTable(standardized as any)
+          }
+        }
+        // Only render raw note blocks if no domain/summary table rendered above
+        if (!suppressNotes) {
+          const noteFields = [
+            { key: 'expressive_language_notes', label: 'Expressive Language Notes' },
+            { key: 'receptive_language_notes', label: 'Receptive Language Notes' },
+            { key: 'pragmatic_language_notes', label: 'Pragmatic Language Notes' },
+            { key: 'articulation_notes', label: 'Articulation/Phonology Notes' },
+            { key: 'voice_notes', label: 'Voice Notes' },
+            { key: 'fluency_notes', label: 'Fluency Notes' },
+          ];
+          const notesHtml = noteFields
+            .map(({ key, label }) => (data[key] ? `<div class="clinical-note"><strong>${label}:</strong> ${data[key]}</div>` : ''))
+            .join('');
+          html += notesHtml;
+        }
         return html;
       }
     
     case 'assessment_tools':
       {
         if (data.tools && Array.isArray(data.tools) && data.tools.length > 0) {
-          const rows = data.tools.map((t: any) => `
-            <tr>
-              <td class="test-name">${t.title || t.tool_name || 'N/A'}</td>
-              <td>${t.administered_date || t.date || 'N/A'}</td>
-              <td>${typeof t.completed === 'boolean' ? (t.completed ? 'Yes' : 'No') : 'N/A'}</td>
-              <td>${Array.isArray(t.domains_assessed) ? t.domains_assessed.join(', ') : (t.domains_assessed || '')}</td>
-              <td>${t.notes || ''}</td>
-            </tr>
-          `).join('');
+          const tools = data.tools as any[]
+          const rows = tools.map((t: any) => {
+            const name = t.title || t.tool_name || 'N/A'
+            const date = t.administered_date || t.date || 'N/A'
+            const purpose = t.purpose || t.description || t.qualitative_description || ''
+            const target = t.target_population || ''
+            const measure = t.measure_type || t.tool_type || ''
+            return `
+              <tr>
+                <td class="test-name">${name}</td>
+                <td>${date}</td>
+                <td>${measure}</td>
+                <td>${target}</td>
+                <td>${purpose}</td>
+              </tr>
+            `
+          }).join('')
+
           return `
             <div class="assessment-results-table">
               <table class="assessment-table">
@@ -217,21 +375,23 @@ export function renderStructuredData(data: any, sectionType: string): string {
                   <tr>
                     <th class="test-name">Tool</th>
                     <th>Date</th>
-                    <th>Completed</th>
-                    <th>Domains</th>
-                    <th>Notes</th>
+                    <th>Measure Type</th>
+                    <th>Target Population</th>
+                    <th>Purpose / Notes</th>
                   </tr>
                 </thead>
-                <tbody>${rows}</tbody>
+                <tbody>
+                  ${rows}
+                </tbody>
               </table>
             </div>
-          `;
+          `
         }
         break;
       }
       
     case 'validity_statement':
-      return renderValidityStatement(data);
+      return renderValidityStatement(data, { report: opts?.report });
       
     case 'recommendations':
       return renderRecommendations(data);
@@ -244,16 +404,8 @@ export function renderStructuredData(data: any, sectionType: string): string {
           if (Object.prototype.hasOwnProperty.call(data, key)) {
             const value = data[key];
             const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            if (typeof value === 'boolean') {
-              html += `<p><strong>${formattedKey}:</strong> ${value ? 'Yes' : 'No'}</p>`;
-            } else if (Array.isArray(value)) {
-              html += `<p><strong>${formattedKey}:</strong> ${value.join(', ')}</p>`;
-            } else if (typeof value === 'object' && value !== null) {
-              // Handle nested objects by converting them to a string representation
-              html += `<p><strong>${formattedKey}:</strong> ${JSON.stringify(value)}</p>`;
-            } else if (value !== undefined && value !== null && value !== '') {
-              html += `<p><strong>${formattedKey}:</strong> ${value}</p>`;
-            }
+            const rendered = summarizeValue(value);
+            if (rendered !== '') html += `<p><strong>${formattedKey}:</strong> ${rendered}</p>`;
           }
         }
         return html;

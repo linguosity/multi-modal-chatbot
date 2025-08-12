@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
 import { ReportSchema } from '@/lib/schemas/report'
+import { normalizeReport } from '@/lib/utils/normalize-report'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { id } = params
@@ -12,7 +13,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { data: report, error } = await supabase
+  let { data: report, error } = await supabase
     .from('reports')
     .select('*')
     .eq('id', id)
@@ -24,7 +25,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return new NextResponse(JSON.stringify({ error: 'Report not found' }), { status: 404 })
   }
 
-  return NextResponse.json(report)
+  // Normalize before returning to clients
+  const normalized = normalizeReport(report as any)
+  return NextResponse.json(normalized)
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
@@ -37,7 +40,9 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const json = await request.json()
+  let json = await request.json()
+  // Normalize incoming payload so schema validation sees consistent keys
+  json = normalizeReport(json as any)
 
   // Validate with Zod schema
   const validation = ReportSchema.safeParse(json)

@@ -11,6 +11,8 @@ import { reportContextBuilder } from '@/lib/report-context-builder'
 import { validatePathAgainstSchema, coerceValueToSchema } from '@/lib/value-normalizer'
 import { SectionSchema, ASSESSMENT_RESULTS_SECTION, ASSESSMENT_TOOLS_SECTION, VALIDITY_STATEMENT_SECTION, REASON_FOR_REFERRAL_SECTION, LANGUAGE_SAMPLE_SECTION, CONCLUSION_SECTION, RECOMMENDATIONS_SECTION, ACCOMMODATIONS_SECTION } from '@/lib/structured-schemas'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
+import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const openai = new OpenAI({
@@ -32,6 +34,7 @@ export async function POST(request: NextRequest) {
     console.log('✅ Step 4: reportId extracted:', reportId)
 
     const sectionIdsRaw = formData.get('sectionIds') as string || '[]'
+    const operationId = (formData.get('operationId') as string | null) || null
     const sectionInfoRaw = formData.get('sectionInfo') as string | null
     const sectionSchemasRaw = formData.get('sectionSchemas') as string | null
     console.log('✅ Step 5: sectionIds raw:', sectionIdsRaw)
@@ -64,6 +67,45 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Step 8: Creating Supabase client...')
     const supabase = await createSupabaseServerClient()
+    const LOG_PROGRESS = process.env.SUPABASE_PROGRESS_LOG_ENABLED === 'true'
+    const dbLog = async (evt: { stage?: string; message?: string; section_id?: string | null; event_type?: string; data?: any }) => {
+      if (!LOG_PROGRESS) return
+      try {
+        await supabase.from('progress_events').insert({
+          report_id: reportId,
+          section_id: evt.section_id || null,
+          operation_id: operationId || null,
+          event_type: evt.event_type || 'progress',
+          stage: evt.stage || null,
+          message: evt.message || null,
+          data: evt.data || null,
+        })
+      } catch (e) {
+        console.warn('⚠️ progress_events insert failed (non-fatal):', e instanceof Error ? e.message : String(e))
+      }
+    }
+
+    // Optional Supabase Realtime broadcast (production-friendly alternative to postgres_changes)
+    // Default broadcast to ON unless explicitly disabled
+    const BROADCAST = process.env.SUPABASE_BROADCAST_ENABLED !== 'false'
+    let broadcastChannel: any = null
+    let broadcastPublish: (event: string, payload: any) => void = () => {}
+    if (BROADCAST && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const rt = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+        broadcastChannel = rt.channel(`report:${reportId}`)
+        await new Promise<void>((resolve) => {
+          broadcastChannel.subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') resolve()
+          })
+        })
+        broadcastPublish = (event: string, payload: any) => {
+          try { broadcastChannel.send({ type: 'broadcast', event, payload }) } catch {}
+        }
+      } catch (e) {
+        console.warn('⚠️ Realtime broadcast setup failed (non-fatal):', e instanceof Error ? e.message : String(e))
+      }
+    }
     console.log('✅ Step 8: Supabase client created')
 
     console.log('✅ Step 9: Building comprehensive report context...')
@@ -96,6 +138,7 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Step 10: Processing uploaded files (Claude for PDFs, OpenAI for audio transcription)...')
     const files: File[] = []
+    const uploadedFilesMeta: Array<{ id: string; name: string; type: string; size?: number; uploadDate: string; description?: string }>=[]
     let fileIndex = 0
     while (formData.get(`file_${fileIndex}`)) {
       files.push(formData.get(`file_${fileIndex}`) as File)
@@ -103,10 +146,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ Step 10: Found ${files.length} files`)
+    // SSE milestone (upload complete)
+    try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.uploading_files`) } catch {}
+    try { broadcastPublish('progress', { stage: 'uploading_files_complete' }) } catch {}
+    dbLog({ stage: 'uploading_files_complete', message: 'All files parsed', event_type: 'stage' }).catch(() => {})
 
     let processingErrors: string[] = []
 
     console.log('✅ Step 11: Getting target sections with full context...')
+    try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text ... replace`) } catch {}
+    try { broadcastPublish('progress', { stage: 'extracting_text_start' }) } catch {}
+    dbLog({ stage: 'extracting_text_start', message: 'Text extraction started', event_type: 'stage' }).catch(() => {})
     let targetSectionsWithContext = reportContextBuilder.getTargetSectionsWithContext(reportContext)
     // Fallback to client-provided sectionInfo if DB returned no sections
     const hasFallbackSections = targetSectionsWithContext.length === 0 && providedSectionInfo.length > 0
@@ -125,6 +175,7 @@ export async function POST(request: NextRequest) {
     }
     const sectionSchemaById = new Map<string, SectionSchema | undefined>()
     const sectionMetaById = new Map<string, { title: string; section_type: string }>()
+    let toolsSectionId: string | null = null
     for (const s of targetSectionsWithContext) {
       // prefer provided schema if present
       let schema: SectionSchema | undefined = providedSectionSchemas[s.id] || (s.schema as SectionSchema | undefined)
@@ -142,6 +193,9 @@ export async function POST(request: NextRequest) {
       }
       sectionSchemaById.set(s.id, schema)
       sectionMetaById.set(s.id, { title: s.title || s.id, section_type: (s as any).section_type || 'unknown' })
+      if (((s as any).section_type || '').toLowerCase() === 'assessment_tools' || (s.title || '').toLowerCase().includes('assessment tools')) {
+        toolsSectionId = s.id
+      }
     }
 
     console.log(`✅ Step 11: Found ${targetSectionsWithContext.length} target sections (including fallbacks if any)`) 
@@ -204,8 +258,16 @@ export async function POST(request: NextRequest) {
       console.log('✅ Step 14a: Added text content')
     }
 
+    const VERBOSE = (process.env.NEXT_PUBLIC_PROGRESS_VERBOSE === 'true') || (process.env.NEXT_PUBLIC_SSE_VERBOSE === 'true')
     for (const f of files) {
       try {
+        // collect source metadata for report metadata.uploadedFiles
+        const metaType = f.type.startsWith('application/pdf') ? 'pdf' : (f.type.startsWith('image/') ? 'image' : (f.type.startsWith('audio/') ? 'audio' : (f.type.startsWith('text/') ? 'text' : 'document')))
+        uploadedFilesMeta.push({ id: crypto.randomUUID(), name: f.name, type: metaType, size: (f as any).size, uploadDate: new Date().toISOString() })
+        // Verbose per-file progress
+        if (VERBOSE) {
+          try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()} ... replace`) } catch {}
+        }
         if (f.type === 'application/pdf') {
           // Send PDF to Claude to extract a concise, report-ready "Main Points" summary for SLP
           const uploaded = await claude.beta.files.upload({ file: f })
@@ -276,8 +338,14 @@ export async function POST(request: NextRequest) {
             }
           })
         }
+        if (VERBOSE) {
+          try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
+        }
       } catch (e) {
         processingErrors.push(`${f.name}: ${(e as Error).message}`)
+        if (VERBOSE) {
+          try { emitProgress(operationId, `❌ Failed to update ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
+        }
       }
     }
 
@@ -296,14 +364,32 @@ export async function POST(request: NextRequest) {
     openaiContent.push(instruction)
 
     console.log(`✅ Step 14: Content array built with ${content.length} items`)
+    try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text`) } catch {}
+    try { broadcastPublish('progress', { stage: 'extracting_text_complete' }) } catch {}
+    dbLog({ stage: 'extracting_text_complete', message: 'Text extraction complete', event_type: 'stage' }).catch(() => {})
 
     console.log('✅ Step 15: Defining tool schema...')
     const reportSchemaTool = {
       name: "save_assessment_data",
-      description: "Extracts and saves structured data from assessment information with progress summaries and provenance.",
+      description: "Extracts and saves structured data with a domain-first summary (can_do/support_needed), clear tool categorization, and provenance.",
       input_schema: {
         type: "object" as const,
         properties: {
+          domain_summary: {
+            type: "array",
+            description: "Domain-first summary for Assessment Results (preferred)",
+            items: {
+              type: "object",
+              properties: {
+                domain: { type: "string" },
+                can_do: { type: "array", items: { type: "string" } },
+                support_needed: { type: "array", items: { type: "string" } },
+                contexts: { type: "array", items: { type: "string" } },
+                sources: { type: "array", items: { type: "string" } }
+              },
+              required: ["domain"]
+            }
+          },
           updates: {
             type: "array",
             description: "Array of field updates to apply to the report sections",
@@ -351,6 +437,7 @@ export async function POST(request: NextRequest) {
 
     // Step 16/17: Either use client-provided updates or call model
     let updates: any[] = []
+    let domainSummary: any[] | undefined
     const applyUpdatesRaw = formData.get('applyUpdates') as string | null
     if (applyUpdatesRaw) {
       try {
@@ -361,6 +448,8 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.log('🤖 Step 16: Calling GPT-5 (Responses API) with required tool...')
+      try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai ... replace`) } catch {}
+      try { broadcastPublish('progress', { stage: 'analyzing_with_ai_start' }) } catch {}
 
       // Define tools for Responses API
       const tools: any[] = [{
@@ -426,6 +515,8 @@ export async function POST(request: NextRequest) {
       } as any)
 
       console.log('✅ Step 16: GPT-5 Responses API call returned')
+      try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai`) } catch {}
+      try { broadcastPublish('progress', { stage: 'analyzing_with_ai_complete' }) } catch {}
       console.log('✅ Step 17: Extracting tool call from response...')
 
       const out: any[] = (response as any).output || []
@@ -480,6 +571,9 @@ export async function POST(request: NextRequest) {
         let args: any = {}
         try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments } catch { args = fn.arguments }
         updates = (args as any).updates || []
+        if (Array.isArray((args as any).domain_summary)) {
+          domainSummary = (args as any).domain_summary
+        }
         console.log(`✅ Step 17: Extracted ${updates.length} updates from model`)
       }
     }
@@ -488,6 +582,38 @@ export async function POST(request: NextRequest) {
     const results = []
     const processSummaries = []
     const resolver = new StructuredFieldPathResolver()
+
+    // If domain_summary provided, upsert into Assessment Results section before granular updates
+    if (domainSummary && domainSummary.length > 0) {
+      try {
+        const resultsSection = targetSectionsWithContext.find(s => (s as any).section_type === 'assessment_results' || ((s.title || '').toLowerCase().includes('assessment results')))
+        if (resultsSection) {
+          const { data: current } = await supabase
+            .from('report_sections')
+            .select('structured_data')
+            .eq('id', (resultsSection as any).id || resultsSection.id)
+            .single()
+          const currentSd = (current?.structured_data && typeof current.structured_data === 'object') ? current.structured_data : {}
+          const nextSd = { ...currentSd, domain_summary: domainSummary }
+          const { error: dsErr } = await supabase
+            .from('report_sections')
+            .upsert({
+              id: (resultsSection as any).id || resultsSection.id,
+              report_id: reportId,
+              title: resultsSection.title,
+              section_type: (resultsSection as any).section_type || 'assessment_results',
+              structured_data: nextSd
+            }, { onConflict: 'id' })
+          if (dsErr) {
+            console.warn('⚠️ Failed to upsert domain_summary:', dsErr.message)
+          } else {
+            console.log('✅ Upserted domain_summary into Assessment Results')
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Error handling domain_summary:', e instanceof Error ? e.message : String(e))
+      }
+    }
 
     // Helper: normalize field path by stripping section key prefixes
     function normalizeFieldPath(rawPath: string, sectionSchema?: SectionSchema): string {
@@ -551,6 +677,8 @@ export async function POST(request: NextRequest) {
 
       // Validate field path against section schema (if available)
       const sectionSchema = sectionSchemaById.get(cleanedUpdate.section_id)
+      // SSE: emit per-field start
+      try { emitProgress(operationId, `📝 Processing update: ${cleanedUpdate.section_id}.${cleanedUpdate.field_path} ... ${cleanedUpdate.merge_strategy || 'replace'}`) } catch {}
       // Normalize field path to be relative to section root (model often prefixes with section key)
       cleanedUpdate.field_path = normalizeFieldPath(cleanedUpdate.field_path, sectionSchema)
       const pathCheck = validatePathAgainstSchema(sectionSchema, cleanedUpdate.field_path)
@@ -614,6 +742,27 @@ export async function POST(request: NextRequest) {
           pathCheck.fieldSchema
         )
 
+        // If we updated assessment_tools.tools, normalize tool entries to preferred fields
+        try {
+          const meta = sectionMetaById.get(cleanedUpdate.section_id)
+          const sectionType = meta?.section_type || sectionSchema?.key
+          if (sectionType === 'assessment_tools' && cleanedUpdate.field_path.startsWith('tools')) {
+            const toolsVal = resolver.getFieldValue(updatedData, 'tools')
+            if (Array.isArray(toolsVal)) {
+              const normalized = toolsVal.map((t: any) => {
+                if (!t || typeof t !== 'object') return t
+                const measure_type = t.measure_type || t.tool_type || ''
+                const purpose = t.purpose || t.description || t.qualitative_description || ''
+                const date = t.administered_date || t.date || ''
+                const title = t.title || t.tool_name || t.context_label || 'Observation'
+                const target_population = t.target_population || ''
+                return { ...t, title, administered_date: date, measure_type, purpose, target_population }
+              })
+              updatedData = resolver.setFieldValue(updatedData, 'tools', normalized)
+            }
+          }
+        } catch {}
+
         // Persist provenance if provided
         try {
           if (update.source_reference || typeof update.confidence === 'number') {
@@ -645,6 +794,65 @@ export async function POST(request: NextRequest) {
           delete updatedData.structured_data
         }
 
+        // If this update is a domain notes field in Assessment Results, propagate a copy into the Tools section under matching context
+        try {
+          const domainKeyMap: Record<string, string> = {
+            'expressive_language_notes': 'Expressive',
+            'receptive_language_notes': 'Receptive',
+            'pragmatic_language_notes': 'Pragmatics',
+            'articulation_notes': 'Articulation',
+            'voice_notes': 'Voice',
+            'fluency_notes': 'Fluency'
+          }
+          const domainKey = Object.keys(domainKeyMap).find(k => cleanedUpdate.field_path === k)
+          const meta = sectionMetaById.get(cleanedUpdate.section_id)
+          if (domainKey && meta && meta.section_type === 'assessment_results' && toolsSectionId && update.source_reference) {
+            const { data: toolsRow } = await supabase
+              .from('report_sections')
+              .select('structured_data')
+              .eq('id', toolsSectionId)
+              .single()
+            const toolsData = (toolsRow?.structured_data && typeof toolsRow.structured_data === 'object') ? toolsRow.structured_data : {}
+            const list = Array.isArray(toolsData.tools) ? toolsData.tools : []
+            // crude context title from source_reference
+            const ref = (update.source_reference as string).toLowerCase()
+            const ctxMap: Record<string, string> = {
+              'lunch': 'Lunch',
+              'reading circle': 'Classroom Reading Circle',
+              'recess': 'Recess',
+              'math': 'Math Small Group',
+              'art': 'Art Class',
+              'hallway': 'Hallway',
+              'transition': 'Transition to Speech Room',
+              'speech': 'Speech Task',
+              'retell': 'Frog Story Retell'
+            }
+            let contextTitle = 'Observation'
+            for (const k of Object.keys(ctxMap)) { if (ref.includes(k)) { contextTitle = ctxMap[k]; break } }
+            let target = list.find((t: any) => (t.title || t.tool_name || '').toString().toLowerCase() === contextTitle.toLowerCase())
+            if (!target) {
+              target = { title: contextTitle, completed: true, tool_type: 'Observation' }
+              list.push(target)
+            }
+            target.domain_notes = target.domain_notes || {}
+            const dLabel = domainKeyMap[domainKey]
+            const noteText = typeof cleanedUpdate.value === 'string' ? cleanedUpdate.value : JSON.stringify(cleanedUpdate.value)
+            // append or set
+            if (target.domain_notes[dLabel]) {
+              const existing = target.domain_notes[dLabel]
+              target.domain_notes[dLabel] = existing.includes(noteText) ? existing : `${existing} ${noteText}`.trim()
+            } else {
+              target.domain_notes[dLabel] = noteText
+            }
+            toolsData.tools = list
+            await supabase
+              .from('report_sections')
+              .upsert({ id: toolsSectionId, report_id: reportId, title: 'Assessment Tools', section_type: 'assessment_tools', structured_data: toolsData }, { onConflict: 'id' })
+          }
+        } catch (e) {
+          console.warn('⚠️ Propagation to tools failed:', e instanceof Error ? e.message : String(e))
+        }
+
         if (dryRun) {
           console.log(`🟡 Step 18.${i + 1}: Dry run — skipping DB write for section ${update.section_id}`)
           results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: true, dryRun: true })
@@ -665,15 +873,24 @@ export async function POST(request: NextRequest) {
           if (error) {
             console.error(`❌ Step 18.${i + 1} FAILED: Failed to update section ${update.section_id}:`, error)
             results.push({ sectionId: update.section_id, success: false, error })
+            try { emitProgress(operationId, `❌ Failed to update ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+            try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: false }) } catch {}
+            dbLog({ event_type: 'section_update', stage: 'error', section_id: cleanedUpdate.section_id, message: `Failed to update ${cleanedUpdate.field_path}`, data: { error } }).catch(() => {})
           } else {
             console.log(`✅ Step 18.${i + 1}: Updated section ${update.section_id}`)
             results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: true })
             processSummaries.push(update.process_summary)
+            try { emitProgress(operationId, `✅ Updated ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+            try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: true }) } catch {}
+            dbLog({ event_type: 'section_update', stage: 'success', section_id: cleanedUpdate.section_id, message: `Updated ${cleanedUpdate.field_path}` }).catch(() => {})
           }
         }
       } catch (error) {
         console.error(`❌ Step 18.${i + 1} FAILED: Error processing update for section ${update.section_id}:`, error)
         results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: false, error: error instanceof Error ? error.message : String(error) })
+        try { emitProgress(operationId, `❌ Failed to update ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+        try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: false }) } catch {}
+        dbLog({ event_type: 'section_update', stage: 'error', section_id: cleanedUpdate.section_id, message: `Exception updating ${cleanedUpdate.field_path}`, data: { error: error instanceof Error ? error.message : String(error) } }).catch(() => {})
       }
     }
 
@@ -683,7 +900,29 @@ export async function POST(request: NextRequest) {
     console.log(`🎉 Step 19: Processing complete: ${successful} successful, ${failed} failed`)
     console.log(`📋 Process summaries:`, processSummaries)
 
-    return NextResponse.json({
+    // Persist uploaded files and activity timeline to report metadata (best-effort)
+    try {
+      const { data: reportRow } = await supabase
+        .from('reports')
+        .select('id, metadata')
+        .eq('id', reportId)
+        .single()
+      const prevMeta = (reportRow?.metadata && typeof reportRow.metadata === 'object') ? reportRow.metadata as any : {}
+      const prevFiles = Array.isArray(prevMeta.uploadedFiles) ? prevMeta.uploadedFiles : []
+      const mergedFiles = [...prevFiles, ...uploadedFilesMeta]
+      const activity = Array.isArray(prevMeta.activity) ? prevMeta.activity : []
+      activity.push({ id: crypto.randomUUID(), type: 'ai_intake', timestamp: new Date().toISOString(), sectionIds, summaries: processSummaries })
+      await supabase
+        .from('reports')
+        .update({ metadata: { ...prevMeta, uploadedFiles: mergedFiles, activity } })
+        .eq('id', reportId)
+      dbLog({ stage: 'metadata_persisted', message: 'uploadedFiles/activity persisted', event_type: 'stage' }).catch(() => {})
+    } catch (e) {
+      console.warn('⚠️ Failed to persist metadata (uploadedFiles/activity):', e instanceof Error ? e.message : String(e))
+      dbLog({ stage: 'metadata_persist_error', message: (e as Error)?.message || 'persist failed', event_type: 'stage' }).catch(() => {})
+    }
+
+    const response = NextResponse.json({
       success: true,
       message: dryRun ? `Preview: ${successful} updates proposed` : `Processed ${successful} updates successfully`,
       results: {
@@ -695,14 +934,21 @@ export async function POST(request: NextRequest) {
         mode: dryRun ? 'dryRun' : 'write'
       }
     })
+    try { completeProgress(operationId) } catch {}
+    dbLog({ stage: 'complete', message: `Processed ${successful} updates, ${failed} failed`, event_type: 'complete' }).catch(() => {})
+    try { if (broadcastChannel) await broadcastChannel.unsubscribe() } catch {}
+    return response
 
   } catch (error) {
     console.error('❌ CRITICAL ERROR: Processing intake data failed:', error)
     console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace')
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
+    try { completeProgress(operationId) } catch {}
+    try { if (broadcastChannel) await broadcastChannel.unsubscribe() } catch {}
+    return errorResponse
   }
 }
 

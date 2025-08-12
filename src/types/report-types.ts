@@ -11,6 +11,8 @@ export type Section = {
   content: string | null;
   structured_data: Json | null;
   hydratedHtml?: string;
+  // Ephemeral provenance for debugging; not persisted
+  renderSource?: 'server_prehydration' | 'client_hydration' | 'structured_renderer' | 'raw';
   studentBio?: StudentBio;
   isCompleted?: boolean;
   isRequired?: boolean;
