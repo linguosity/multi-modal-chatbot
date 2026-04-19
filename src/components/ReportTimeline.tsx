@@ -157,9 +157,9 @@ export function ReportTimeline() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">Recent Activity</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
         <Link href="/dashboard/reports">
           <Button variant="secondary" size="sm">
             View All Reports
@@ -168,19 +168,35 @@ export function ReportTimeline() {
         </Link>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {reports.map((report, index) => (
           <div key={report.id} className="relative">
             {/* Timeline line */}
             {index < reports.length - 1 && (
-              <div className="absolute left-5 top-12 w-0.5 h-full bg-gray-200 -z-10"></div>
+              <div className="absolute left-5 top-11 w-0.5 h-full bg-gray-200 -z-10"></div>
             )}
             
             <Link href={`/dashboard/reports/${report.id}`} className="block">
-              <div className="flex items-start space-x-4 p-4 bg-white rounded-lg border hover:shadow-md transition-all duration-200 cursor-pointer hover:border-blue-300">
+              <div className="relative flex items-start gap-3 p-3 bg-white rounded-lg border hover:shadow-md transition-all duration-200 cursor-pointer hover:border-indigo-200">
+                {/* Floating AI action */}
+                <button
+                  aria-label="Generate AI summary"
+                  className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    generateAISummary(report.id)
+                  }}
+                  disabled={generatingSummary === report.id}
+                >
+                  {generatingSummary === report.id ? (
+                    <Clock className="h-4 w-4 animate-spin text-gray-500" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-indigo-600" />
+                  )}
+                </button>
                 {/* Timeline dot */}
-                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-blue-600" />
+                <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <FileText className="h-5 w-5 text-indigo-600" />
                 </div>
 
                 {/* Content */}
@@ -203,19 +219,26 @@ export function ReportTimeline() {
                         <Clock className="h-4 w-4 mr-1" />
                         {report.lastActivity}
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {report.completedSections}/{report.totalSections} complete
+                      {/* Linear progress bar */}
+                      <div className="w-36" aria-hidden>
+                        {(() => {
+                          const completed = report.completedSections || 0
+                          const total = report.totalSections || 0
+                          const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+                          return (
+                            <div className="h-1.5 w-full bg-gray-200 rounded">
+                              <div
+                                className={`h-1.5 rounded ${pct === 100 ? 'bg-green-500' : 'bg-indigo-500'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-3">
-                    <ProgressIndicator 
-                      completed={report.completedSections || 0}
-                      total={report.totalSections || 0}
-                      size="sm"
-                      showText={false}
-                    />
                     <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(report.status)}`}>
                       {report.status.replace('_', ' ')}
                     </span>
@@ -234,39 +257,16 @@ export function ReportTimeline() {
                   ) : (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Edit3 className="h-4 w-4 mr-1" />
-                          Recent sections:
-                        </div>
-                        <Button
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            generateAISummary(report.id)
-                          }}
-                          disabled={generatingSummary === report.id}
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                        >
-                          {generatingSummary === report.id ? (
-                            <>
-                              <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600 mr-1"></div>
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-3 w-3 mr-1" />
-                              AI Summary
-                            </>
-                          )}
-                        </Button>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Edit3 className="h-4 w-4 mr-1" />
+                        Recent sections:
+                      </div>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {report.lastModifiedSections?.map((section, idx) => (
                           <span
                             key={idx}
-                            className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+                            className={`px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded ${idx > 0 ? 'border-l border-gray-200 ml-1 pl-2' : ''}`}
                           >
                             {section}
                           </span>

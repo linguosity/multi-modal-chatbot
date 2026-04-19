@@ -10,8 +10,12 @@ export type Section = {
   order: number;
   content: string | null;
   structured_data: Json | null;
+  // New fields from clean schema
+  extraction_confidence?: Json | null;
+  source_refs?: Json | null;
+  change_tracking?: Json | null;
+  // Ephemeral fields (not persisted, computed during hydration)
   hydratedHtml?: string;
-  // Ephemeral provenance for debugging; not persisted
   renderSource?: 'server_prehydration' | 'client_hydration' | 'structured_renderer' | 'raw';
   studentBio?: StudentBio;
   isCompleted?: boolean;
@@ -19,6 +23,7 @@ export type Section = {
   isGenerated?: boolean;
 };
 
-export type Report = Omit<Database['public']['Tables']['reports']['Row'], 'sections'> & {
+// Report metadata from the reports table + sections fetched separately from report_sections
+export type Report = Database['public']['Tables']['reports']['Row'] & {
   sections: Section[];
 };

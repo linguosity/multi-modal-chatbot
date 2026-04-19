@@ -1,10 +1,17 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { FileText, Eye, Download, RefreshCw, MapPin, AlertCircle } from 'lucide-react'
+import { FileText, Eye, Download, RefreshCw, MapPin, AlertCircle, ChevronDown } from 'lucide-react'
 import { Button } from './ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
 import TiptapEditor from './TiptapEditor'
 import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
+import { SourcePillGroup } from '@/components/ui/SourcePillGroup'
 
 interface SourceMapping {
   id: string
@@ -43,6 +50,7 @@ export function NarrativeView({
   const [selectedMapping, setSelectedMapping] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showSourceDetails, setShowSourceDetails] = useState(false)
   
   // For tracking AI-generated changes in TOC
   const { addRecentUpdate } = useRecentUpdates()
@@ -152,39 +160,45 @@ export function NarrativeView({
     }
   }
 
-  const exportToPDF = async () => {
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExport = async (format: 'pdf' | 'docx') => {
+    setIsExporting(true)
     try {
-      const response = await fetch('/api/export/pdf', {
+      const response = await fetch(`/api/export/${format}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportId,
           sectionId,
           narrative,
-          sectionTitle
-        })
+          sectionTitle,
+        }),
       })
 
-      if (!response.ok) throw new Error('Failed to export PDF')
+      if (!response.ok) throw new Error(`Failed to export ${format.toUpperCase()}`)
 
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${sectionTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_narrative.pdf`
+      const safeName = sectionTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      a.download = `${safeName}_narrative.${format}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (error) {
-      console.error('Failed to export PDF:', error)
+      console.error(`Failed to export ${format}:`, error)
+    } finally {
+      setIsExporting(false)
     }
   }
 
   const renderNarrativeWithMappings = () => {
     if (!narrative || sourceMappings.length === 0) {
       return (
-        <div className="prose max-w-none">
+        <div className="prose max-w-none content-readable">
           <TiptapEditor
             content={narrative}
             onChange={setNarrative}
@@ -296,10 +310,10 @@ export function NarrativeView({
             onClick={generateNarrative}
             disabled={isGenerating || !hasValidData()}
             className="flex items-center gap-1"
-            title={!hasValidData() ? "Add some data to the section above first" : ""}
+            title={!hasValidData() ? "Add some data to the section above first" : "Generate narrative for this section only"}
           >
             <RefreshCw className={`h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {narrative ? 'Regenerate' : 'Generate'} Narrative
+            {narrative ? 'Regenerate' : 'Generate'} for this section
           </Button>
 
           {narrative && (
@@ -316,15 +330,28 @@ export function NarrativeView({
                 </Button>
               )}
               
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={exportToPDF}
-                className="flex items-center gap-1"
-              >
-                <Download className="h-4 w-4" />
-                Export PDF
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={isExporting}
+                    className="flex items-center gap-1"
+                  >
+                    <Download className="h-4 w-4" />
+                    {isExporting ? 'Exporting...' : 'Export'}
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                    Export as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('docx')}>
+                    Export as Word
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
         </div>
@@ -357,7 +384,9 @@ export function NarrativeView({
               </div>
             ) : (
               <div className={`${isExpanded ? '' : 'max-h-48 overflow-y-auto'}`}>
-                {renderNarrativeWithMappings()}
+                <div className="content-readable">
+                  {renderNarrativeWithMappings()}
+                </div>
               </div>
             )}
           </div>
@@ -379,26 +408,48 @@ export function NarrativeView({
                     <p className="text-sm text-blue-900 italic">"{selectedMappingData.text}"</p>
                   </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-700">Data Sources:</p>
-                    {selectedMappingData.sources.map((source, index) => (
-                      <div key={index} className="bg-blue-50/30 p-3 rounded border border-blue-200/30 text-sm">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-gray-900">{source.sectionTitle}</span>
-                          <span className="text-xs text-gray-500">
-                            {Math.round(source.confidence * 100)}% confidence
-                          </span>
-                        </div>
-                        <p className="text-gray-600 mb-1">{source.fieldLabel}</p>
-                        <p className="text-gray-900 font-mono text-xs bg-white/80 p-1 rounded">
-                          {typeof source.value === 'object' 
-                            ? JSON.stringify(source.value) 
-                            : String(source.value)
-                          }
-                        </p>
-                      </div>
-                    ))}
+                  {/* Grouped source pills to reduce clutter */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Sources (grouped):</p>
+                    <SourcePillGroup
+                      items={selectedMappingData.sources.map((s) => ({
+                        key: `${s.sectionId}.${s.fieldPath}`,
+                        label: `${s.sectionTitle}: ${s.fieldLabel}`,
+                        score: s.confidence,
+                      }))}
+                    />
+                    <div className="mt-2">
+                      <button
+                        className="text-xs text-indigo-600 hover:underline"
+                        onClick={() => setShowSourceDetails(v => !v)}
+                      >
+                        {showSourceDetails ? 'Hide details' : 'Show details'}
+                      </button>
+                    </div>
                   </div>
+
+                  {showSourceDetails && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-700">Data Sources:</p>
+                      {selectedMappingData.sources.map((source, index) => (
+                        <div key={index} className="bg-blue-50/30 p-3 rounded border border-blue-200/30 text-sm">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-gray-900">{source.sectionTitle}</span>
+                            <span className="text-xs text-gray-500">
+                              {Math.round(source.confidence * 100)}% confidence
+                            </span>
+                          </div>
+                          <p className="text-gray-600 mb-1">{source.fieldLabel}</p>
+                          <p className="text-gray-900 font-mono text-xs bg-white/80 p-1 rounded">
+                            {typeof source.value === 'object' 
+                              ? JSON.stringify(source.value) 
+                              : String(source.value)
+                            }
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <Button
                     variant="secondary"
@@ -430,7 +481,7 @@ export function NarrativeView({
             <li>• <strong>Hover</strong> over text to see which parts are sourced from your data</li>
             <li>• <strong>Click</strong> highlighted text to view detailed source information</li>
             <li>• <strong>Regenerate</strong> specific sections to refine the narrative</li>
-            <li>• <strong>Export PDF</strong> creates a clean, professional report</li>
+            <li>• <strong>Export</strong> downloads as PDF or editable Word document</li>
           </ul>
         </div>
       )}

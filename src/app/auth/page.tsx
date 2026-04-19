@@ -1,8 +1,7 @@
 'use client'
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton'
 import { createBrowserSupabase } from '@/lib/supabase/browser'
 import { useRouter } from 'next/navigation'
@@ -10,44 +9,41 @@ import { useEffect, useState } from 'react'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [signInLoading, setSignInLoading] = useState(false);
-  const [error, setError] = useState('');
-  const router = useRouter();
-  const supabase = createBrowserSupabase();
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [signInLoading, setSignInLoading] = useState(false)
+  const [error, setError] = useState('')
+  const router = useRouter()
+  const supabase = createBrowserSupabase()
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        router.replace('/dashboard');
+        router.replace('/dashboard')
       } else {
-        setLoading(false);
+        setLoading(false)
       }
-    };
-    checkUser();
-  }, [router, supabase]);
+    }
+    checkUser()
+  }, [router, supabase])
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-t from-blue-100 to-white">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--paper)]">
+        <div className="wf-spinner" />
       </div>
-    );
+    )
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setSignInLoading(true)
     setError('')
-    
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setError(error.message)
@@ -59,110 +55,103 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-t from-blue-100 to-white p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--paper)] p-4">
       <div className="w-full max-w-md">
-        {/* Logo and Header */}
+        {/* Brand mark + heading */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <img 
-              src="/images/logo-animation.gif" 
-              alt="Linguosity Logo" 
-              className="h-12 w-12"
-            />
+          <div className="mb-3 flex justify-center">
+            <div
+              className="wf-ico"
+              style={{ background: 'var(--terracotta)', color: '#fff', width: 48, height: 48, fontSize: 26, fontFamily: 'var(--font-display)' }}
+            >
+              L
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Linguosity</h1>
-          <p className="text-gray-600">Sign in to access your speech-language evaluation platform</p>
+          <div className="wf-label mb-2">sign in</div>
+          <h1 className="wf-heading" style={{ fontSize: 30 }}>Welcome to Linguosity.</h1>
+          <p className="wf-sm mt-2">Speech-language evaluation platform for SLPs.</p>
         </div>
 
-        {/* Sign In Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          {/* Google Sign In Button */}
-          <div className="mb-6">
-            <GoogleSignInButton />
+        {/* Sign-in card */}
+        <div className="wf-box p-7">
+          <GoogleSignInButton />
+
+          <div className="wf-divider my-5 relative flex items-center">
+            <div className="flex-1 h-px bg-[var(--line-2)]" />
+            <span className="px-3 wf-sm bg-[var(--card-surface)]" style={{ textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: 10 }}>
+              or with email
+            </span>
+            <div className="flex-1 h-px bg-[var(--line-2)]" />
           </div>
 
-          {/* Divider */}
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or continue with email</span>
-            </div>
-          </div>
-
-          {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              {error}
+            <div className="wf-box terra mb-4 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--terracotta-ink)' }} />
+              <span className="text-xs" style={{ fontFamily: 'var(--font-mono)', color: 'var(--terracotta-ink)' }}>{error}</span>
             </div>
           )}
 
-          {/* Email/Password Form */}
           <form onSubmit={handleSignIn} className="space-y-4">
-            <div>
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                Email address
-              </Label>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email" className="wf-label bold">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder="you@clinic.edu"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="border-[var(--line)] rounded-[3px] bg-[var(--card-surface)]"
+                style={{ fontFamily: 'var(--font-mono)' }}
               />
             </div>
 
-            <div>
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                Password
-              </Label>
-              <div className="mt-1 relative">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="password" className="wf-label bold">Password</Label>
+              <div className="relative">
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="border-[var(--line)] rounded-[3px] bg-[var(--card-surface)] pr-10"
+                  style={{ fontFamily: 'var(--font-mono)' }}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
+                    <EyeOff className="h-4 w-4" style={{ color: 'var(--ink-3)' }} />
                   ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
+                    <Eye className="h-4 w-4" style={{ color: 'var(--ink-3)' }} />
                   )}
                 </button>
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+            <button
+              type="submit"
+              className="wf-btn primary w-full justify-center mt-2"
               disabled={signInLoading}
             >
               {signInLoading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Signing in...
-                </div>
+                <>
+                  <div className="wf-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                  Signing in…
+                </>
               ) : (
-                'Sign in'
+                'Sign in →'
               )}
-            </Button>
+            </button>
           </form>
 
-          {/* Footer */}
-          <div className="mt-6 text-center text-sm text-gray-600">
-            <p>Don't have an account? Contact your administrator</p>
+          <div className="wf-sm text-center mt-5">
+            Don't have an account? Contact your administrator.
           </div>
         </div>
       </div>

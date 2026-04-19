@@ -102,7 +102,12 @@ class ProgressToastDispatcher {
       toast.status = success ? 'success' : 'error';
       toast.errors = success ? undefined : event.errors;
       
-      // Don't auto-remove toasts - let user dismiss them manually
+      // Auto-remove successful items after a short delay to reduce noise
+      if (success) {
+        setTimeout(() => {
+          this.removeToast(id)
+        }, 2500)
+      }
       
       this.notifyHandlers();
     }

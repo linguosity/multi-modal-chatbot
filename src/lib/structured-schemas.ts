@@ -186,92 +186,6 @@ export const ASSESSMENT_RESULTS_SECTION: SectionSchema = {
   title: 'Assessment Results',
   fields: [
     {
-      key: 'assessment_items',
-      label: 'Assessment Items',
-      type: 'array',
-      children: [
-        {
-          key: 'type',
-          label: 'Type',
-          type: 'select',
-          options: ['Standardized Test', 'Informal Assessment', 'Observation', 'Interview'],
-          required: true
-        },
-        {
-          key: 'title',
-          label: 'Title',
-          type: 'string',
-          placeholder: 'e.g., PLS-5, Classroom Observation, Parent Interview...',
-          required: true
-        },
-        {
-          key: 'completed',
-          label: 'Completed',
-          type: 'boolean',
-        },
-        {
-          key: 'author',
-          label: 'Author(s)',
-          type: 'string',
-          placeholder: 'Test author(s)...',
-        },
-        {
-          key: 'year_published',
-          label: 'Year Published',
-          type: 'number',
-          placeholder: 'Publication year...',
-        },
-        {
-          key: 'target_population',
-          label: 'Target Population',
-          type: 'string',
-          placeholder: 'Age range and population...',
-        },
-        {
-          key: 'domains_assessed',
-          label: 'Domains Assessed',
-          type: 'array',
-          options: ['Articulation', 'Receptive Language', 'Expressive Language', 'Pragmatic Language', 'Voice', 'Fluency'],
-        },
-        {
-          key: 'standard_score',
-          label: 'Standard Score',
-          type: 'number',
-          placeholder: 'Enter standard score...',
-        },
-        {
-          key: 'percentile',
-          label: 'Percentile Rank',
-          type: 'number',
-          placeholder: 'Enter percentile rank...',
-        },
-        {
-          key: 'confidence_interval',
-          label: 'Confidence Interval',
-          type: 'number',
-          placeholder: 'e.g., 90% CI: 85-95',
-        },
-        {
-          key: 'qualitative_description',
-          label: 'Qualitative Description',
-          type: 'string',
-          placeholder: 'e.g., Below Average, Average, Above Average...',
-        },
-        {
-          key: 'examples_of_items',
-          label: 'Examples of Items',
-          type: 'string',
-          placeholder: 'Describe specific test items or observations...',
-        },
-        {
-          key: 'notes',
-          label: 'Notes',
-          type: 'string',
-          placeholder: 'Any additional notes or observations...',
-        },
-      ]
-    },
-    {
       key: 'articulation_notes',
       label: 'Articulation Notes',
       type: 'string',
@@ -1112,6 +1026,8 @@ export function getSectionSchemaForType(sectionType: string, userState?: string)
       return ASSESSMENT_RESULTS_SECTION;
     case 'language_sample':
       return LANGUAGE_SAMPLE_SECTION;
+    case 'assessment_tools':
+      return ASSESSMENT_TOOLS_SECTION;
     case 'reason_for_referral':
       return REASON_FOR_REFERRAL_SECTION;
     case 'parent_concern':

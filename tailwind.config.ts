@@ -22,6 +22,9 @@ const config = {
     extend: {
       fontFamily: {
         sans: ["Inter", ...defaultTheme.fontFamily.sans],
+        display: ["Gloock", "Times New Roman", "serif"],
+        mono: ["Inconsolata", "ui-monospace", "SF Mono", "monospace"],
+        hand: ["Caveat", "cursive"],
       },
       colors: {
         // Shadcn/ui system colors (preserved for compatibility)
@@ -64,6 +67,26 @@ const config = {
         card: {
           DEFAULT: "#ffffff",
           foreground: tokens.colors.gray[900],
+        },
+
+        // New design system colors
+        terracotta: {
+          DEFAULT: '#CE7B56',
+          ink: '#8a4a30',
+        },
+        tan: {
+          DEFAULT: '#C9BA94',
+          soft: '#ece4cf',
+        },
+        paper: {
+          DEFAULT: '#f7f5f0',
+          2: '#efece4',
+        },
+        ink: {
+          DEFAULT: '#111111',
+          2: '#3a3a3a',
+          3: '#6b6b6b',
+          4: '#9a9a9a',
         },
 
         // Legacy brand colors (preserved for backward compatibility)

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
-import Anthropic from '@/lib/ai/anthropic-compat'
+import Anthropic from '@/lib/ai/gemini-messages'
+import { z } from 'zod'
+import { parseWithZod } from '@/lib/ai/gemini-structured'
 
 const anthropic = new Anthropic({})
 
@@ -66,20 +68,33 @@ Examples of good summaries:
 
 Your summary:`
 
-    const response = await anthropic.messages.create({
-      model: 'gpt-5',
-      max_tokens: 100,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    })
+    // Try Structured Outputs first for a strict, predictable shape
+    const SummarySchema = z.object({ summary: z.string() })
+    const structured = await parseWithZod(
+      SummarySchema,
+      'report_activity_summary',
+      [
+        { role: 'system', content: 'Return only JSON with { summary: string }. Summary should be a single concise sentence (<= 15 words).' },
+        { role: 'user', content: prompt },
+      ],
+    )
 
-    const summary = response.content[0].type === 'text' 
-      ? response.content[0].text.trim()
-      : 'Recent work on evaluation sections'
+    let summary: string
+    if (structured.ok) {
+      summary = structured.data.summary.trim()
+    } else {
+      // Fallback to existing Anthropic-compatible path
+      const response = await anthropic.messages.create({
+        model: 'gpt-5',
+        max_tokens: 100,
+        messages: [
+          { role: 'user', content: prompt }
+        ]
+      })
+      summary = response.content[0].type === 'text'
+        ? response.content[0].text.trim()
+        : 'Recent work on evaluation sections'
+    }
 
     return NextResponse.json({ summary })
 

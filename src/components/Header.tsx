@@ -1,6 +1,6 @@
 'use client'
 
-import { Save, FileDown, X, Trash2, Wrench, Mic, Square } from "lucide-react";
+import { Save, FileDown, X, Trash2, Mic, Square } from "lucide-react";
 import Link from 'next/link'
 import { BaseModal } from '@/components/ui/base-modal'
 import { Button } from '@/components/ui/button'
@@ -68,32 +68,38 @@ export default function Header() {
     router.push('/dashboard');
   };
 
-  const handleExportPdf = () => {
-    console.log('Export PDF clicked');
-    // TODO: Implement PDF export
-  };
+  const [isExporting, setIsExporting] = useState(false)
 
-  const handleRepairSync = async () => {
-    if (!report) return;
+  const handleExportReport = async (format: 'pdf' | 'docx') => {
+    if (!report?.id) return
+    setIsExporting(true)
     try {
-      const res = await fetch('/api/admin/repair-sync', {
+      const response = await fetch(`/api/export/${format}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId: report.id })
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.success) {
-        console.warn('Repair sync failed', json?.error);
-        alert('Repair failed: ' + (json?.error || res.statusText));
-      } else {
-        console.log('Repair sync completed', json);
-        alert('Repair complete');
-      }
-    } catch (e) {
-      console.error('Repair sync error', e);
-      alert('Repair error: ' + (e as Error).message);
+        body: JSON.stringify({ reportId: report.id }),
+      })
+
+      if (!response.ok) throw new Error(`Export failed`)
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const safeName = (report.title || 'report').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      a.download = `${safeName}.${format}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error(`Export ${format} error:`, error)
+    } finally {
+      setIsExporting(false)
     }
   }
+
+  // Repair sync removed — report_sections is now sole source of truth
 
   // Voice journal recorder (modal)
   const [showRecorder, setShowRecorder] = useState(false)
@@ -189,10 +195,15 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between
-                       bg-white/95 backdrop-blur border-b px-4 py-2">
+                       bg-[#f7f5f0] border-b-[1.5px] border-[#1a1a1a] px-7 py-[18px]">
       <Breadcrumb items={breadcrumbItems} />
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
+        {report && (
+          <span className="text-[11px] tracking-[0.12em] uppercase text-[#6b6b6b] font-mono mr-2 hidden sm:inline">
+            {report.type || 'Report'}
+          </span>
+        )}
         {isViewMode && (
           <>
             {/* Minimal actions in report view to reduce clutter */}
@@ -232,7 +243,11 @@ export default function Header() {
         {/* Voice journal recorder */}
         <button
           onClick={openRecorder}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md border border-gray-200"
+          className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.06em]
+                     px-2.5 py-[5px] bg-transparent border-[1.5px] border-transparent
+                     text-[#3a3a3a] rounded-sm
+                     hover:bg-[#efece4] hover:border-[#efece4]
+                     transition-all duration-100"
           title="Record a quick voice note"
         >
           <Mic className="h-3.5 w-3.5" /> Record
@@ -267,16 +282,7 @@ export default function Header() {
         </BaseModal>
         {/* Global user settings (defaults for locked fields, state, etc.) */}
         <SettingsButton />
-        {/* Repair sync for current report */}
-        {report && (
-          <button
-            onClick={handleRepairSync}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md border border-gray-200"
-            title="Repair data sync for this report"
-          >
-            <Wrench className="h-3.5 w-3.5" /> Repair
-          </button>
-        )}
+        {/* Repair sync removed — report_sections is sole source of truth */}
         
         <SplitButton
           onClick={handleSaveClick}
@@ -296,10 +302,15 @@ export default function Header() {
               onClick: handleSaveAndClose
             },
             {
-              label: "Export PDF",
+              label: isExporting ? "Exporting..." : "Export as PDF",
               icon: <FileDown className="h-4 w-4" />,
-              onClick: handleExportPdf,
+              onClick: () => handleExportReport('pdf'),
               separator: true
+            },
+            {
+              label: isExporting ? "Exporting..." : "Export as Word",
+              icon: <FileDown className="h-4 w-4" />,
+              onClick: () => handleExportReport('docx'),
             },
             {
               label: "Delete Report",

@@ -70,6 +70,7 @@ export default function DynamicStructuredBlock({
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [previewRef, setPreviewRef] = useState<SourceRef | null>(null);
   const { settings } = useUserSettings()
+  const isHeaderSection = (schema?.key === 'header') || (schema?.title?.toLowerCase() === 'student information')
 
   // Map locked header fields to user settings keys
   const LOCKED_FIELD_SETTINGS_MAP: Record<string, keyof typeof settings> = {
@@ -272,13 +273,16 @@ export default function DynamicStructuredBlock({
 
     const LabelRow = ({ children }: { children?: React.ReactNode }) => (
       <div className="flex items-center gap-2">
-        <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
+        <label className={`block ${isHeaderSection ? 'text-xs' : 'text-sm'} font-medium text-gray-700`}>{field.label}:</label>
         {SHOW_PROVENANCE && field.mode && (
           <FieldModeBadge mode={field.mode} />
         )}
         {children}
       </div>
     )
+
+    const inputBaseClass = `w-full h-10 px-3 py-0.5 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500`
+    const smallInputClass = `w-full h-10 px-2 py-0.5 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500`
 
     const updateFieldValue = (newValue: any, shouldTriggerSave = false) => {
       // Only log when actually saving, not on every keystroke
@@ -320,6 +324,29 @@ export default function DynamicStructuredBlock({
     }
 
     const isLocked = (field as any).mode === 'locked'
+    const widthClass = (() => {
+      if (!isHeaderSection) return ''
+      switch (field.key) {
+        case 'first_name':
+        case 'last_name':
+          return 'max-w-[20rem]'
+        case 'student_id':
+          return 'max-w-[18rem]'
+        case 'date_of_birth':
+        case 'report_date':
+          return 'max-w-[14rem]'
+        case 'age':
+          return 'max-w-[8rem]'
+        case 'grade':
+          return 'max-w-[10rem]'
+        case 'primary_languages':
+          return 'max-w-[22rem]'
+        case 'evaluation_dates':
+          return 'max-w-[24rem]'
+        default:
+          return ''
+      }
+    })()
     switch (field.type) {
       case 'boolean':
         return wrapWithHighlight(fieldPath, (
@@ -382,14 +409,14 @@ export default function DynamicStructuredBlock({
 
       case 'date':
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-1">
+          <div key={fieldPath} className={`space-y-0.5 ${widthClass}`}>
             <LabelRow />
             <input
               type="date"
               value={value || ''}
               onChange={(e) => updateFieldValue(e.target.value, false)}
               onBlur={(e) => updateFieldValue(e.target.value, true)}
-              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className={isHeaderSection ? inputBaseClass : smallInputClass}
               disabled={isLocked}
               title={isLocked ? 'Locked by user settings' : undefined}
             />
@@ -405,12 +432,12 @@ export default function DynamicStructuredBlock({
 
       case 'select':
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-1">
+          <div key={fieldPath} className={`space-y-0.5 ${widthClass}`}>
             <LabelRow />
             <select
               value={value || ''}
               onChange={(e) => updateFieldValue(e.target.value, true)}
-              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className={isHeaderSection ? inputBaseClass : smallInputClass}
               disabled={isLocked}
               title={isLocked ? 'Locked by user settings' : undefined}
             >
@@ -433,7 +460,7 @@ export default function DynamicStructuredBlock({
 
       case 'number':
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-1">
+          <div key={fieldPath} className={`space-y-0.5 ${widthClass}`}>
             <LabelRow />
             <input
               type="number"
@@ -441,7 +468,7 @@ export default function DynamicStructuredBlock({
               onChange={(e) => updateFieldValue(parseFloat(e.target.value) || 0, false)}
               onBlur={(e) => updateFieldValue(parseFloat(e.target.value) || 0, true)}
               placeholder={field.placeholder}
-              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className={isHeaderSection ? inputBaseClass : smallInputClass}
               disabled={isLocked}
               title={isLocked ? 'Locked by user settings' : undefined}
             />
@@ -467,63 +494,42 @@ export default function DynamicStructuredBlock({
                   )}
                 </div>
                 
-                {/* Assessment Items List */}
-                {(Array.isArray(value) ? value : []).map((item: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="group flex items-center justify-between py-2 px-3 border-l-2 border-slate-200 hover:border-[var(--clr-accent)] hover:bg-slate-50 transition-all cursor-pointer"
-                    onClick={() => {
-                      setEditingItem(item);
-                      setEditingItemIndex(idx);
-                      setIsModalOpen(true);
-                    }}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {/* Tool name and type */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[var(--text-base)] font-medium text-gray-900 truncate">
-                          {item.title || 'Unnamed Tool'}
-                        </div>
-                        {item.type && (
-                          <div className="text-[var(--text-label)] text-slate-500">
-                            {item.type}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Scores (if available) */}
-                      <div className="flex items-center gap-2 text-[var(--text-label)] text-slate-600">
-                        {item.standard_score && (
-                          <span className="font-medium">SS: {item.standard_score}</span>
-                        )}
-                        {item.percentile && (
-                          <span className="font-medium">%: {item.percentile}</span>
-                        )}
-                        {item.qualitative_description && (
-                          <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <title>Has qualitative notes</title>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Remove button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const newArray = (Array.isArray(value) ? value : []).filter((_: any, i: number) => i !== idx);
-                        updateFieldValue(newArray);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
-                      title="Remove assessment tool"
+                {/* Assessment Items List (minimalist format) */}
+                {(Array.isArray(value) ? value : []).map((item: any, idx: number) => {
+                  const parts: string[] = []
+                  if (item.title) parts.push(String(item.title))
+                  if (item.acronym) parts.push(String(item.acronym).toUpperCase())
+                  const authorYear = [item.author, item.year_published].filter(Boolean).join(', ')
+                  if (authorYear) parts.push(authorYear)
+                  const blurb = item.purpose || item.target_population || (Array.isArray(item.domains_assessed) ? item.domains_assessed.join(', ') : '')
+                  if (blurb) parts.push(String(blurb))
+                  const line = parts.join(' | ')
+                  return (
+                    <div
+                      key={idx}
+                      className="group flex items-center justify-between py-2 px-3 rounded hover:bg-slate-50 transition cursor-pointer"
+                      onClick={() => { setEditingItem(item); setEditingItemIndex(idx); setIsModalOpen(true) }}
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-900 truncate">{line || 'Unnamed Tool'}</div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newArray = (Array.isArray(value) ? value : []).filter((_: any, i: number) => i !== idx)
+                          updateFieldValue(newArray)
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition"
+                        title="Remove assessment tool"
+                        aria-label="Remove assessment tool"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )
+                })}
 
                 {/* Add button */}
                 <button
@@ -554,7 +560,7 @@ export default function DynamicStructuredBlock({
 
                 {/* Empty state */}
                 {(Array.isArray(value) ? value : []).length === 0 && (
-                  <div className="text-[var(--text-base)] text-slate-400 text-center py-6 border-l-2 border-slate-200">
+                  <div className="text-sm text-slate-400 text-center py-6">
                     No assessment tools added yet
                   </div>
                 )}
@@ -770,18 +776,31 @@ export default function DynamicStructuredBlock({
 
       default: // string
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-2 h-fit">
+          <div key={fieldPath} className={`space-y-1 h-fit ${widthClass}`}>
             <LabelRow />
-            <textarea
-              value={value || ''}
-              onChange={(e) => updateFieldValue(e.target.value, false)}
-              onBlur={(e) => updateFieldValue(e.target.value, true)}
-              placeholder={field.placeholder}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              rows={3}
-              disabled={isLocked}
-              title={isLocked ? 'Locked by user settings' : undefined}
-            />
+            {isHeaderSection && ['first_name','last_name','student_id','primary_languages','evaluator_name','evaluator_credentials','evaluation_dates','school_name'].includes(field.key) ? (
+              <input
+                type="text"
+                value={value || ''}
+                onChange={(e) => updateFieldValue(e.target.value, false)}
+                onBlur={(e) => updateFieldValue(e.target.value, true)}
+                placeholder={field.placeholder}
+                className={inputBaseClass}
+                disabled={isLocked}
+                title={isLocked ? 'Locked by user settings' : undefined}
+              />
+            ) : (
+              <textarea
+                value={value || ''}
+                onChange={(e) => updateFieldValue(e.target.value, false)}
+                onBlur={(e) => updateFieldValue(e.target.value, true)}
+                placeholder={field.placeholder}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows={3}
+                disabled={isLocked}
+                title={isLocked ? 'Locked by user settings' : undefined}
+              />
+            )}
             {(() => {
               const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
               if (!show) return null
@@ -853,12 +872,14 @@ export default function DynamicStructuredBlock({
             )
           })()}
           {/* Dynamic Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 items-start">
+          <div className={`${isHeaderSection ? 'rounded-md border border-gray-200 bg-gray-50/60 p-3' : ''}`}>
+            <div className={`${isHeaderSection ? 'grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3' : 'grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6'} mb-6 items-start`}>
             {schema.fields.map(field => (
               <React.Fragment key={field.key}>
                 {renderField(field, data[field.key])}
               </React.Fragment>
             ))}
+            </div>
           </div>
         </div>
       )}

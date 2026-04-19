@@ -3,6 +3,7 @@
 import { ReportProvider } from '@/lib/context/ReportContext';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import { LinguosityChat } from '@/components/LinguosityChat';
 
 export default function DashboardLayout({
   children,
@@ -11,7 +12,7 @@ export default function DashboardLayout({
 }) {
   return (
     <ReportProvider>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-[#f7f5f0]">
         <Sidebar />
         <div className="flex-1 flex flex-col">
           <Header />
@@ -20,6 +21,7 @@ export default function DashboardLayout({
           </main>
         </div>
       </div>
+      <LinguosityChat />
     </ReportProvider>
   );
 }

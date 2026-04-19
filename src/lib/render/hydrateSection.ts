@@ -159,20 +159,37 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
             value = getPath(data, 'evaluator_credentials') || getPath(reportMeta, 'evaluatorCredentials') || '';
             break;
           case 'school_name':
-            value = getPath(data, 'school_name') || getPath(reportMeta, 'schoolName') || '';
+            value = getPath(data, 'school_name') || getPath(data, 'schoolName') || getPath(reportMeta, 'schoolName') || '';
+            break;
+          case 'referral_source':
+            value = getPath(data, 'referral_source') || getPath(data, 'referralSource') || getPath(data, 'referred_by') || getPath(data, 'referral_by') || '';
+            break;
+          case 'grade':
+          case 'grade_level':
+            value = getPath(data, 'grade') || getPath(data, 'grade_level') || '';
+            break;
+          case 'teacher_name':
+            value = getPath(data, 'teacher_name') || getPath(data, 'teacherName') || getPath(data, 'referring_teacher') || '';
+            break;
+          case 'diagnosis':
+            value = getPath(data, 'diagnosis') || getPath(data, 'diagnosis_codes') || getPath(data, 'eligibility_category') || '';
+            break;
+          case 'age':
+          case 'chronological_age':
+            value = getPath(data, 'age') || getPath(data, 'chronological_age') || '';
             break;
           case 'eligibility_status':
             value = getPath(data, 'eligibility_status') || getPath(reportMeta, 'eligibilityStatus') || '';
             break;
         }
       }
-      
+
       if (value !== undefined && value !== null && value !== '') {
         const formatted = formatValueForPlaceholder(value, fieldName)
         try { console.log(`🧩 hydrateSection: formatted {${fieldName}} ->`, formatted.substring(0,120)) } catch {}
         return escapeHtml(formatted);
       }
-      
+
       // Return empty string for missing data instead of showing placeholder
       return '';
     }
@@ -191,7 +208,7 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
   // 4) If your section uses DataPointSchema "points", render them
   if (Array.isArray(data?.points)) {
     console.log("🔍 hydrateSection: Rendering data points");
-    
+
     // Check for circular references in points data
     if (hasCircularReference(data.points)) {
       console.error("❌ Circular reference detected in data points");
@@ -206,6 +223,19 @@ export function hydrateSection({ html, data, reportMeta }: Input) {
       }
     }
   }
+
+  // 5) Clean up orphaned prepositions and connectors after placeholder replacement
+  // When placeholders resolve to empty strings, they leave behind broken grammar
+  out = out
+    // Clean up orphaned connectors (prepositions, conjunctions, articles) when followed by punctuation or end of content
+    .replace(/\s+(by|for|from|to|at|in|of|with|due to|regarding|because of|as per|according to)\s*(?=[.,;!?\s]|$)/gi, ' ')
+    // Clean up double spaces
+    .replace(/\s{2,}/g, ' ')
+    // Clean up space before punctuation
+    .replace(/\s+([.,;:!?])/g, '$1')
+    // Clean up leading/trailing spaces in paragraphs
+    .replace(/>\s+/g, '>')
+    .replace(/\s+</g, '<');
 
   console.log("✅ hydrateSection: Hydration completed");
   console.log("🔍 Output HTML length:", out?.length || 0);

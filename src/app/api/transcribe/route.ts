@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { transcribeAudio } from '@/lib/file-processing'
+import { transcribeAudio } from '@/lib/ai/gemini-file-processor'
 
 export const runtime = 'nodejs'
 

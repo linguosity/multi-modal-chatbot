@@ -3,7 +3,6 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useReport } from '@/lib/context/ReportContext'
-import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { getSectionSchemaForType } from '@/lib/structured-schemas'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
@@ -26,7 +25,7 @@ import type { SectionSchema } from '@/lib/structured-schemas'
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
   const router = useRouter()
-  const { report, handleSave } = useReport()
+  const { report, handleSave, updateSectionData } = useReport()
   const { settings } = useUserSettings()
   const [mode, setMode] = useState<'data' | 'template' | 'sources'>('data')
   const [showJsonDebug] = useState(false)
@@ -129,44 +128,28 @@ export default function SectionPage() {
     setSectionContent(newContent)
   }, [sectionId, section?.title])
 
-  // Save function for autosave
+  // Save function for autosave — saves directly to report_sections (single source of truth)
   const saveSection = useCallback(async (showToast = false) => {
     if (!report) return
-    
+
     console.log('💾 SectionPage saveSection called:', {
       sectionId,
       sectionTitle: section?.title,
       contentLength: sectionContent.length,
-      contentPreview: sectionContent.substring(0, 100) + (sectionContent.length > 100 ? '...' : ''),
       hasStructuredData: Object.keys(structuredData).length > 0,
       structuredDataKeys: Object.keys(structuredData),
-      structuredData: process.env.NEXT_PUBLIC_DEBUG === 'true' ? safeStringify(structuredData, 2) : '[Debug disabled]',
       showToast,
       timestamp: new Date().toISOString()
     });
-    
-    const updatedReport = {
-      ...report,
-      sections: report.sections.map(s => 
-        s.id === sectionId 
-          ? { 
-              ...s, 
-              content: sectionContent, 
-              structured_data: structuredData,
-              lastUpdated: new Date().toISOString() 
-            } 
-          : s
-      )
-    }
-    
-    console.log('💾 SectionPage calling handleSave with updated report');
-    await handleSave(updatedReport)
-    
+
+    // Save directly to report_sections via context (updates in-memory + persists to DB)
+    updateSectionData(sectionId, structuredData, sectionContent)
+
     // Show toast notification for manual saves
     if (showToast) {
-      showAIUpdateToast([], [], 'Report saved successfully')
+      showAIUpdateToast([], [], 'Section saved successfully')
     }
-  }, [report, sectionId, sectionContent, structuredData, handleSave, showAIUpdateToast])
+  }, [report, sectionId, sectionContent, structuredData, updateSectionData, showAIUpdateToast])
 
   // Setup autosave with better UX timing - much more responsive
   const { hasUnsavedChanges } = useAutosave({
@@ -227,10 +210,11 @@ export default function SectionPage() {
   // Early returns after all hooks
   if (!report) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <h2 className={cn(getClinicalTypographyClass('sectionHeading'), 'mb-2')}>Report not found</h2>
-          <p className={getClinicalTypographyClass('bodyText', 'gray-600')}>The requested report could not be loaded.</p>
+      <div className="flex items-center justify-center h-full bg-[var(--paper)]">
+        <div className="wf-box text-center max-w-md">
+          <div className="wf-label mb-2">404</div>
+          <h2 className="wf-heading mb-2" style={{ fontSize: 20 }}>Report not found.</h2>
+          <p className="wf-sm">The requested report could not be loaded.</p>
         </div>
       </div>
     )
@@ -238,67 +222,71 @@ export default function SectionPage() {
 
   if (!section) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <h2 className={cn(getClinicalTypographyClass('sectionHeading'), 'mb-2')}>Section not found</h2>
-          <p className={getClinicalTypographyClass('bodyText', 'gray-600')}>The requested section could not be found.</p>
+      <div className="flex items-center justify-center h-full bg-[var(--paper)]">
+        <div className="wf-box text-center max-w-md">
+          <div className="wf-label mb-2">404</div>
+          <h2 className="wf-heading mb-2" style={{ fontSize: 20 }}>Section not found.</h2>
+          <p className="wf-sm">The requested section could not be found.</p>
         </div>
       </div>
     )
   }
 
+  const tabButtonCls = (isActive: boolean) => [
+    'px-4 py-2.5 border-r',
+    isActive
+      ? 'bg-[var(--card-surface)] text-[var(--ink)]'
+      : 'text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--paper)]',
+  ].join(' ')
+
   return (
-    <div className="h-full w-full flex flex-col overflow-x-hidden">
+    <div className="h-full w-full flex flex-col overflow-x-hidden bg-[var(--paper)]">
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white">
-        <div className="flex items-end justify-between">
-          <div>
-            <motion.h1 
+      <div
+        className="bg-[var(--card-surface)]"
+        style={{ borderBottom: '1.5px solid var(--line)' }}
+      >
+        <div className="flex items-end justify-between px-6 pt-5 pb-4">
+          <div className="flex flex-col gap-1">
+            <div className="wf-label">Section {(currentIndex + 1).toString().padStart(2, '0')} · {report.title}</div>
+            <motion.h1
               key={`title-${sectionId}`}
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.15, delay: 0.05 }}
-              className={getClinicalTypographyClass('reportTitle')}
+              className="wf-heading"
+              style={{ fontSize: 26 }}
             >
               {section.title}
             </motion.h1>
-
           </div>
-
-
         </div>
-        
+
         {/* Tab Navigation */}
-        <div className="flex border-t border-gray-200 bg-gray-50">
+        <div
+          className="flex bg-[var(--paper-2)]"
+          style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: '1px solid var(--line-2)', borderColor: 'var(--line-2)' }}
+        >
           <button
             onClick={() => setMode('data')}
-            className={`px-4 py-2 text-sm font-medium border-r border-gray-200 transition-colors ${
-              mode === 'data'
-                ? 'bg-white text-gray-900 border-b-2 border-blue-500'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
+            className={tabButtonCls(mode === 'data')}
+            style={{ borderRightColor: 'var(--line-2)', borderBottom: mode === 'data' ? '2px solid var(--terracotta)' : '2px solid transparent' }}
           >
-            Data Entry
+            Data entry
           </button>
           {hasStructuredSchema && (
             <button
               onClick={() => setMode('template')}
-              className={`px-4 py-2 text-sm font-medium border-r border-gray-200 transition-colors ${
-                mode === 'template'
-                  ? 'bg-white text-gray-900 border-b-2 border-blue-500'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
+              className={tabButtonCls(mode === 'template')}
+              style={{ borderRightColor: 'var(--line-2)', borderBottom: mode === 'template' ? '2px solid var(--terracotta)' : '2px solid transparent' }}
             >
-              Edit Template
+              Edit template
             </button>
           )}
           <button
             onClick={() => setMode('sources')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              mode === 'sources'
-                ? 'bg-white text-gray-900 border-b-2 border-blue-500'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
+            className={tabButtonCls(mode === 'sources')}
+            style={{ borderBottom: mode === 'sources' ? '2px solid var(--terracotta)' : '2px solid transparent' }}
           >
             Sources
           </button>
@@ -421,51 +409,31 @@ export default function SectionPage() {
           </section>
         </motion.div>
 
-        {/* Narrative View Section - Full Width Background */}
+        {/* Narrative view */}
         {hasStructuredSchema && currentSchema && mode === 'data' && (
           <>
-            {/* Subtle 3-Point Gradient Transition - Full Width */}
-            <div className="relative h-16 bg-gradient-to-b from-white via-blue-50/30 to-blue-50/50 w-full">
-              {/* Elegant Divider with Gradient Background */}
-              <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full">
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200/60"></div>
-                    </div>
-                    <div className="relative flex justify-center">
-                      <div className="bg-gradient-to-r from-blue-50/80 via-white to-blue-50/80 px-6 py-2 rounded-full border border-gray-200/40 backdrop-blur-sm">
-                        <div className="flex items-center gap-3">
-                          <div className="w-1 h-1 bg-blue-400/60 rounded-full animate-pulse"></div>
-                          <FileText className="h-4 w-4 text-blue-500/70" />
-                          <span className="text-xs font-medium text-blue-600/80 uppercase tracking-wider">
-                            AI-Generated Narrative
-                          </span>
-                          <FileText className="h-4 w-4 text-blue-500/70" />
-                          <div className="w-1 h-1 bg-blue-400/60 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div className="py-6 flex items-center gap-3 px-6 bg-[var(--paper)]">
+              <div className="h-px flex-1" style={{ background: 'var(--line-2)' }} />
+              <div className="flex items-center gap-2">
+                <FileText className="h-3.5 w-3.5" style={{ color: 'var(--terracotta)' }} />
+                <span className="wf-label bold" style={{ color: 'var(--terracotta-ink)' }}>
+                  AI-generated narrative
+                </span>
               </div>
+              <div className="h-px flex-1" style={{ background: 'var(--line-2)' }} />
             </div>
 
-            {/* Narrative Content with Full Width Gradient Background */}
-            <div className="bg-gradient-to-b from-blue-50/50 via-blue-50/20 to-white w-full pb-6">
-              <div className="w-full overflow-x-hidden">
-                <div className="pt-4">
-                  <NarrativeView
-                    reportId={report.id}
-                    sectionId={section.id}
-                    sectionTitle={section.title}
-                    structuredData={section.structured_data || {}}
-                    onRegenerateNarrative={async () => {
-                      // Trigger a refresh of the narrative
-                      console.log('Regenerating narrative for section:', section.id)
-                    }}
-                  />
-                </div>
+            <div className="bg-[var(--paper)] w-full pb-6">
+              <div className="w-full overflow-x-hidden px-6">
+                <NarrativeView
+                  reportId={report.id}
+                  sectionId={section.id}
+                  sectionTitle={section.title}
+                  structuredData={section.structured_data || {}}
+                  onRegenerateNarrative={async () => {
+                    console.log('Regenerating narrative for section:', section.id)
+                  }}
+                />
               </div>
             </div>
           </>
@@ -494,42 +462,34 @@ export default function SectionPage() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="border-t border-gray-200 bg-white">
+      <div
+        className="bg-[var(--paper-2)] px-5 py-2"
+        style={{ borderTop: '1px solid var(--line-2)' }}
+      >
         <div className="flex justify-between items-center">
-          <motion.div
-            whileHover={{ scale: prevSection ? 1.02 : 1 }}
-            whileTap={{ scale: prevSection ? 0.98 : 1 }}
-            transition={{ duration: 0.1 }}
+          <button
+            type="button"
+            onClick={() => prevSection && navigateToSection(prevSection.id)}
+            disabled={!prevSection || isNavigating}
+            className="wf-btn sm ghost"
           >
-            <Button
-              variant="default"
-              onClick={() => prevSection && navigateToSection(prevSection.id)}
-              disabled={!prevSection || isNavigating}
-              className="flex items-center gap-2"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              {prevSection?.title || 'Previous'}
-            </Button>
-          </motion.div>
-          
-          <div className="text-sm text-gray-500">
-            Section {currentIndex + 1} of {report?.sections.length || 0}
+            <ChevronLeft className="h-3 w-3" />
+            <span className="truncate max-w-[220px]">{prevSection?.title || 'Previous'}</span>
+          </button>
+
+          <div className="wf-ticker">
+            Section {currentIndex + 1} / {report?.sections.length || 0}
           </div>
-          
-          <motion.div
-            whileHover={{ scale: nextSection ? 1.02 : 1 }}
-            whileTap={{ scale: nextSection ? 0.98 : 1 }}
-            transition={{ duration: 0.1 }}
+
+          <button
+            type="button"
+            onClick={() => nextSection && navigateToSection(nextSection.id)}
+            disabled={!nextSection || isNavigating}
+            className="wf-btn sm ghost"
           >
-            <Button
-              onClick={() => nextSection && navigateToSection(nextSection.id)}
-              disabled={!nextSection || isNavigating}
-              className="flex items-center gap-2"
-            >
-              {nextSection?.title || 'Next'}
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </motion.div>
+            <span className="truncate max-w-[220px]">{nextSection?.title || 'Next'}</span>
+            <ChevronRight className="h-3 w-3" />
+          </button>
         </div>
       </div>
 

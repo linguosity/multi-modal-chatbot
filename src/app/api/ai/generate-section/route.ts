@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
-import Anthropic from '@/lib/ai/anthropic-compat'
-import { processMultipleFiles, filesToClaudeContent, ProcessedFile } from '@/lib/file-processing';
+import Anthropic from '@/lib/ai/gemini-messages'
+import { processMultipleFiles, filesToClaudeContent, ProcessedFile } from '@/lib/ai/gemini-file-processor';
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver';
 import { getSectionSchemaForType, SectionSchema } from '@/lib/structured-schemas';
 import { StructuredDataMerger } from '@/lib/structured-data-merger';
+import { z } from 'zod'
+import { parseWithZod } from '@/lib/ai/gemini-structured'
 
 const anthropic = new Anthropic({});
 
@@ -695,35 +697,26 @@ async function handleMultiModalAssessment(
   if (updatedSections.length > 0) {
     console.log(`💾 Updating database for report ${reportId} with ${updatedSections.length} modified sections:`, updatedSections);
 
-    // 1) Persist embedded JSON for backward compatibility with any consumers still reading it
-    const { error: updateError } = await supabase
-      .from('reports')
-      .update({ sections: report.sections })
-      .eq('id', reportId);
+    // Persist to report_sections (sole source of truth)
+    for (const sectionId of updatedSections) {
+      const sec = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
+      if (!sec) continue;
 
-    if (updateError) {
-      console.error('❌ Database update failed (reports.sections):', updateError);
-      throw new Error(`Failed to update report in database: ${updateError.message}`);
-    }
+      const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+      if ((sec as any)?.structured_data !== undefined) updatePayload.structured_data = (sec as any).structured_data;
+      if (sec.content !== undefined) updatePayload.content = sec.content;
+      if (sec.isGenerated !== undefined) updatePayload.is_generated = sec.isGenerated;
 
-    // 2) Persist structured_data into canonical row-based table (report_sections)
-    try {
-      for (const sectionId of updatedSections) {
-        const sec = (report.sections as Section[]).find((s: Section) => s.id === sectionId);
-        const sd = (sec as any)?.structured_data;
-        if (sd !== undefined) {
-          const { error: rsErr } = await supabase
-            .from('report_sections')
-            .update({ structured_data: sd as any })
-            .eq('id', sectionId)
-            .eq('report_id', reportId);
-          if (rsErr) {
-            console.warn(`⚠️ Failed to update report_sections for ${sectionId}:`, rsErr.message);
-          }
-        }
+      const { error: rsErr } = await supabase
+        .from('report_sections')
+        .update(updatePayload)
+        .eq('id', sectionId)
+        .eq('report_id', reportId);
+
+      if (rsErr) {
+        console.error(`❌ Failed to update report_sections for ${sectionId}:`, rsErr.message);
+        throw new Error(`Failed to update section ${sectionId}: ${rsErr.message}`);
       }
-    } catch (e) {
-      console.warn('⚠️ Error while syncing structured_data to report_sections:', e instanceof Error ? e.message : String(e));
     }
 
     console.log('✅ Database updates successful');
@@ -771,8 +764,8 @@ async function handleMultiModalAssessment(
 export async function POST(request: Request) {
   const supabase = await createRouteSupabase();
 
-  if (!process.env.OPENAI_API_KEY) {
-    return new NextResponse(JSON.stringify({ error: 'Server configuration error: OpenAI API key missing.' }), { status: 500 });
+  if (!process.env.GOOGLE_GEMINI_API_KEY) {
+    return new NextResponse(JSON.stringify({ error: 'Server configuration error: Gemini API key missing.' }), { status: 500 });
   }
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -1106,10 +1099,41 @@ You MUST call the 'update_report_section' tool with the section_id "${targetSect
     if (!targetSection) {
       return new NextResponse(JSON.stringify({ error: 'Target section required for points generation' }), { status: 400 });
     }
-    
-    // Legacy support - convert to prose generation
+    // Structured Outputs first: return a clean outline for the UI (no DB writes)
+    const Outline = z.object({
+      title: z.string(),
+      headings: z.array(
+        z.object({
+          title: z.string(),
+          bullets: z.array(z.string()),
+        })
+      ),
+    })
+
+    const outlineSystem = [
+      'You are an expert SLP writing a report section outline.',
+      'Return only JSON with a concise outline: section title, headings, and bullets.',
+      'Headings should be clinically meaningful; bullets should be short, specific points.',
+    ].join(' ')
+
+    if (unstructuredInput && unstructuredInput.trim()) {
+      const structured = await parseWithZod(
+        Outline,
+        'section_outline',
+        [
+          { role: 'system', content: outlineSystem },
+          { role: 'user', content: `Section: ${targetSection.title} (${targetSection.sectionType})\n\nNotes:\n${unstructuredInput}` },
+        ]
+      )
+
+      if (structured.ok) {
+        return NextResponse.json({ success: true, outline: structured.data })
+      }
+      // If strict outline fails, fall back to legacy prose generation below
+    }
+
+    // Legacy fallback - convert to prose generation via tool call
     const directive = targetSection.ai_directive || `Generate professional content for the ${targetSection.title || targetSection.sectionType} section of a speech-language evaluation report.`;
-    
     systemMessageContent = `You are an expert Speech-Language Pathologist (SLP) report writer. Your task is to generate professional content for a report section. 
 
 Section Type: ${targetSection.sectionType}
@@ -1207,15 +1231,20 @@ Generate rich text content based on the provided context. You MUST call the 'upd
           // Update the section content with AI-generated rich text
           report.sections[sectionIndex].content = content;
           report.sections[sectionIndex].isGenerated = true;
-          report.sections[sectionIndex].lastUpdated = new Date().toISOString();
 
+          // Persist to report_sections (sole source of truth)
           const { error: updateError } = await supabase
-            .from('reports')
-            .update({ sections: report.sections })
-            .eq('id', reportId);
+            .from('report_sections')
+            .update({
+              content,
+              is_generated: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', section_id)
+            .eq('report_id', reportId);
 
           if (updateError) {
-            throw new Error(`Failed to update report in database: ${updateError.message}`);
+            throw new Error(`Failed to update section in database: ${updateError.message}`);
           }
           return NextResponse.json({ updatedSection: report.sections[sectionIndex] });
         } else {

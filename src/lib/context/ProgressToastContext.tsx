@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { progressToastDispatcher, ProgressToast } from '@/lib/progress-toast-dispatcher'
-import { logProcessor } from '@/lib/event-bus'
+import { logProcessor, eventBus, ProcessingCompleteEvent } from '@/lib/event-bus'
 import { ProgressToastContainer } from '@/components/ProgressToast'
+import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 
 interface ProgressToastContextType {
   toasts: ProgressToast[]
@@ -16,6 +17,7 @@ const ProgressToastContext = createContext<ProgressToastContextType | undefined>
 
 export function ProgressToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ProgressToast[]>([])
+  const { addRecentUpdate } = useRecentUpdates()
 
   useEffect(() => {
     // Subscribe to toast updates
@@ -23,8 +25,18 @@ export function ProgressToastProvider({ children }: { children: React.ReactNode 
       setToasts(Array.from(toastMap.values()))
     })
 
+    // Also listen for processing complete events to mark inline updates
+    const unsubscribeEvents = eventBus.subscribe<ProcessingCompleteEvent>('processing-complete', (evt) => {
+      if (!evt?.id) return
+      const [sectionId, fieldPath] = String(evt.id).split('.')
+      if (evt.success && sectionId && fieldPath) {
+        try { addRecentUpdate(sectionId, [fieldPath], 'ai_update', 'info') } catch {}
+      }
+    })
+
     return () => {
       unsubscribe()
+      unsubscribeEvents()
       // Cleanup on unmount
       progressToastDispatcher.cleanup()
       logProcessor.cleanup()

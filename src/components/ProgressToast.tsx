@@ -1,7 +1,7 @@
 'use client'
 
-import React from 'react'
-import { CheckCircle, AlertCircle, Clock, Loader2, X } from 'lucide-react'
+import React, { useState } from 'react'
+import { CheckCircle, AlertCircle, Clock, Loader2, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { ProgressToast as ProgressToastType } from '@/lib/progress-toast-dispatcher'
 
 interface ProgressToastProps {
@@ -95,30 +95,70 @@ export default function ProgressToast({ toast, onDismiss }: ProgressToastProps) 
 }
 
 /**
- * Container component for displaying multiple progress toasts
+ * Compact panel that groups multiple updates into a single collapsible UI
  */
-interface ProgressToastContainerProps {
+interface ProgressPanelProps {
   toasts: ProgressToastType[]
   onDismiss?: (id: string) => void
   className?: string
 }
 
-export function ProgressToastContainer({ 
-  toasts, 
-  onDismiss, 
-  className = '' 
-}: ProgressToastContainerProps) {
+export function ProgressToastContainer({ toasts, onDismiss, className = '' }: ProgressPanelProps) {
   if (toasts.length === 0) return null
-  
+  const [open, setOpen] = useState(true)
+  const processing = toasts.filter(t => t.status === 'processing')
+  const succeeded = toasts.filter(t => t.status === 'success')
+  const failed = toasts.filter(t => t.status === 'error' || t.status === 'timeout')
+
   return (
-    <div className={`fixed top-16 right-4 z-50 space-y-2 max-w-sm ${className}`}>
-      {toasts.map((toast) => (
-        <ProgressToast
-          key={toast.id}
-          toast={toast}
-          onDismiss={onDismiss}
-        />
-      ))}
+    <div className={`fixed top-16 right-4 z-50 max-w-sm ${className}`}>
+      <div className="rounded-lg border border-gray-200 bg-white shadow-md">
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center gap-2 text-sm">
+            {processing.length > 0 ? (
+              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+            ) : failed.length > 0 ? (
+              <AlertCircle className="h-4 w-4 text-red-500" />
+            ) : (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            )}
+            <span className="font-medium text-gray-900">Updates</span>
+            <span className="text-xs text-gray-500">{toasts.length} item{toasts.length !== 1 ? 's' : ''}</span>
+          </div>
+          <button
+            className="text-gray-500 hover:text-gray-700"
+            onClick={() => setOpen(o => !o)}
+            aria-label={open ? 'Collapse' : 'Expand'}
+          >
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+        </div>
+
+        {open && (
+          <div className="max-h-72 overflow-auto divide-y divide-gray-100">
+            {toasts.map((toast) => (
+              <div key={toast.id} className="flex items-start gap-2 px-3 py-2">
+                <div className="pt-0.5">{getStatusIcon(toast.status)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-900 truncate">{formatToastMessage(toast)}</div>
+                  {toast.errors?.length ? (
+                    <div className="text-xs text-red-600 mt-0.5 truncate">{toast.errors[0]}</div>
+                  ) : null}
+                </div>
+                {onDismiss && (
+                  <button
+                    onClick={() => onDismiss(toast.id)}
+                    className="p-1 rounded hover:bg-gray-50"
+                    aria-label="Dismiss"
+                  >
+                    <X className="h-3.5 w-3.5 text-gray-400" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import { getGeminiClient, resolveModel } from '@/lib/ai/gemini-client'
+import { FunctionCallingConfigMode } from '@google/genai'
 import { getSectionSchemaForType, SectionSchema } from '@/lib/structured-schemas'
 
 export const runtime = 'nodejs'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-const MODEL = process.env.OPENAI_MODEL || 'gpt-5-2025-08-07'
 
 type AnalyzeBody = {
   sectionKey: string
@@ -46,84 +44,84 @@ export async function POST(req: NextRequest) {
     // Prepare source text with provenance markers
     const bundledText = sources
       .map(s => {
-        if (s.type === 'pdf') return `[pdf:${s.artifactId}#p${s.page}]\n${s.text}`
-        if (s.type === 'audio') return `[audio:${s.artifactId}@${s.startSec}-${s.endSec}]\n${s.text}`
+        if (s.type === 'pdf') return `[pdf:${s.artifactId}#p${(s as any).page}]\n${s.text}`
+        if (s.type === 'audio') return `[audio:${s.artifactId}@${(s as any).startSec}-${(s as any).endSec}]\n${s.text}`
         return `[text:${s.artifactId}]\n${s.text}`
       })
       .join('\n\n---\n\n')
 
-    // Tool to return strict JSON values per field
-    const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-      {
-        type: 'function',
-        function: {
-          name: 'return_field_values',
-          description: 'Return only the requested fields with validated values and provenance.',
-          parameters: {
+    // Gemini function declaration for field extraction
+    const functionDeclaration = {
+      name: 'return_field_values',
+      description: 'Return only the requested fields with validated values and provenance.',
+      parametersJsonSchema: {
+        type: 'object',
+        properties: {
+          values: {
             type: 'object',
-            properties: {
-              values: {
+            additionalProperties: true,
+            description: 'Map of field key to value (string | number | boolean | object | array)',
+          },
+          provenance: {
+            type: 'object',
+            additionalProperties: {
+              type: 'array',
+              items: {
                 type: 'object',
-                additionalProperties: true,
-                description: 'Map of field key to value (string | number | boolean | object | array)'
+                properties: {
+                  artifactId: { type: 'string' },
+                  page: { type: 'number' },
+                  startSec: { type: 'number' },
+                  endSec: { type: 'number' },
+                  confidence: { type: 'number' },
+                  note: { type: 'string' },
+                },
               },
-              provenance: {
-                type: 'object',
-                additionalProperties: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      artifactId: { type: 'string' },
-                      page: { type: 'number' },
-                      startSec: { type: 'number' },
-                      endSec: { type: 'number' },
-                      confidence: { type: 'number', minimum: 0, maximum: 1 },
-                      note: { type: 'string' }
-                    }
-                  }
-                }
-              }
             },
-            required: ['values']
-          }
-        }
-      }
-    ]
+          },
+        },
+        required: ['values'],
+      },
+    }
 
-    const system = [
+    const systemText = [
       'You are extracting structured values for a speech-language evaluation report.',
       'Return only the requested fields. If a value is missing, omit the key.',
       'Honor types: string | number | boolean | array | object. Keep numbers as numbers.',
-      'Provide provenance entries referencing artifactId and (page or startSec/endSec) where possible.'
+      'Provide provenance entries referencing artifactId and (page or startSec/endSec) where possible.',
     ].join(' ')
 
-    const user = `Section: ${schema.title} (key=${schema.key})\nFields: ${JSON.stringify(fieldContracts)}\n\nSources:\n${bundledText}`
+    const userText = `Section: ${schema.title} (key=${schema.key})\nFields: ${JSON.stringify(fieldContracts)}\n\nSources:\n${bundledText}`
 
-    // Call OpenAI with function call
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      temperature: 0.1,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ],
-      tools,
-      tool_choice: { type: 'function', function: { name: 'return_field_values' } as any } as any
+    const ai = getGeminiClient()
+    const model = resolveModel()
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: userText }] }],
+      config: {
+        systemInstruction: systemText,
+        temperature: 0.1,
+        tools: [{ functionDeclarations: [functionDeclaration] }],
+        toolConfig: {
+          functionCallingConfig: {
+            mode: FunctionCallingConfigMode.ANY,
+            allowedFunctionNames: ['return_field_values'],
+          },
+        },
+      },
     })
 
-    const msg = completion.choices[0].message
-    const tc = msg.tool_calls?.[0]
-    if (!tc?.function?.arguments) {
+    // Extract function call from response
+    const candidate = (response as any).candidates?.[0]
+    const parts = candidate?.content?.parts || []
+    const fcPart = parts.find((p: any) => p.functionCall)
+
+    if (!fcPart?.functionCall?.args) {
       return NextResponse.json({ success: false, error: 'Model did not return tool output' }, { status: 502 })
     }
 
-    let parsed: any
-    try {
-      parsed = JSON.parse(tc.function.arguments)
-    } catch {
-      parsed = { values: {}, provenance: {} }
-    }
+    const parsed = fcPart.functionCall.args
 
     return NextResponse.json({ success: true, sectionKey, fields: targetFields, ...parsed })
   } catch (err) {

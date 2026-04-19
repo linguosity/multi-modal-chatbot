@@ -93,9 +93,11 @@ export default class Anthropic {
         tool_choice = { type: 'function', function: { name: params.tool_choice.name } }
       }
 
+      const envMax = Number(process.env.OPENAI_MAX_COMPLETION_TOKENS || process.env.OPENAI_MAX_TOKENS || '')
+      const max = Number.isFinite(envMax) && envMax > 0 ? envMax : params.max_tokens
       const opts: any = {
         model: params.model || this.model,
-        max_completion_tokens: params.max_tokens,
+        max_completion_tokens: max,
         messages: chatMessages,
         tools: oaTools.length ? oaTools : undefined,
         tool_choice: tool_choice as any,

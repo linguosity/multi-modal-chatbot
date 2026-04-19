@@ -104,8 +104,8 @@ export const StudentBioSchema = z.object({
   eligibilityStatus: z.string().optional(),
 });
 
-// Schema for complete reports
-export const ReportSchema = z.object({
+// Schema for report metadata only (no embedded sections — sections live in report_sections table)
+export const ReportMetadataSchema = z.object({
   id: z.string(),
   templateId: z.string().optional(),
 
@@ -137,9 +137,6 @@ export const ReportSchema = z.object({
   // People involved
   evaluatorId: z.string().optional(),
 
-  // Content
-  sections: z.array(ReportSectionSchema),
-
   // Additional metadata
   metadata: z.object({
     studentBio: StudentBioSchema.optional(),
@@ -151,14 +148,17 @@ export const ReportSchema = z.object({
       uploadDate: z.string(),
       description: z.string().optional(),
       processingMethod: z.string().optional(),
-      sectionIds: z.array(z.string()).optional(), // Which sections this file contributed to
+      sectionIds: z.array(z.string()).optional(),
     })).optional(),
   }).optional(),
   tags: z.array(z.string()).optional(),
   finalizedDate: z.string().optional(),
-  printVersion: z.string().optional(),
+});
 
-  // Related data
+// Legacy: Full report schema with embedded sections (kept for backward compatibility during migration)
+export const ReportSchema = ReportMetadataSchema.extend({
+  sections: z.array(ReportSectionSchema),
+  printVersion: z.string().optional(),
   relatedAssessmentIds: z.array(z.string()).optional(),
   relatedEligibilityIds: z.array(z.string()).optional(),
 });

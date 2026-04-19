@@ -1,12 +1,8 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { MigrationPanel } from "@/components/MigrationPanel";
-import { ReportTimeline } from "@/components/ReportTimeline";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { redirect } from "next/navigation";
-import { BarChart3, Users, Clock, Home } from "lucide-react";
+import { DashboardContent } from "@/components/dashboard/DashboardContent";
 
 export default async function DashboardPage() {
-  console.log('Rendering DashboardPage');
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase.auth.getUser();
@@ -14,93 +10,50 @@ export default async function DashboardPage() {
     redirect("/auth");
   }
 
-  // Get some basic stats
+  // Fetch all reports for this user
   const { data: reports } = await supabase
-    .from('reports')
-    .select('id, status, created_at')
-    .order('created_at', { ascending: false });
+    .from("reports")
+    .select(
+      "id, title, type, status, student_id, student_name, metadata, created_at, updated_at, finalized_date"
+    )
+    .eq("user_id", data.user.id)
+    .order("updated_at", { ascending: false });
 
-  const totalReports = reports?.length || 0;
-  const completedReports = reports?.filter(r => r.status === 'completed').length || 0;
-  const inProgressReports = reports?.filter(r => r.status === 'in_progress').length || 0;
+  type ReportRow = {
+    id: string;
+    title: string;
+    type: string;
+    status: string;
+    student_id: string | null;
+    student_name: string | null;
+    metadata: any;
+    created_at: string;
+    updated_at: string;
+    finalized_date: string | null;
+  };
+
+  const allReports: ReportRow[] = (reports ?? []) as ReportRow[];
+
+  // Fetch section counts per report in a single query
+  const reportIds = allReports.map((r) => r.id);
+  let sectionCounts: Record<string, number> = {};
+  if (reportIds.length > 0) {
+    const { data: sections } = await supabase
+      .from("report_sections")
+      .select("report_id")
+      .in("report_id", reportIds);
+
+    if (sections) {
+      for (const s of sections) {
+        sectionCounts[s.report_id] = (sectionCounts[s.report_id] || 0) + 1;
+      }
+    }
+  }
 
   return (
-    <div className="space-y-8">
-      {/* Breadcrumb Navigation */}
-      <Breadcrumb 
-        items={[
-          {
-            id: 'dashboard',
-            label: 'Dashboard',
-            current: true,
-            iconKey: 'home'
-          }
-        ]}
-        showHome={false}
-        variant="clinical"
-      />
-
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">
-            Manage your speech-language evaluation reports
-          </p>
-        </div>
-        <div className="flex items-center space-x-3">
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg border">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <BarChart3 className="h-6 w-6 text-blue-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Reports</p>
-              <p className="text-2xl font-bold text-gray-900">{totalReports}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg border">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Users className="h-6 w-6 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Completed</p>
-              <p className="text-2xl font-bold text-gray-900">{completedReports}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg border">
-          <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <Clock className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">In Progress</p>
-              <p className="text-2xl font-bold text-gray-900">{inProgressReports}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Report Timeline */}
-      <div className="bg-gray-50 p-6 rounded-lg">
-        <ReportTimeline />
-      </div>
-
-      {/* Migration Panel - Only show if needed */}
-      <div className="max-w-2xl">
-        <h2 className="text-lg font-semibold mb-4">System Updates</h2>
-        <MigrationPanel />
-      </div>
-    </div>
+    <DashboardContent
+      reports={allReports}
+      sectionCounts={sectionCounts}
+    />
   );
 }

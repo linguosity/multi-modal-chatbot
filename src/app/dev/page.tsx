@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FeedbackDemo, BulletToNarrativeDemo, PDFProcessingDemo } from '@/components/dev'
-import { FileText, MessageSquare, Upload, Code } from 'lucide-react'
+import { FileText, MessageSquare, Upload, Code, Sparkles } from 'lucide-react'
+import Link from 'next/link'
 
 // Only show in development
 if (process.env.NODE_ENV === 'production') {
@@ -103,6 +104,22 @@ export default function DevDashboard() {
               </CardContent>
             </Card>
           ))}
+
+          {/* Structured Outputs Demo (navigates to dedicated page) */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-6 w-6 text-emerald-600" />
+                <CardTitle className="text-lg">Structured Outputs Demo</CardTitle>
+              </div>
+              <CardDescription>Try schema-validated JSON and streaming results</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/dev/structured">
+                <Button className="w-full" variant="secondary">Open Structured Demo</Button>
+              </Link>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="mt-12 bg-white rounded-lg p-6 border">

@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-// Claude SDK for PDF document analysis
-import Anthropic from '@anthropic-ai/sdk'
-// OpenAI for GPT-5 + vision + tools
-import OpenAI from 'openai'
-import { processMultipleFiles, transcribeAudio, fileToBase64 } from '@/lib/file-processing'
+// Gemini SDK for all AI processing
+import { getGeminiClient, resolveModel } from '@/lib/ai/gemini-client'
+import { FunctionCallingConfigMode } from '@google/genai'
+import { processMultipleFiles, transcribeAudio, fileToBase64 } from '@/lib/ai/gemini-file-processor'
 import { validateAndCleanFieldUpdate, dataIntegrityGuard } from '@/lib/data-integrity-guard'
 import { reportContextBuilder } from '@/lib/report-context-builder'
 // PDF text extraction disabled to avoid native 'canvas' dependency
 import { validatePathAgainstSchema, coerceValueToSchema } from '@/lib/value-normalizer'
 import { SectionSchema, ASSESSMENT_RESULTS_SECTION, ASSESSMENT_TOOLS_SECTION, VALIDITY_STATEMENT_SECTION, REASON_FOR_REFERRAL_SECTION, LANGUAGE_SAMPLE_SECTION, CONCLUSION_SECTION, RECOMMENDATIONS_SECTION, ACCOMMODATIONS_SECTION } from '@/lib/structured-schemas'
+import { z } from 'zod'
+import { parseWithZod } from '@/lib/ai/gemini-structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
 import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  project: process.env.OPENAI_PROJECT || process.env.OPENAI_PROJECT_ID,
-})
+// Gemini client is obtained via getGeminiClient() singleton
 
 export async function POST(request: NextRequest) {
   console.log('🚀 === AI INTAKE API ROUTE START ===')
@@ -269,40 +266,47 @@ export async function POST(request: NextRequest) {
           try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()} ... replace`) } catch {}
         }
         if (f.type === 'application/pdf') {
-          // Send PDF to Claude to extract a concise, report-ready "Main Points" summary for SLP
-          const uploaded = await claude.beta.files.upload({ file: f })
-          const pdfExtract = await claude.beta.messages.create({
-            model: process.env.CLAUDE_MODEL || 'claude-opus-4-1-20250805',
-            max_tokens: 2000,
-            temperature: 0.1,
-            system: [
-              'You are an expert Speech-Language Pathologist extracting MAIN POINTS from assessment PDFs for a clinical report.',
-              'Goal: produce a concise, high-signal summary tailored for SLP reporting, not a verbatim transcript.',
-              'Include only the most decision-relevant details with brief page references when clear (e.g., [p.3]).',
-              'Focus areas (use only those present):',
-              '- Demographics: name/initials, age, grade, primary language(s)',
-              '- Referral reason / concerns (parent/teacher/clinician)',
-              '- Background: medical/educational/services history; hearing/vision status',
-              '- Assessment tools used (e.g., CELF-Preschool-3, PLS-5, GFTA-3, language sample), forms, dates',
-              '- Key scores/results: core/composite/indices, subtests, scaled/standard scores, percentiles; norms/date',
-              '- Observations: attention/behavior/regulation, speech intelligibility, fluency, voice, pragmatics',
-              '- Strengths and needs: expressive/receptive/pragmatics/speech sound patterns noted',
-              '- Diagnostic impressions / eligibility (if stated)',
-              '- Recommendations: services/frequency/setting, goals focus, accommodations, home carryover',
-              'Constraints:',
-              '- Be concise (bulleted). No long quotes. No speculation. No formatting beyond bullets and short headers.',
-              '- Do not invent data. If a field is not present, omit it.',
-              '- Output strictly as plain text bullets suitable to pass onward (no JSON, no extra commentary).'
-            ].join('\n'),
-            messages: [{
+          // Send PDF to Gemini to extract a concise, report-ready "Main Points" summary for SLP
+          const arrayBuffer = await f.arrayBuffer()
+          const base64Data = Buffer.from(arrayBuffer).toString('base64')
+
+          const ai = getGeminiClient()
+          const pdfModel = resolveModel()
+          const pdfExtractResponse = await ai.models.generateContent({
+            model: pdfModel,
+            contents: [{
               role: 'user',
-              content: [{ type: 'document', title: f.name, source: { type: 'file', file_id: uploaded.id } }]
-            }]
+              parts: [
+                { inlineData: { mimeType: 'application/pdf', data: base64Data } },
+                { text: `Extract the MAIN POINTS from this assessment PDF for a clinical SLP report. Be concise with bulleted format.` }
+              ]
+            }],
+            config: {
+              systemInstruction: [
+                'You are an expert Speech-Language Pathologist extracting MAIN POINTS from assessment PDFs for a clinical report.',
+                'Goal: produce a concise, high-signal summary tailored for SLP reporting, not a verbatim transcript.',
+                'Include only the most decision-relevant details with brief page references when clear (e.g., [p.3]).',
+                'Focus areas (use only those present):',
+                '- Demographics: name/initials, age, grade, primary language(s)',
+                '- Referral reason / concerns (parent/teacher/clinician)',
+                '- Background: medical/educational/services history; hearing/vision status',
+                '- Assessment tools used (e.g., CELF-Preschool-3, PLS-5, GFTA-3, language sample), forms, dates',
+                '- Key scores/results: core/composite/indices, subtests, scaled/standard scores, percentiles; norms/date',
+                '- Observations: attention/behavior/regulation, speech intelligibility, fluency, voice, pragmatics',
+                '- Strengths and needs: expressive/receptive/pragmatics/speech sound patterns noted',
+                '- Diagnostic impressions / eligibility (if stated)',
+                '- Recommendations: services/frequency/setting, goals focus, accommodations, home carryover',
+                'Constraints:',
+                '- Be concise (bulleted). No long quotes. No speculation. No formatting beyond bullets and short headers.',
+                '- Do not invent data. If a field is not present, omit it.',
+                '- Output strictly as plain text bullets suitable to pass onward (no JSON, no extra commentary).'
+              ].join('\n'),
+              temperature: 0.1,
+              maxOutputTokens: 2000,
+            }
           })
-          const extractedText = pdfExtract.content
-            .filter((b: any) => b.type === 'text')
-            .map((b: any) => b.text)
-            .join('\n')
+
+          const extractedText = pdfExtractResponse.text || ''
           const textBlock2 = { type: 'text', text: `Main Points from PDF (${f.name}):\n${extractedText}` }
           content.push(textBlock2)
           openaiContent.push(textBlock2)
@@ -451,23 +455,25 @@ export async function POST(request: NextRequest) {
       try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai ... replace`) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_start' }) } catch {}
 
-      // Define tools for Responses API
-      const tools: any[] = [{
-        type: 'function',
-        name: reportSchemaTool.name,
-        description: reportSchemaTool.description,
-        parameters: reportSchemaTool.input_schema,
+      // Define Gemini function declarations
+      const geminiTools = [{
+        functionDeclarations: [{
+          name: reportSchemaTool.name,
+          description: reportSchemaTool.description,
+          parametersJsonSchema: reportSchemaTool.input_schema,
+        }]
       }]
 
-      // Convert content to Responses API parts
-      const toResponsePart = (part: any) => {
+      // Convert content to Gemini Parts
+      const toGeminiPart = (part: any) => {
         if (part?.type === 'text' || part?.type === 'input_text') {
-          return { type: 'input_text', text: part.text }
+          return { text: part.text }
         }
         if (part?.type === 'image_url') {
-          return { type: 'image_url', image_url: { url: part.image_url?.url || part.image_url } }
+          // Image URLs not supported inline; skip or convert
+          return { text: `[Image: ${part.image_url?.url || part.image_url}]` }
         }
-        return { type: 'input_text', text: typeof part === 'string' ? part : JSON.stringify(part) }
+        return { text: typeof part === 'string' ? part : JSON.stringify(part) }
       }
 
       // Compose Report Schema JSON (selected sections only) to provide full structural context
@@ -496,70 +502,85 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const input: any[] = [
-        { role: 'system', content: [{ type: 'input_text', text: systemPrompt }] },
-        { role: 'system', content: [{ type: 'input_text', text: `REPORT SCHEMA (JSON, selected sections):\n${JSON.stringify(schemaPayload).slice(0, 120000)}` }] },
-        { role: 'system', content: [{ type: 'input_text', text: allowedPathsText }] },
-        { role: 'user', content: (openaiContent as any[]).map(toResponsePart) }
-      ]
+      // Build Gemini system instruction from all system messages
+      const geminiSystemInstruction = [
+        systemPrompt,
+        `REPORT SCHEMA (JSON, selected sections):\n${JSON.stringify(schemaPayload).slice(0, 120000)}`,
+        allowedPathsText,
+      ].join('\n\n')
 
-      const response = await openai.responses.create({
-        model: process.env.OPENAI_MODEL || 'gpt-5-2025-08-07',
-        input,
-        tools,
-        tool_choice: {
-          type: 'allowed_tools',
-          mode: 'required',
-          tools: [{ type: 'function', name: 'save_assessment_data' }]
-        } as any,
-      } as any)
+      // Build Gemini user content parts
+      const geminiUserParts = (openaiContent as any[]).map(toGeminiPart)
 
-      console.log('✅ Step 16: GPT-5 Responses API call returned')
+      const ai = getGeminiClient()
+      const geminiModel = resolveModel()
+
+      const response = await ai.models.generateContent({
+        model: geminiModel,
+        contents: [{ role: 'user', parts: geminiUserParts }],
+        config: {
+          systemInstruction: geminiSystemInstruction,
+          tools: geminiTools,
+          toolConfig: {
+            functionCallingConfig: {
+              mode: FunctionCallingConfigMode.ANY,
+              allowedFunctionNames: ['save_assessment_data'],
+            },
+          },
+        },
+      })
+
+      console.log('✅ Step 16: Gemini API call returned')
       try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai`) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_complete' }) } catch {}
       console.log('✅ Step 17: Extracting tool call from response...')
 
-      const out: any[] = (response as any).output || []
-      let fn = out.find((o: any) => o?.type === 'function_call' && o?.name === 'save_assessment_data')
+      // Extract function call from Gemini response
+      const candidate = (response as any).candidates?.[0]
+      const responseParts = candidate?.content?.parts || []
+      let fcPart = responseParts.find((p: any) => p.functionCall?.name === 'save_assessment_data')
 
-      if (!fn) {
-        console.warn('⚠️ Step 16: No function_call found. Attempting strict retry and JSON fallback...')
+      if (!fcPart) {
+        console.warn('⚠️ Step 16: No function_call found. Attempting Structured Outputs fallback...')
 
-        const strictInput: any[] = [
-          { role: 'system', content: [{ type: 'input_text', text: `${systemPrompt}\n\nSTRICT_TOOL_MODE: You MUST call the save_assessment_data tool and return no prose.` }] },
-          { role: 'user', content: (openaiContent as any[]).map(toResponsePart) }
-        ]
-        const strict = await openai.responses.create({
-          model: process.env.OPENAI_MODEL || 'gpt-5-2025-08-07',
-          input: strictInput,
-          tools,
-          tool_choice: {
-            type: 'allowed_tools',
-            mode: 'required',
-            tools: [{ type: 'function', name: 'save_assessment_data' }]
-          } as any,
-        } as any)
+        // Structured Outputs fallback via parseWithZod
+        const UpdateSchema = z.object({
+          section_id: z.string(),
+          field_path: z.string(),
+          value: z.any(),
+          merge_strategy: z.enum(['replace', 'append', 'merge']).default('replace'),
+          confidence: z.number().min(0).max(1).optional(),
+          source_reference: z.string().optional(),
+        })
+        const UpdatesEnvelope = z.object({ updates: z.array(UpdateSchema) })
 
-        const strictOut: any[] = (strict as any).output || []
-        fn = strictOut.find((o: any) => o?.type === 'function_call' && o?.name === 'save_assessment_data')
-        if (!fn) {
-          const textBlocks: string[] = []
-          for (const o of strictOut.length ? strictOut : out) {
-            if (o?.type === 'output_text' && o?.text) textBlocks.push(o.text)
-          }
-          const combined = textBlocks.join('\n')
+        const so = await parseWithZod(
+          UpdatesEnvelope,
+          'assessment_updates',
+          [
+            { role: 'system', content: `${systemPrompt}\n\nReturn only JSON with { updates: [...] } strictly matching the schema.` },
+            { role: 'user', content: geminiUserParts.map((p: any) => p.text || '').join('\n\n') },
+          ]
+        )
+
+        if (so.ok) {
+          updates = so.data.updates
+          console.log(`✅ Step 17: Parsed ${updates.length} updates via Structured Outputs fallback`)
+        } else {
+          // Last resort: check if response has text that contains JSON
+          const responseText = response.text || ''
           let parsed: any = null
-          try { parsed = JSON.parse(combined) } catch {
-            const fence = combined.match(/```(?:json)?\n([\s\S]*?)\n```/i)
+          try { parsed = JSON.parse(responseText) } catch {
+            const fence = responseText.match(/```(?:json)?\n([\s\S]*?)\n```/i)
             if (fence?.[1]) { try { parsed = JSON.parse(fence[1]) } catch {} }
             if (!parsed) {
-              const s = combined.indexOf('{'); const e = combined.lastIndexOf('}')
-              if (s !== -1 && e !== -1 && e > s) { try { parsed = JSON.parse(combined.slice(s, e + 1)) } catch {} }
+              const s = responseText.indexOf('{'); const e = responseText.lastIndexOf('}')
+              if (s !== -1 && e !== -1 && e > s) { try { parsed = JSON.parse(responseText.slice(s, e + 1)) } catch {} }
             }
           }
           if (parsed && Array.isArray(parsed.updates)) {
             updates = parsed.updates
-            console.log(`✅ Step 17: Parsed ${updates.length} updates from assistant JSON fallback`)
+            console.log(`✅ Step 17: Parsed ${updates.length} updates from text JSON fallback`)
           } else {
             console.error('❌ Step 16: No function_call and JSON fallback failed.')
             throw new Error('No tool call found in response from model')
@@ -567,9 +588,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (fn && fn.arguments) {
-        let args: any = {}
-        try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments } catch { args = fn.arguments }
+      if (fcPart && fcPart.functionCall?.args) {
+        const args = fcPart.functionCall.args
         updates = (args as any).updates || []
         if (Array.isArray((args as any).domain_summary)) {
           domainSummary = (args as any).domain_summary
@@ -584,7 +604,8 @@ export async function POST(request: NextRequest) {
     const resolver = new StructuredFieldPathResolver()
 
     // If domain_summary provided, upsert into Assessment Results section before granular updates
-    if (domainSummary && domainSummary.length > 0) {
+    // Respect dryRun: do not write to DB during preview-only runs
+    if (!dryRun && domainSummary && domainSummary.length > 0) {
       try {
         const resultsSection = targetSectionsWithContext.find(s => (s as any).section_type === 'assessment_results' || ((s.title || '').toLowerCase().includes('assessment results')))
         if (resultsSection) {
@@ -911,7 +932,26 @@ export async function POST(request: NextRequest) {
       const prevFiles = Array.isArray(prevMeta.uploadedFiles) ? prevMeta.uploadedFiles : []
       const mergedFiles = [...prevFiles, ...uploadedFilesMeta]
       const activity = Array.isArray(prevMeta.activity) ? prevMeta.activity : []
-      activity.push({ id: crypto.randomUUID(), type: 'ai_intake', timestamp: new Date().toISOString(), sectionIds, summaries: processSummaries })
+
+      // Only record activity when we have meaningful process summaries and not in dry-run mode
+      const nonEmptySummaries = (processSummaries || []).filter((s: any) => typeof s === 'string' && s.trim().length > 0)
+      if (!dryRun && nonEmptySummaries.length > 0) {
+        // Build section titles for successful updates
+        try {
+          const idToTitle = new Map<string, string>()
+          for (const s of targetSectionsWithContext) {
+            const sid = (s as any).id || (s as any).section_id || s.id
+            const title = (s as any).title || 'Untitled'
+            if (sid) idToTitle.set(String(sid), String(title))
+          }
+          const successfulIds = results.filter((r: any) => r?.success && r.sectionId).map((r: any) => r.sectionId)
+          const sectionTitles = Array.from(new Set(successfulIds.map((sid: string) => idToTitle.get(sid) || sid)))
+          activity.push({ id: crypto.randomUUID(), type: 'ai_intake', timestamp: new Date().toISOString(), sectionTitles, summaries: nonEmptySummaries })
+        } catch {
+          // Fallback: still push minimal with summaries only
+          activity.push({ id: crypto.randomUUID(), type: 'ai_intake', timestamp: new Date().toISOString(), summaries: nonEmptySummaries })
+        }
+      }
       await supabase
         .from('reports')
         .update({ metadata: { ...prevMeta, uploadedFiles: mergedFiles, activity } })
@@ -922,6 +962,34 @@ export async function POST(request: NextRequest) {
       dbLog({ stage: 'metadata_persist_error', message: (e as Error)?.message || 'persist failed', event_type: 'stage' }).catch(() => {})
     }
 
+    // Build a concise processing summary for UI
+    let processingSummary: { summary: string; confidence: number; issues: string[] } | null = null
+    try {
+      const ProcessingSummary = z.object({
+        summary: z.string(),
+        confidence: z.number().min(0).max(1),
+        issues: z.array(z.string()),
+      })
+
+      const successfulIds = results.filter((r: any) => r?.success && r.sectionId).map((r: any) => r.sectionId)
+      const uniqueSections = Array.from(new Set(successfulIds))
+      const exampleChanges = (updates || []).slice(0, 5).map((u: any) => `${u.section_id}.${u.field_path}`)
+
+      const so = await parseWithZod(
+        ProcessingSummary,
+        'processing_summary',
+        [
+          { role: 'system', content: 'Summarize changes for a clinical report intake. Return only JSON: { summary, confidence, issues }.' },
+          { role: 'user', content: `Applied ${successful} updates (${failed} failed). Sections affected: ${uniqueSections.join(', ') || 'none'}\nExample changes: ${exampleChanges.join(', ') || 'n/a'}\nNotes: ${(processSummaries || []).slice(0, 5).join(' | ')}` },
+        ]
+      )
+
+      if (so.ok) processingSummary = so.data
+      else processingSummary = { summary: (dryRun ? `Previewed ${successful} updates` : `Processed ${successful} updates`), confidence: 0.8, issues: [] }
+    } catch {
+      processingSummary = { summary: (dryRun ? `Previewed ${successful} updates` : `Processed ${successful} updates`), confidence: 0.8, issues: [] }
+    }
+
     const response = NextResponse.json({
       success: true,
       message: dryRun ? `Preview: ${successful} updates proposed` : `Processed ${successful} updates successfully`,
@@ -929,6 +997,7 @@ export async function POST(request: NextRequest) {
         successful,
         failed,
         processSummaries,
+        processingSummary,
         updateResults: results,
         proposedUpdates: updates,
         mode: dryRun ? 'dryRun' : 'write'
