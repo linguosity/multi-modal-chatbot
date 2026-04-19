@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
-import Anthropic from '@/lib/ai/gemini-messages'
+import Anthropic from '@/lib/ai/anthropic-compat'
 import { processMultipleFiles, filesToClaudeContent, ProcessedFile } from '@/lib/ai/gemini-file-processor';
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver';
 import { getSectionSchemaForType, SectionSchema } from '@/lib/structured-schemas';
 import { StructuredDataMerger } from '@/lib/structured-data-merger';
 import { z } from 'zod'
-import { parseWithZod } from '@/lib/ai/gemini-structured'
+import { parseWithZod } from '@/lib/ai/structured'
 
 const anthropic = new Anthropic({});
 

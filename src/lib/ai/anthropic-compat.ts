@@ -1,8 +1,21 @@
-// Anthropic compatibility layer backed by OpenAI function calling
-// Supports: text messages, tool/function calling, tool results loop
-// Note: Does not support Anthropic image/document content blocks; callers should pre-extract text.
+/**
+ * Anthropic SDK wrapper exposing the message-shaped interface the rest of the
+ * codebase expects (`anthropic.messages.create(params)` → `{ content, stop_reason }`).
+ *
+ * Historically this was an OpenAI-backed shim; now it's backed by the real
+ * Anthropic SDK (`@anthropic-ai/sdk`). Keep the class API stable so routes
+ * that import this continue working.
+ */
 
-import OpenAI from 'openai'
+import AnthropicSDK from '@anthropic-ai/sdk'
+
+export const CLAUDE_MODELS = {
+  OPUS:   'claude-opus-4-7',
+  SONNET: 'claude-sonnet-4-6',
+  HAIKU:  'claude-haiku-4-5-20251001',
+} as const
+
+export type ClaudeModelId = (typeof CLAUDE_MODELS)[keyof typeof CLAUDE_MODELS]
 
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
@@ -21,7 +34,7 @@ type AnthropicTool = {
 }
 
 type CreateParams = {
-  model: string
+  model?: string
   max_tokens?: number
   temperature?: number
   system?: string
@@ -30,116 +43,87 @@ type CreateParams = {
   tool_choice?: { type: 'tool'; name: string } | 'auto' | undefined
 }
 
-export default class Anthropic {
-  private openai: OpenAI
-  private model: string
+let _client: AnthropicSDK | null = null
 
-  constructor(opts: { apiKey?: string, project?: string } = {}) {
-    this.openai = new OpenAI({
-      apiKey: opts.apiKey || process.env.OPENAI_API_KEY,
-      // Support project-scoped API keys if provided
-      project: opts.project || process.env.OPENAI_PROJECT || process.env.OPENAI_PROJECT_ID,
-    })
-    // Prefer Claude model if provided; otherwise allow override via OPENAI_MODEL
-    this.model = process.env.CLAUDE_MODEL || process.env.OPENAI_MODEL || 'claude-opus-4-1-20250805'
+function getClient(apiKey?: string): AnthropicSDK {
+  if (_client) return _client
+  _client = new AnthropicSDK({
+    apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
+  })
+  return _client
+}
+
+function resolveModel(explicit?: string): string {
+  return explicit || process.env.CLAUDE_MODEL || CLAUDE_MODELS.SONNET
+}
+
+/**
+ * Class kept named `Anthropic` so existing callers doing
+ * `import Anthropic from '...'` followed by `Anthropic.ToolUseBlock` etc.
+ * still type-resolve via the matching namespace declaration below.
+ */
+export default class Anthropic {
+  private defaultModel: string
+  private apiKey?: string
+
+  constructor(opts: { apiKey?: string; project?: string } = {}) {
+    this.apiKey = opts.apiKey
+    this.defaultModel = process.env.CLAUDE_MODEL || CLAUDE_MODELS.SONNET
   }
 
   public messages = {
     create: async (params: CreateParams) => {
-      const system = params.system
-      const tools = params.tools || []
+      const client = getClient(this.apiKey)
+      const model = resolveModel(params.model || this.defaultModel)
 
-      // Map Anthropic tool schemas to OpenAI function tools
-      const oaTools = tools.map(t => ({
-        type: 'function' as const,
-        function: {
-          name: t.name,
-          description: t.description || undefined,
-          parameters: t.input_schema || { type: 'object', properties: {} }
-        }
-      }))
-
-      // Build chat messages
-      const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = []
-      if (system) {
-        chatMessages.push({ role: 'system', content: system })
-      }
-
+      // Split messages into system prompt + conversation
+      let systemText = params.system || ''
+      const conversation: any[] = []
       for (const m of params.messages) {
-        // Collapse text blocks into a single string
-        const toolResultBlocks = m.content.filter(b => b.type === 'tool_result') as Extract<AnthropicContentBlock, { type: 'tool_result' }>[]
-        const textBlocks = m.content.filter(b => b.type === 'text') as Extract<AnthropicContentBlock, { type: 'text' }>[]
-
-        if (toolResultBlocks.length > 0) {
-          // Forward tool results as tool role messages
-          for (const tr of toolResultBlocks) {
-            chatMessages.push({
-              role: 'tool',
-              tool_call_id: tr.tool_use_id,
-              content: tr.content || ''
-            })
-          }
+        if (m.role === 'system') {
+          const extra = m.content
+            .filter((b): b is Extract<AnthropicContentBlock, { type: 'text' }> => b.type === 'text')
+            .map((b) => b.text)
+            .join('\n')
+          systemText = systemText ? `${systemText}\n${extra}` : extra
           continue
         }
-
-        const combined = textBlocks.map(t => t.text).join('\n')
-        const role = m.role === 'system' ? 'user' : m.role // treat stray system as user for safety
-        chatMessages.push({ role, content: combined || '' })
+        conversation.push({ role: m.role, content: m.content })
       }
 
-      // Tool choice mapping
-      let tool_choice: any = undefined
-      if (params.tool_choice && typeof params.tool_choice === 'object' && params.tool_choice.type === 'tool') {
-        tool_choice = { type: 'function', function: { name: params.tool_choice.name } }
+      const requestBody: any = {
+        model,
+        max_tokens: params.max_tokens ?? 4096,
+        messages: conversation,
+      }
+      if (systemText) requestBody.system = systemText
+      if (params.temperature !== undefined) requestBody.temperature = params.temperature
+      if (params.tools && params.tools.length > 0) {
+        requestBody.tools = params.tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.input_schema,
+        }))
+      }
+      if (
+        params.tool_choice &&
+        typeof params.tool_choice === 'object' &&
+        params.tool_choice.type === 'tool'
+      ) {
+        requestBody.tool_choice = { type: 'tool', name: params.tool_choice.name }
       }
 
-      const envMax = Number(process.env.OPENAI_MAX_COMPLETION_TOKENS || process.env.OPENAI_MAX_TOKENS || '')
-      const max = Number.isFinite(envMax) && envMax > 0 ? envMax : params.max_tokens
-      const opts: any = {
-        model: params.model || this.model,
-        max_completion_tokens: max,
-        messages: chatMessages,
-        tools: oaTools.length ? oaTools : undefined,
-        tool_choice: tool_choice as any,
-      }
-      // GPT-5 models only support default temperature; omit to avoid 400s
-      const modelName = (params.model || this.model || '').toString()
-      if (!modelName.startsWith('gpt-5') && params.temperature !== undefined) {
-        opts.temperature = params.temperature
-      }
-
-      const completion = await this.openai.chat.completions.create(opts)
-
-      const choice = completion.choices[0]
-      const toolCalls = choice.message.tool_calls || []
-      const content: AnthropicContentBlock[] = []
-
-      const text = choice.message.content || ''
-      if (text && text.trim().length > 0) {
-        content.push({ type: 'text', text })
-      }
-
-      for (const tc of toolCalls) {
-        let args: any = {}
-        try {
-          args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {}
-        } catch {
-          args = tc.function.arguments
-        }
-        content.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input: args })
-      }
-
-      const stop_reason = toolCalls.length > 0 ? 'tool_use' : (choice.finish_reason || 'stop')
+      const response = await client.messages.create(requestBody)
 
       return {
-        content,
-        stop_reason
+        content: response.content as unknown as AnthropicContentBlock[],
+        stop_reason: response.stop_reason ?? 'stop',
       }
-    }
+    },
   }
 }
 
-// Type namespace compatibility to satisfy existing type references like Anthropic.ToolUseBlock
+// Type namespace for `Anthropic.ToolUseBlock` / `Anthropic.MessageParam` references
 export namespace Anthropic {
   export type ToolUseBlock = { type: 'tool_use'; id: string; name: string; input: any }
   export type MessageParam = {

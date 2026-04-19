@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@/lib/ai/gemini-messages'
+import Anthropic from '@/lib/ai/anthropic-compat'
 
 const anthropic = new Anthropic({})
 

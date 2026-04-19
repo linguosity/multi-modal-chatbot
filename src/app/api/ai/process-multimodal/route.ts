@@ -8,7 +8,7 @@ import { transcribeAudio } from '@/lib/ai/gemini-file-processor'
 import { validatePathAgainstSchema, coerceValueToSchema } from '@/lib/value-normalizer'
 import { SectionSchema } from '@/lib/structured-schemas'
 import { z } from 'zod'
-import { parseWithZod } from '@/lib/ai/gemini-structured'
+import { parseWithZod } from '@/lib/ai/structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
 import type { Part } from '@google/genai'
 

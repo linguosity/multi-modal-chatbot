@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
-import Anthropic from '@/lib/ai/gemini-messages'
+import Anthropic from '@/lib/ai/anthropic-compat'
 import { z } from 'zod'
-import { parseWithZod } from '@/lib/ai/gemini-structured'
+import { parseWithZod } from '@/lib/ai/structured'
 
 const anthropic = new Anthropic({})
 

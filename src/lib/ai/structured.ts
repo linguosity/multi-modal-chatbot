@@ -1,17 +1,19 @@
-import OpenAI from 'openai'
-import { z } from 'zod'
-import { zodTextFormat } from 'openai/helpers/zod'
+/**
+ * Structured-output helpers backed by Claude tool-use.
+ *
+ * Claude doesn't have a dedicated `responses.parse()` endpoint like OpenAI;
+ * the canonical pattern is to define a single tool whose input_schema matches
+ * the desired JSON shape and force the model to call it. The tool's input
+ * object is the validated JSON response.
+ *
+ * Same exports as before (`parseWithZod`, `streamParseWithZod`, `RoleMessage`,
+ * `StructuredParseOptions`) so call sites don't need to change.
+ */
 
-// Centralized OpenAI client (reuses project-scoped key if present)
-let _client: OpenAI | null = null
-export function getOpenAI(): OpenAI {
-  if (_client) return _client
-  _client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    project: process.env.OPENAI_PROJECT || process.env.OPENAI_PROJECT_ID,
-  })
-  return _client
-}
+import AnthropicSDK from '@anthropic-ai/sdk'
+import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
+import { CLAUDE_MODELS } from './anthropic-compat'
 
 export type RoleMessage = { role: 'system' | 'user' | 'assistant'; content: string }
 
@@ -20,10 +22,51 @@ export type StructuredParseOptions = {
   max_output_tokens?: number
 }
 
+let _client: AnthropicSDK | null = null
+function getClient(): AnthropicSDK {
+  if (_client) return _client
+  _client = new AnthropicSDK({ apiKey: process.env.ANTHROPIC_API_KEY })
+  return _client
+}
+
+function resolveModel(explicit?: string): string {
+  return explicit || process.env.CLAUDE_MODEL || CLAUDE_MODELS.SONNET
+}
+
+/** Convert our flat messages array → Anthropic messages + system prompt. */
+function toAnthropicInput(messages: RoleMessage[]): {
+  system?: string
+  messages: any[]
+} {
+  let system: string | undefined
+  const out: any[] = []
+  for (const m of messages) {
+    if (m.role === 'system') {
+      system = system ? `${system}\n${m.content}` : m.content
+      continue
+    }
+    out.push({
+      role: m.role,
+      content: [{ type: 'text', text: m.content }],
+    })
+  }
+  return { system, messages: out }
+}
+
+/** Strip JSON-schema fields Claude's tool_use doesn't need. */
+function zodToClaudeSchema(schema: z.ZodType): Record<string, unknown> {
+  const full = zodToJsonSchema(schema, { target: 'openApi3' }) as Record<string, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { $schema, default: _d, ...rest } = full as any
+  return rest
+}
+
+function sanitizeToolName(name: string): string {
+  return (name || 'return_structured_output').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
+}
+
 /**
- * Parse model output into a Zod-validated object using Structured Outputs.
- * - Ensures strict JSON schema adherence
- * - Surfaces refusals and incomplete responses
+ * Parse model output into a Zod-validated object using a forced tool call.
  */
 export async function parseWithZod<T>(
   schema: z.ZodType<T>,
@@ -31,35 +74,50 @@ export async function parseWithZod<T>(
   messages: RoleMessage[],
   opts: StructuredParseOptions = {}
 ): Promise<{ ok: true; data: T } | { ok: false; error: string; refusal?: string }> {
-  const openai = getOpenAI()
-  const model = opts.model || process.env.OPENAI_MODEL || 'gpt-5-2025-08-07'
+  const client = getClient()
+  const model = resolveModel(opts.model)
+  const { system, messages: convo } = toAnthropicInput(messages)
+  const toolName = sanitizeToolName(name)
 
   try {
-    const response = await openai.responses.parse({
+    const requestBody: any = {
       model,
-      input: messages.map(m => ({ role: m.role, content: m.content })),
-      max_output_tokens: opts.max_output_tokens,
-      text: { format: zodTextFormat(schema, name) },
-    })
-
-    // Handle incomplete or refused generations
-    if (response.status === 'incomplete') {
-      const reason = (response as any).incomplete_details?.reason || 'incomplete'
-      return { ok: false, error: `Model response incomplete: ${reason}` }
+      max_tokens: opts.max_output_tokens ?? 4096,
+      messages: convo,
+      tools: [
+        {
+          name: toolName,
+          description: `Return the structured ${name} response via this tool.`,
+          input_schema: zodToClaudeSchema(schema),
+        },
+      ],
+      tool_choice: { type: 'tool', name: toolName },
     }
+    if (system) requestBody.system = system
 
-    // responses.parse sets .output_parsed on success
-    const parsed = (response as any).output_parsed as T | undefined
-    if (parsed === undefined || parsed === null) {
-      // Check explicit refusal payloads
-      const first = (response as any).output?.[0]?.content?.[0]
-      if (first?.type === 'refusal' && first?.refusal) {
-        return { ok: false, error: 'Model refused the request', refusal: first.refusal }
+    const response = await client.messages.create(requestBody)
+
+    // Extract the forced tool_use block
+    const toolBlock: any = response.content.find(
+      (b: any) => b.type === 'tool_use' && b.name === toolName
+    )
+    if (!toolBlock) {
+      const text = response.content
+        .filter((b: any) => b.type === 'text')
+        .map((b: any) => b.text)
+        .join('\n')
+        .trim()
+      if ((response.stop_reason as string) === 'refusal') {
+        return { ok: false, error: 'Model refused the request', refusal: text || 'refusal' }
       }
-      return { ok: false, error: 'No parsed output returned by model' }
+      return { ok: false, error: text || 'Model did not return the structured tool call' }
     }
 
-    return { ok: true, data: parsed }
+    const result = schema.safeParse(toolBlock.input)
+    if (!result.success) {
+      return { ok: false, error: `Zod validation failed: ${result.error.message}` }
+    }
+    return { ok: true, data: result.data }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return { ok: false, error: msg }
@@ -67,22 +125,45 @@ export async function parseWithZod<T>(
 }
 
 /**
- * Helper to stream a schema-constrained response. Caller consumes events and
- * then calls stream.get_final_response() to access the parsed object.
+ * Stream a schema-constrained response. Consumer accumulates chunks and
+ * JSON-parses the concatenated `input_json_delta` events when done.
  */
-export function streamParseWithZod<T>(
+export async function* streamParseWithZod<T>(
   schema: z.ZodType<T>,
   name: string,
   messages: RoleMessage[],
   opts: StructuredParseOptions = {}
-) {
-  const openai = getOpenAI()
-  const model = opts.model || process.env.OPENAI_MODEL || 'gpt-5-2025-08-07'
-  return openai.responses.stream({
-    model,
-    input: messages.map(m => ({ role: m.role, content: m.content })),
-    text: { format: zodTextFormat(schema, name) },
-    max_output_tokens: opts.max_output_tokens,
-  })
-}
+): AsyncGenerator<string, void, undefined> {
+  const client = getClient()
+  const model = resolveModel(opts.model)
+  const { system, messages: convo } = toAnthropicInput(messages)
+  const toolName = sanitizeToolName(name)
 
+  const requestBody: any = {
+    model,
+    max_tokens: opts.max_output_tokens ?? 4096,
+    messages: convo,
+    tools: [
+      {
+        name: toolName,
+        description: `Return the structured ${name} response via this tool.`,
+        input_schema: zodToClaudeSchema(schema),
+      },
+    ],
+    tool_choice: { type: 'tool', name: toolName },
+  }
+  if (system) requestBody.system = system
+
+  const stream = client.messages.stream(requestBody)
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta') {
+      const delta: any = event.delta
+      if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+        yield delta.partial_json
+      } else if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+        yield delta.text
+      }
+    }
+  }
+}

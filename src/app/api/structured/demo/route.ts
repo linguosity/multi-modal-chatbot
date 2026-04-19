@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { parseWithZod } from '@/lib/ai/gemini-structured'
+import { parseWithZod } from '@/lib/ai/structured'
 
 export const runtime = 'nodejs'
 
