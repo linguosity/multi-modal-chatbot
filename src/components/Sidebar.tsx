@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, Plus, FileText, Pen, Book, Eye, Sparkles, ChevronDown, Library, Filter, LayoutList, Gauge, Workflow } from "lucide-react";
+import { Home, Plus, FileText, Pen, Book, Eye, Sparkles, ChevronDown, Library, Filter, LayoutList, Gauge, Workflow, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
@@ -121,6 +121,13 @@ export default function Sidebar() {
               isActive={pathname.endsWith('/sources')}
             >
               Sources
+            </NavLink>
+            <NavLink
+              href={`/dashboard/reports/${id}/pii`}
+              icon={ShieldCheck}
+              isActive={pathname.endsWith('/pii')}
+            >
+              Privacy
             </NavLink>
             <NavLink
               href={`/dashboard/reports/${id}/triage`}

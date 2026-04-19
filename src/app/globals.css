@@ -1090,6 +1090,185 @@
   margin-top: 6px;
 }
 
+/* PII Confirmation */
+.wf-pii-wrap { display: flex; flex-direction: column; gap: 18px; }
+.wf-pii-header {
+  display: flex; gap: 18px; align-items: flex-start;
+  padding: 18px 20px;
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  background: #fff5ee;
+  box-shadow: 4px 4px 0 var(--line);
+}
+.wf-pii-stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.wf-pii-stat {
+  display: flex; gap: 12px; align-items: center;
+  padding: 12px 16px;
+  border: 1.25px solid var(--line);
+  border-radius: 3px;
+  background: var(--card-surface);
+}
+.wf-pii-stat.warn { background: #fff5ee; border-color: var(--terracotta); }
+.wf-pii-stat-num {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+  color: var(--terracotta-ink);
+}
+.wf-pii-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+}
+
+.wf-pii-table {
+  display: flex; flex-direction: column;
+  border: 1.25px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--card-surface);
+}
+.wf-pii-row {
+  display: grid;
+  grid-template-columns: 150px 180px 180px minmax(0, 1fr) 210px 36px;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 12.5px;
+}
+.wf-pii-row:last-child { border-bottom: none; }
+.wf-pii-row-head {
+  background: var(--paper-2);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border-bottom: 1.5px solid var(--line);
+}
+.wf-pii-row.excluded { opacity: 0.4; background: var(--paper); }
+.wf-pii-row.flagged { background: #fef9e7; }
+.wf-pii-type {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.wf-pii-type-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.wf-pii-detected {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-pii-token {
+  font-family: var(--font-mono);
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.wf-pii-source {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-pii-action {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.wf-pii-action select {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 6px;
+  border: 1px solid var(--line-2);
+  background: var(--card-surface);
+  border-radius: 2px;
+  color: var(--ink);
+}
+.wf-pii-flag-pill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 2px 5px;
+  background: #C9A96E;
+  color: #fff;
+  border-radius: 2px;
+  letter-spacing: 0.04em;
+}
+.wf-pii-exbtn {
+  width: 26px; height: 26px;
+  border: 1px solid var(--line-2);
+  background: var(--card-surface);
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.wf-pii-exbtn:hover { border-color: var(--ink); color: var(--ink); }
+
+.wf-pii-explainer {
+  padding: 16px 18px;
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+}
+.wf-pii-pipeline {
+  display: flex; gap: 0;
+  align-items: stretch;
+  margin-top: 4px;
+}
+.wf-pii-pipe-step {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1.25px solid var(--line);
+  background: var(--card-surface);
+  border-radius: 3px;
+}
+.wf-pii-pipe-num {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--ink-4);
+}
+.wf-pii-pipe-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  margin-top: 3px;
+}
+.wf-pii-pipe-sub {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 5px;
+  line-height: 1.4;
+}
+.wf-pii-pipe-arrow {
+  display: flex; align-items: center;
+  padding: 0 10px;
+  color: var(--terracotta);
+  font-size: 22px;
+}
+.wf-pii-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+
 /* Stepper for staged wizard flows */
 .wf-stepper {
   display: flex; align-items: center; gap: 12px;
