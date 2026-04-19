@@ -20,11 +20,14 @@ export type ClaudeModelId = (typeof CLAUDE_MODELS)[keyof typeof CLAUDE_MODELS]
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  | { type: 'tool_result'; tool_use_id: string; content: string | AnthropicContentBlock[]; is_error?: boolean }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string }; title?: string }
 
 type AnthropicMessageParam = {
   role: 'user' | 'assistant' | 'system'
-  content: AnthropicContentBlock[]
+  // Accept raw string OR structured content blocks — Anthropic SDK allows both.
+  content: string | AnthropicContentBlock[]
 }
 
 type AnthropicTool = {
@@ -58,11 +61,12 @@ function resolveModel(explicit?: string): string {
 }
 
 /**
- * Class kept named `Anthropic` so existing callers doing
- * `import Anthropic from '...'` followed by `Anthropic.ToolUseBlock` etc.
- * still type-resolve via the matching namespace declaration below.
+ * Class + namespace declared locally first, then default-exported together.
+ * This lets callers do `import Anthropic from '...'` followed by
+ * `Anthropic.ToolUseBlock` — the namespace declaration merges with the class
+ * declaration into a single binding that the default export carries over.
  */
-export default class Anthropic {
+class Anthropic {
   private defaultModel: string
   private apiKey?: string
 
@@ -81,10 +85,13 @@ export default class Anthropic {
       const conversation: any[] = []
       for (const m of params.messages) {
         if (m.role === 'system') {
-          const extra = m.content
-            .filter((b): b is Extract<AnthropicContentBlock, { type: 'text' }> => b.type === 'text')
-            .map((b) => b.text)
-            .join('\n')
+          const extra =
+            typeof m.content === 'string'
+              ? m.content
+              : m.content
+                  .filter((b): b is Extract<AnthropicContentBlock, { type: 'text' }> => b.type === 'text')
+                  .map((b) => b.text)
+                  .join('\n')
           systemText = systemText ? `${systemText}\n${extra}` : extra
           continue
         }
@@ -123,11 +130,51 @@ export default class Anthropic {
   }
 }
 
-// Type namespace for `Anthropic.ToolUseBlock` / `Anthropic.MessageParam` references
-export namespace Anthropic {
+// Namespace merges with the class above so `Anthropic.ToolUseBlock` /
+// `Anthropic.MessageParam` etc. are accessible at the type level via
+// `import Anthropic from '...'`.
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace Anthropic {
+  export type TextBlock = { type: 'text'; text: string }
   export type ToolUseBlock = { type: 'tool_use'; id: string; name: string; input: any }
+  export type ToolResultBlock = {
+    type: 'tool_result'
+    tool_use_id: string
+    content: string | ContentBlock[]
+    is_error?: boolean
+  }
+  export type ImageBlock = {
+    type: 'image'
+    source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string }
+  }
+  export type DocumentBlock = {
+    type: 'document'
+    source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string }
+    title?: string
+  }
+  export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ImageBlock | DocumentBlock
+
   export type MessageParam = {
     role: 'user' | 'assistant' | 'system'
-    content: AnthropicContentBlock[]
+    content: string | ContentBlock[]
+  }
+
+  export type Tool = {
+    name: string
+    description?: string
+    input_schema: any
+  }
+
+  export type Message = {
+    id?: string
+    type?: 'message'
+    role?: 'assistant'
+    model?: string
+    content: ContentBlock[]
+    stop_reason?: string | null
+    stop_sequence?: string | null
+    usage?: { input_tokens?: number; output_tokens?: number }
   }
 }
+
+export default Anthropic

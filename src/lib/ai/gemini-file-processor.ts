@@ -261,11 +261,16 @@ export function filesToGeminiParts(processedFiles: ProcessedFile[]): Part[] {
 }
 
 /**
- * Backward-compatible: converts processed files to Claude-shaped content blocks.
- * Used by routes that haven't been fully migrated yet.
+ * Converts processed files to Claude-shaped content blocks for `messages.create`.
+ *
+ * Return type is `any[]` so this can spread into Anthropic's `MessageParam.content`
+ * without import cycles between this module and `anthropic-compat.ts`. At the
+ * call site, cast to a stricter variant if you want narrowing.
  */
-export function filesToClaudeContent(processedFiles: ProcessedFile[]): Array<{ type: string; source?: any; text?: string; title?: string }> {
-  const content: Array<{ type: string; source?: any; text?: string; title?: string }> = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function filesToClaudeContent(processedFiles: ProcessedFile[]): any[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const content: any[] = []
 
   for (const file of processedFiles) {
     if (file.processingMethod === 'gemini-vision') {
