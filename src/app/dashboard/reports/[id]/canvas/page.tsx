@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -24,11 +24,18 @@ import { EvidenceChip, fileKindFromType, type EvidenceKind } from '@/components/
 
 // ─── Node data types ─────────────────────────────────────────────────────────
 
+type BucketOption = { id: string; num: string; title: string }
+
 type ChipNodeData = {
   kind: EvidenceKind
   name: string
   meta?: string
   attached?: string | null
+  // Shared so every chip can expose the keyboard-accessible Move-to menu.
+  // WCAG 2.1.1 (Keyboard) — drag-and-drop must have an equivalent.
+  buckets?: BucketOption[]
+  onMoveTo?: (chipNodeId: string, bucketNodeId: string | null) => void
+  nodeId?: string
 }
 
 type BucketNodeData = {
@@ -40,8 +47,9 @@ type BucketNodeData = {
 // ─── Custom nodes ────────────────────────────────────────────────────────────
 
 function ChipNode({ data }: NodeProps<Node<ChipNodeData>>) {
+  const attachedBucket = data.buckets?.find((b) => b.id === data.attached) ?? null
   return (
-    <div style={{ pointerEvents: 'all' }}>
+    <div style={{ pointerEvents: 'all', display: 'flex', alignItems: 'center', gap: 4 }}>
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
       <EvidenceChip
         kind={data.kind}
@@ -49,6 +57,53 @@ function ChipNode({ data }: NodeProps<Node<ChipNodeData>>) {
         meta={data.meta}
         tone={data.attached ? 'terra' : 'default'}
       />
+      {/* Keyboard-accessible Move-to menu.
+          Native <select> gives free keyboard navigation + screen-reader announcement. */}
+      {data.buckets && data.buckets.length > 0 && data.nodeId && data.onMoveTo && (
+        <label
+          className="nodrag"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--ink-3)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            background: 'var(--card-surface)',
+            border: '1px solid var(--line-2)',
+            borderRadius: 2,
+            padding: '2px 4px',
+            cursor: 'pointer',
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <span className="sr-only">
+            Move {data.name} to a section. Currently {attachedBucket ? `in ${attachedBucket.title}` : 'unassigned'}.
+          </span>
+          <span aria-hidden>↱</span>
+          <select
+            value={data.attached ?? ''}
+            onChange={(e) => data.onMoveTo!(data.nodeId!, e.target.value || null)}
+            aria-label={`Section for ${data.name}`}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--ink)',
+            }}
+          >
+            <option value="">— unassigned —</option>
+            {data.buckets.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.num} · {b.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   )
 }
@@ -155,6 +210,15 @@ function CanvasInner() {
     [sections]
   )
 
+  const bucketOptions: BucketOption[] = useMemo(
+    () => initialBuckets.map((b) => ({ id: b.id, num: b.data.num, title: b.data.title })),
+    [initialBuckets]
+  )
+
+  // forward-decl reference so we can thread the keyboard-move callback into
+  // the chip node data without a circular hook dep.
+  const moveToRef = useRef<((chipId: string, bucketId: string | null) => void) | null>(null)
+
   const initialChips: Node<ChipNodeData>[] = useMemo(
     () =>
       uploadedFiles.map((f, i) => ({
@@ -166,10 +230,13 @@ function CanvasInner() {
           name: f.fileName || f.name || 'untitled',
           meta: (f.type || '').split('/')[1] || 'file',
           attached: null,
+          nodeId: `chip-${f.id}`,
+          buckets: bucketOptions,
+          onMoveTo: (chipId: string, bucketId: string | null) => moveToRef.current?.(chipId, bucketId),
         },
         draggable: true,
       })),
-    [uploadedFiles]
+    [uploadedFiles, bucketOptions]
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<ChipNodeData | BucketNodeData>>([
@@ -188,6 +255,42 @@ function CanvasInner() {
     setToast(msg)
     setTimeout(() => setToast(null), 2200)
   }, [])
+
+  /**
+   * Keyboard-accessible counterpart to drag-to-attach. Called from the chip
+   * node's native <select>. Snaps the chip into the bucket (or back to the
+   * tray column when bucketId is null) and updates the attachment state.
+   */
+  const handleMoveTo = useCallback((chipNodeId: string, bucketId: string | null) => {
+    setNodes((ns) => {
+      const bucket = bucketId ? ns.find((n) => n.id === bucketId && n.type === 'bucket') as Node<BucketNodeData> | undefined : null
+      const existingInBucket = bucketId
+        ? ns.filter((n) => n.type === 'chip' && (n.data as ChipNodeData).attached === bucketId && n.id !== chipNodeId).length
+        : 0
+      return ns.map((n) => {
+        if (n.id !== chipNodeId || n.type !== 'chip') return n
+        const chip = n as Node<ChipNodeData>
+        if (bucket) {
+          return {
+            ...chip,
+            position: { x: bucket.position.x + 16, y: bucket.position.y + 50 + existingInBucket * 28 },
+            data: { ...chip.data, attached: bucketId },
+          }
+        }
+        return {
+          ...chip,
+          data: { ...chip.data, attached: null },
+        }
+      })
+    })
+    showToast(bucketId ? 'Attached via keyboard' : 'Detached via keyboard')
+  }, [setNodes, showToast])
+
+  // Keep the ref current so chip-node <select> onChange handlers (captured at
+  // node-construction time) dispatch into the latest callback.
+  useEffect(() => {
+    moveToRef.current = handleMoveTo
+  }, [handleMoveTo])
 
   const recomputeBucketCounts = useCallback(() => {
     setNodes((ns) => {

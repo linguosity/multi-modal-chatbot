@@ -1296,23 +1296,57 @@
 .wf-stepper .step.done .num { background: var(--terracotta); color: var(--card-surface); border-color: var(--line); }
 .wf-stepper .sep { flex: 0 0 30px; height: 1px; background: var(--line-2); }
 
-/* Respect motion preferences */
+/* Screen-reader-only utility (WCAG 1.3.1) */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+
+/* Global focus ring — WCAG 2.4.7 (Focus Visible).
+ * Visible 2px ring on every interactive wireframe element when reached via keyboard. */
+.wf-btn:focus-visible,
+.wf-chat-fab:focus-visible,
+.wf-chat-quick button:focus-visible,
+.wf-chat-close:focus-visible,
+.wf-chat-input input:focus-visible,
+.wf-lib-search input:focus-visible,
+.wf-lib-tag:focus-visible,
+.wf-lib-card:focus-visible,
+.wf-legend-chip:focus-visible,
+.wf-inner-tab:focus-visible,
+.wf-outline-item .toggle:focus-visible,
+.wf-stepper .step:focus-visible,
+.wf-pii-exbtn:focus-visible,
+.wf-pii-action select:focus-visible,
+.wf-pii-table button:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+/* Respect motion preferences — WCAG 2.3.3 */
 @media (prefers-reduced-motion: reduce) {
+  /* Pre-existing AI highlight animations */
   .flash-fade,
   .sparkle-limited,
   .ai-highlight,
-  .animate-fade-in {
-    animation: none;
-  }
-  
+  .animate-fade-in { animation: none; }
   .flash-fade {
     background: var(--hl-fade-bg-start);
     border-color: var(--hl-fade-border);
     transition: none;
   }
-  
-  .animate-fade-in {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  .animate-fade-in { opacity: 1; transform: translateY(0); }
+
+  /* Wireframe animations */
+  .wf-bar.indeterm > span { animation: none; margin-left: 0; width: 100%; }
+  .wf-spinner { animation: none; border-top-color: var(--tan-soft); }
+  .wf-btn { transition: none; }
+  .wf-chat-fab { transition: none; }
+  .wf-stat-fill { transition: none; }
+  .wf-bar > span { transition: none; }
+  .wf-chip { transition: none; }
+  .wf-lib-card { transition: none; }
 }

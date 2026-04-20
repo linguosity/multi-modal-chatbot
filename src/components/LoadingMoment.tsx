@@ -133,16 +133,22 @@ export function LoadingMoment({ active, files, operationId, onSkip, onPause }: L
   if (!active) return null
 
   return (
-    <div className="fixed inset-0 z-[60] bg-[var(--paper-2)] overflow-auto">
+    <div
+      className="fixed inset-0 z-[60] bg-[var(--paper-2)] overflow-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="loading-moment-title"
+      aria-describedby="loading-moment-description"
+    >
       <div className="max-w-6xl mx-auto px-10 py-10">
         {/* Headline */}
         <div className="flex items-baseline justify-between mb-6">
           <div className="flex flex-col gap-1">
             <div className="wf-label">Step 2</div>
-            <div className="wf-heading" style={{ fontSize: 30 }}>
+            <div id="loading-moment-title" className="wf-heading" style={{ fontSize: 30 }}>
               Reading <span style={{ color: 'var(--terracotta)' }}>{total} source{total === 1 ? '' : 's'}</span>.
             </div>
-            <div className="wf-sm">This takes about {estDisplay}. Feel free to grab coffee — we'll ping you when the skeleton's ready.</div>
+            <div id="loading-moment-description" className="wf-sm">This takes about {estDisplay}. Feel free to grab coffee — we'll ping you when the skeleton's ready.</div>
           </div>
           <div className="flex flex-col gap-1.5 items-end">
             <span className="wf-pill terra">● running locally</span>
@@ -164,8 +170,15 @@ export function LoadingMoment({ active, files, operationId, onSkip, onPause }: L
         {/* Live feed + sidebar */}
         <div className="grid gap-8 mt-8" style={{ gridTemplateColumns: '1fr 340px' }}>
           <div className="flex flex-col gap-2">
-            <div className="wf-label bold">Live feed</div>
-            <div className="wf-box" style={{ padding: 0 }}>
+            <div className="wf-label bold" id="loading-moment-feed-label">Live feed</div>
+            {/* aria-live: screen readers announce each file's state change */}
+            <div
+              className="wf-box"
+              style={{ padding: 0 }}
+              role="log"
+              aria-live="polite"
+              aria-labelledby="loading-moment-feed-label"
+            >
               {files.map((f, i) => {
                 const status = statuses[f.id] ?? 'queued'
                 const isDone = status === 'done'
@@ -209,13 +222,19 @@ export function LoadingMoment({ active, files, operationId, onSkip, onPause }: L
 
           {/* What Linguosity is doing — sidebar */}
           <div className="flex flex-col gap-3">
-            <div className="wf-label bold">What Linguosity is doing</div>
-            <div className="wf-box tan" style={{ padding: 14 }}>
+            <div className="wf-label bold" id="loading-moment-cycle-label">What Linguosity is doing</div>
+            <div
+              className="wf-box tan"
+              style={{ padding: 14 }}
+              aria-live="polite"
+              aria-atomic="true"
+              aria-labelledby="loading-moment-cycle-label"
+            >
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, lineHeight: 1.2 }}>
                 {cycle.title}…
               </div>
               <div className="wf-sm" style={{ marginTop: 6 }}>{cycle.sub}</div>
-              <div className="wf-bar indeterm" style={{ marginTop: 12 }}><span /></div>
+              <div className="wf-bar indeterm" style={{ marginTop: 12 }} aria-hidden="true"><span /></div>
             </div>
 
             <div className="wf-hand" style={{ textAlign: 'center', marginTop: 6 }}>

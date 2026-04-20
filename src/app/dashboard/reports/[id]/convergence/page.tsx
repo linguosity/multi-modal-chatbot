@@ -192,6 +192,7 @@ export default function ConvergencePage() {
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filterType, setFilterType] = useState<EvidenceType | null>(null)
+  const [viewMode, setViewMode] = useState<'beeswarm' | 'table'>('beeswarm')
   const wrapRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 880, h: 380 })
 
@@ -286,19 +287,81 @@ export default function ConvergencePage() {
           </div>
         )}
 
-        {/* Plot */}
-        <div className="wf-conv-plot-wrap" ref={wrapRef}>
-          <Beeswarm
-            width={size.w}
-            height={size.h}
-            placed={placed}
-            filterType={filterType}
-            hoverId={hoverId}
-            selectedId={selectedId}
-            onHover={setHoverId}
-            onSelect={setSelectedId}
-          />
+        {/* View toggle — WCAG 1.1.1 (non-text content alternative) */}
+        <div className="flex items-center justify-between">
+          <div
+            role="tablist"
+            aria-label="Convergence view"
+            className="inline-flex rounded-[3px] border border-[var(--line)] overflow-hidden"
+            style={{ boxShadow: '2px 2px 0 var(--line-2)' }}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'beeswarm'}
+              onClick={() => setViewMode('beeswarm')}
+              className="wf-btn sm"
+              style={{
+                boxShadow: 'none',
+                borderRadius: 0,
+                borderTop: 'none',
+                borderBottom: 'none',
+                borderLeft: 'none',
+                background: viewMode === 'beeswarm' ? 'var(--ink)' : 'var(--card-surface)',
+                color: viewMode === 'beeswarm' ? 'var(--card-surface)' : 'var(--ink)',
+              }}
+            >
+              ◉ Beeswarm
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'table'}
+              onClick={() => setViewMode('table')}
+              className="wf-btn sm"
+              style={{
+                boxShadow: 'none',
+                borderRadius: 0,
+                borderTop: 'none',
+                borderBottom: 'none',
+                borderRight: 'none',
+                background: viewMode === 'table' ? 'var(--ink)' : 'var(--card-surface)',
+                color: viewMode === 'table' ? 'var(--card-surface)' : 'var(--ink)',
+              }}
+            >
+              ☰ Table
+            </button>
+          </div>
+          <span className="wf-sm">
+            {viewMode === 'beeswarm'
+              ? 'Click a dot to open rubric details.'
+              : 'Sort by column. Click a row to open rubric details.'}
+          </span>
         </div>
+
+        {/* Plot */}
+        {viewMode === 'beeswarm' ? (
+          <div className="wf-conv-plot-wrap" ref={wrapRef}>
+            <Beeswarm
+              width={size.w}
+              height={size.h}
+              placed={placed}
+              filterType={filterType}
+              hoverId={hoverId}
+              selectedId={selectedId}
+              onHover={setHoverId}
+              onSelect={setSelectedId}
+            />
+          </div>
+        ) : (
+          <EvidenceTable
+            evidence={EVIDENCE}
+            filterType={filterType}
+            excluded={excluded}
+            onSelect={setSelectedId}
+            onToggleExcluded={(id) => setExcluded((prev) => ({ ...prev, [id]: !prev[id] }))}
+          />
+        )}
 
         {/* Legend */}
         <Legend filterType={filterType} setFilterType={setFilterType} />
@@ -529,6 +592,155 @@ function Legend({
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+function EvidenceTable({
+  evidence, filterType, excluded, onSelect, onToggleExcluded,
+}: {
+  evidence: Evidence[]
+  filterType: EvidenceType | null
+  excluded: Record<string, boolean>
+  onSelect: (id: string) => void
+  onToggleExcluded: (id: string) => void
+}) {
+  type SortKey = 'source' | 'type' | 'finding' | 'V' | 'R' | 'Rl' | 'strength'
+  const [sortKey, setSortKey] = useState<SortKey>('strength')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const rows = useMemo(() => {
+    const visible = evidence.filter((e) => !filterType || e.type === filterType)
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[sortKey] as number | string
+      const bv = b[sortKey] as number | string
+      if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av
+      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+    })
+    return sorted
+  }, [evidence, filterType, sortKey, sortDir])
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir(typeof evidence[0]?.[key] === 'number' ? 'desc' : 'asc')
+    }
+  }
+
+  const th = (key: SortKey, label: string) => (
+    <th
+      scope="col"
+      style={{
+        textAlign: typeof evidence[0]?.[key] === 'number' ? 'right' : 'left',
+        padding: '8px 10px',
+        borderBottom: '1.5px solid var(--line)',
+        background: 'var(--paper-2)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        color: 'var(--ink-3)',
+        cursor: 'pointer',
+      }}
+      onClick={() => toggleSort(key)}
+      aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      {label} {sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+    </th>
+  )
+
+  return (
+    <div className="wf-box" style={{ padding: 0, overflowX: 'auto' }}>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12,
+        }}
+      >
+        <caption className="sr-only">
+          Evidence rubric scores — sortable alternative to the beeswarm plot.
+        </caption>
+        <thead>
+          <tr>
+            {th('source', 'Source')}
+            {th('type', 'Type')}
+            {th('finding', 'Finding')}
+            {th('V', 'V')}
+            {th('R', 'R')}
+            {th('Rl', 'Rel')}
+            {th('strength', 'Strength')}
+            <th scope="col" style={{ padding: '8px 10px', borderBottom: '1.5px solid var(--line)', background: 'var(--paper-2)' }}>
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const isExcluded = !!excluded[row.id]
+            const t = TYPE_META[row.type]
+            return (
+              <tr
+                key={row.id}
+                style={{
+                  background: isExcluded ? 'var(--paper)' : 'transparent',
+                  opacity: isExcluded ? 0.55 : 1,
+                  borderBottom: '1px solid var(--line-2)',
+                }}
+              >
+                <td style={{ padding: '8px 10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(row.id)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      color: 'var(--ink)',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 13,
+                    }}
+                  >
+                    {row.source}
+                  </button>
+                  <div className="wf-sm" style={{ marginTop: 2 }}>
+                    {LANG_BORDER[row.lang].label} · {row.setting}
+                  </div>
+                </td>
+                <td style={{ padding: '8px 10px' }}>
+                  <span className="wf-legend-dot" style={{ background: t.fill, width: 18, height: 18, fontSize: 8 }}>
+                    {t.glyph}
+                  </span>{' '}
+                  {t.label}
+                </td>
+                <td style={{ padding: '8px 10px' }}>
+                  <span className={`wf-finding-badge f-${row.finding}`}>{row.finding.replace(/_/g, ' ')}</span>
+                </td>
+                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{row.V}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{row.R}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{row.Rl}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--terracotta-ink)', fontWeight: 600 }}>
+                  {row.strength.toFixed(2)}
+                </td>
+                <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleExcluded(row.id)}
+                    className="wf-btn sm ghost"
+                    aria-label={isExcluded ? `Re-include ${row.source} in convergence index` : `Exclude ${row.source} from convergence index`}
+                  >
+                    {isExcluded ? 'Include' : 'Exclude'}
+                  </button>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

@@ -110,7 +110,12 @@ export function ProgressToastContainer({ toasts, onDismiss, className = '' }: Pr
   const failed = toasts.filter(t => t.status === 'error' || t.status === 'timeout')
 
   return (
-    <div className={`fixed top-16 right-4 z-50 max-w-sm ${className}`}>
+    <div
+      className={`fixed top-16 right-4 z-50 max-w-sm ${className}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
+    >
       <div className="rounded-lg border border-gray-200 bg-white shadow-md">
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-2 text-sm">

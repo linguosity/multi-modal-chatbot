@@ -270,9 +270,35 @@ export default function TriagePage() {
 
           {/* Footer: bulk actions */}
           {rows.length > 0 && (
-            <div className="flex items-center gap-2 mt-2">
-              <button type="button" className="wf-btn sm ghost" disabled>▼ bulk: set direction</button>
-              <button type="button" className="wf-btn sm ghost" disabled>▼ bulk: assign section</button>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <button
+                type="button"
+                className="wf-btn sm"
+                onClick={() => {
+                  // Confirm every row with confidence ≥ 0.75 that is currently pending.
+                  setRows((prev) =>
+                    prev.map((r) =>
+                      r.state === 'pending' && r.confidence >= 0.75
+                        ? { ...r, state: 'confirmed' as TriageState }
+                        : r
+                    )
+                  )
+                }}
+                disabled={!rows.some((r) => r.state === 'pending' && r.confidence >= 0.75)}
+                title="Confirms every pending row with confidence ≥ 75%. Leaves low-confidence rows for review."
+              >
+                ✓ Confirm all high-confidence
+              </button>
+              <button
+                type="button"
+                className="wf-btn sm ghost"
+                onClick={() => {
+                  setRows((prev) => prev.map((r) => (r.state === 'confirmed' ? { ...r, state: 'pending' as TriageState } : r)))
+                }}
+                disabled={confirmedCount === 0}
+              >
+                ↺ Unconfirm all
+              </button>
               <span className="ml-auto" />
               <button
                 type="button"
