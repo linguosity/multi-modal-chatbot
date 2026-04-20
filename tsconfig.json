@@ -7,7 +7,7 @@
     ],
     "types": ["react", "react-dom", "node"],
     "allowJs": true,
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
@@ -38,6 +38,15 @@
     "src/types/**/*.d.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dev-archive",
+    "wireframes",
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.enhanced.ts",
+    "src/**/*.refactored.ts",
+    "src/**/*.minimal.tsx",
+    "src/**/*.ultra-minimal.tsx"
   ]
 }

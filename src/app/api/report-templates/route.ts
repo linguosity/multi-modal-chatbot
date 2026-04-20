@@ -14,17 +14,19 @@ export const GET = createApiHandler({
 
   const templates = await crudService.findAll();
 
-  // Transform and validate data
-  const parsedTemplates = templates.map(template => {
+  // Transform and validate data — crudService.findAll returns a broad union,
+  // narrow via cast then let Zod safeParse enforce the real shape.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsedTemplates = (templates as any[]).map((template: any) => {
     const result = ReportTemplateSchema.safeParse({
       ...template,
       groups: template.template_structure, // Map template_structure from DB to groups
       user_id: user.id // Add user_id for validation
     });
-    
+
     if (!result.success) {
       console.error({ validationError: result.error, templateId: template.id }, 'Validation error for fetched template.');
-      return null; 
+      return null;
     }
     return result.data;
   }).filter(Boolean);

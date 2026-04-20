@@ -406,6 +406,17 @@ export default function WYSIWYGReportPreview({
     }
   }, [report, updateSectionData, addRecentUpdate, showToast, refreshReport])
 
+  // Check if all sections are empty — declared before early returns so
+  // the hook call order is consistent across renders.
+  const areAllSectionsEmpty = useMemo(() => {
+    if (!report || !report.sections || report.sections.length === 0) return false
+    return report.sections.every(section => {
+      const isEmpty = (!section.content || section.content.trim() === '') &&
+                      (!section.structured_data || Object.keys(section.structured_data).length === 0)
+      return isEmpty
+    })
+  }, [report])
+
   // ── Render ──────────────────────────────────────────────────
 
   if (!report || !headerInfo) {
@@ -422,16 +433,6 @@ export default function WYSIWYGReportPreview({
   // Active section for the modal
   const activeExportSection = activeSectionIdx !== null ? exportSections[activeSectionIdx] : null
   const activeSectionId = activeSectionIdx !== null ? orderedIds[activeSectionIdx] : null
-
-  // Check if all sections are empty
-  const areAllSectionsEmpty = useMemo(() => {
-    if (!report || !report.sections || report.sections.length === 0) return false
-    return report.sections.every(section => {
-      const isEmpty = (!section.content || section.content.trim() === '') &&
-                      (!section.structured_data || Object.keys(section.structured_data).length === 0)
-      return isEmpty
-    })
-  }, [report])
 
   // Show empty state if all sections are empty
   if (areAllSectionsEmpty) {

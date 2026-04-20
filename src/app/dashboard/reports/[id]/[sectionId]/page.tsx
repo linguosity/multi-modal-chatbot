@@ -136,8 +136,8 @@ export default function SectionPage() {
       sectionId,
       sectionTitle: section?.title,
       contentLength: sectionContent.length,
-      hasStructuredData: Object.keys(structuredData).length > 0,
-      structuredDataKeys: Object.keys(structuredData),
+      hasStructuredData: Object.keys((structuredData ?? {}) as object).length > 0,
+      structuredDataKeys: Object.keys((structuredData ?? {}) as object),
       showToast,
       timestamp: new Date().toISOString()
     });
@@ -504,7 +504,7 @@ export default function SectionPage() {
               sectionType: section?.sectionType,
               hasStructuredSchema,
               currentSchemaKeys: currentSchema ? Object.keys(currentSchema) : [],
-              structuredDataKeys: Object.keys(structuredData),
+              structuredDataKeys: Object.keys((structuredData ?? {}) as object),
               contentLength: sectionContent.length,
               mode,
               hasUnsavedChanges

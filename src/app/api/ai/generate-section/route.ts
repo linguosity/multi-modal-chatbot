@@ -289,6 +289,10 @@ async function handleMultiModalAssessment(
       const duration = Date.now() - startTime;
       console.log(`⏱️ API call completed in ${duration}ms${retryCount > 0 ? ` (after ${retryCount} retries)` : ''}`);
 
+      if (!response) {
+        throw new Error('No response from Anthropic after retries');
+      }
+
       console.log(`📊 Response stop_reason: ${response.stop_reason}`);
       console.log(`🔧 Response content blocks: ${response.content.map(c => c.type).join(', ')}`);
 
@@ -495,7 +499,10 @@ async function handleMultiModalAssessment(
               currentValue,
               update.value,
               update.merge_strategy,
-              fieldSchema,
+              // The merger's FieldSchema union is a subset of the canonical one
+              // in structured-schemas; cast to bridge the shape without losing
+              // behavior (merger reads only `key`, `type`, `children`).
+              fieldSchema as unknown as Parameters<typeof dataMerger.mergeFieldUpdate>[3],
               update.confidence
             );
             

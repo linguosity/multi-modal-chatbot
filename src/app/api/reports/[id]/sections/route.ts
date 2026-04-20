@@ -6,8 +6,8 @@ import { v4 as uuidv4 } from 'uuid'
  * GET /api/reports/[id]/sections
  * Fetch all sections for a report, ordered by `order`.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const { id: reportId } = params
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: reportId } = await params
   const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,8 +45,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
  * POST /api/reports/[id]/sections
  * Create a new section in the report.
  */
-export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const { id: reportId } = params
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: reportId } = await params
   const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()

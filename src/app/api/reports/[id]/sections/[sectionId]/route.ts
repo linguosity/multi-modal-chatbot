@@ -7,9 +7,9 @@ import { safeJsonResponse } from '@/lib/api/safe-json'
  */
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string; sectionId: string } }
+  { params }: { params: Promise<{ id: string; sectionId: string }> }
 ) {
-  const { id: reportId, sectionId } = params
+  const { id: reportId, sectionId } = await params
   const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -70,9 +70,9 @@ export async function PUT(
  */
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string; sectionId: string } }
+  { params }: { params: Promise<{ id: string; sectionId: string }> }
 ) {
-  const { id: reportId, sectionId } = params
+  const { id: reportId, sectionId } = await params
   const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()

@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     console.log('📖 Fetching report context...')
 
     // First try with sections join
+    // eslint-disable-next-line prefer-const
     let { data: report, error: reportError } = await supabase
       .from('reports')
       .select(`

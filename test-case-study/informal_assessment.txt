@@ -1,0 +1,637 @@
+================================================================================
+INFORMAL ASSESSMENT DATA & ANALYSIS
+================================================================================
+
+Student Name: Sofia Martinez
+DOB: 11/15/2021
+Age at Evaluation: 4 years, 4 months (4;4)
+Evaluation Date: 03/05/2026
+Evaluator: Dr. Amanda Torres, M.A., CCC-SLP
+
+================================================================================
+LANGUAGE SAMPLE COLLECTION & ANALYSIS
+================================================================================
+
+SAMPLE TYPE: Play-based spontaneous language sample
+COLLECTION METHOD: Video recorded interaction with clinician during structured play
+DURATION: 15 minutes of continuous interaction (approximately 47 utterances)
+CONTEXT: Play with dolls, cars, blocks, and kitchen toys
+Participants: Sofia and Dr. Torres (SLP evaluator)
+Setting: Quiet assessment room at Sunshine Academy Preschool
+Sofia's behavior during sample: Cooperative, gradually becoming more verbal as
+  rapport developed. Initial shyness decreased after first 5 minutes.
+
+SAMPLE CHARACTERISTICS:
+  Total number of utterances: 47
+  Mean utterance length (morphemes): 2.3
+  Mean utterance length (words): 2.1
+  Type-token ratio: 0.42
+  Longest utterance: 5 words ("where is the baby going?")
+
+LANGUAGE SAMPLE TRANSCRIPT WITH PHONETIC NOTATIONS:
+
+Utterance 1: "me wan dat" [mi wɑn dæt]
+Target: "I want that"
+Grammatical analysis: Subject pronoun error (me/I), infinitive unmarked, pronoun
+  omission (that/it)
+
+Utterance 2: "doggy go" [dɑgi goʊ]
+Target: "The dog/doggy is going" or "Doggy goes"
+Grammatical analysis: Articles omitted, copula omitted, emerging present progressive
+  -ing (go/going)
+
+Utterance 3: "no more" [noʊ moɹ]
+Target: "No more" or "I don't want any more"
+Grammatical analysis: Grammatically acceptable for negation; appropriate for context
+
+Utterance 4: "her is big" [hɜɹ ɪz bɪg]
+Target: "She/it is big" or "The dog is big"
+Grammatical analysis: Object pronoun error (her/she), copula present, adjective
+  appropriate, but pronoun reference unclear
+
+Utterance 5: "me do it" [mi du ɪt]
+Target: "I'll do it" or "Let me do it"
+Grammatical analysis: Subject pronoun error (me/I), auxiliary omitted (will/can)
+
+Utterance 6: "where baby go?" [wɛɹ beɪbi goʊ]
+Target: "Where did the baby go?" or "Where is the baby going?"
+Grammatical analysis: Question formation appropriate (where), article omitted, past
+  tense marker omitted (did), copula/auxiliary omitted, finality problem (go/went)
+
+Utterance 7: "dat one mine" [dæt wʌn maɪn]
+Target: "That one is mine" or "That's mine"
+Grammatical analysis: Pronoun correct (that), copula omitted, possessive correct
+
+Utterance 8: "baby sit down" [beɪbi sɪt daʊn]
+Target: "The baby sits down" or "Baby sits down"
+Grammatical analysis: Article omitted, third person singular -s omitted
+
+Utterance 9: "no sit" [noʊ sɪt]
+Target: "No, I don't sit" or "Don't sit"
+Grammatical analysis: Negation appropriate, verb unmarked for person/tense
+
+Utterance 10: "what dis?" [wʌt dɪs]
+Target: "What is this?"
+Grammatical analysis: Question word appropriate, copula omitted, demonstrative correct
+
+Utterance 11: "car go fast" [kɑɹ goʊ fæst]
+Target: "The car goes fast" or "Car goes fast"
+Grammatical analysis: Article omitted, third person singular -s omitted
+
+Utterance 12: "my turn?" [maɪ tɜɹn]
+Target: "Is it my turn?" or "My turn"
+Grammatical analysis: Possessive correct, copula/auxiliary omitted, question intonation
+  appropriate
+
+Utterance 13: "she no like" [ʃi noʊ laɪk]
+Target: "She doesn't like it" or "She no like"
+Grammatical analysis: Subject pronoun correct (she), negation present, auxiliary
+  omitted (doesn't), object pronoun omitted
+
+Utterance 14: "mommy come" [mɑmi kʌm]
+Target: "Mommy is coming" or "Mommy came"
+Grammatical analysis: Article appropriate (proper noun), copula/auxiliary omitted
+
+Utterance 15: "all done" [ɔl dʌn]
+Target: "All done" or "I'm all done"
+Grammatical analysis: Grammatically acceptable two-word phrase
+
+Utterance 16: "more pees" [moɹ pis]
+Target: "More please"
+Grammatical analysis: Both words present, mildly inappropriate syntax (says "more"
+  first), pronunciation noted (please → pees)
+
+Utterance 17: "you see?" [ju si]
+Target: "You see?" or "Do you see?"
+Grammatical analysis: Subject pronoun present, auxiliary omitted (do), question
+  formation with intonation, third person singular -s omitted
+
+Utterance 18: "pretty" [pɹɪti]
+Target: "Pretty" (describing something)
+Grammatical analysis: Adjective alone without copula or article
+
+Utterance 19: "go outside" [goʊ ʌtsaɪd]
+Target: "Go outside" or "I want to go outside"
+Grammatical analysis: Verb unmarked, prepositional phrase, subject omitted
+
+Utterance 20: "that one" [dæt wʌn]
+Target: "That one"
+Grammatical analysis: Demonstrative + quantifier (neutral/grammatical)
+
+Utterance 21: "mine" [maɪn]
+Target: "Mine" (possessive)
+Grammatical analysis: Single word, grammatically appropriate
+
+Utterance 22: "no like it" [noʊ laɪk ɪt]
+Target: "I don't like it"
+Grammatical analysis: Negation present, auxiliary/subject omitted, object present
+
+Utterance 23: "help please" [hɛlp plis]
+Target: "Help please" or "Can you help please?"
+Grammatical analysis: Verb unmarked, politeness marker present, subject/auxiliary
+  omitted
+
+Utterance 24: "me try" [mi tɹaɪ]
+Target: "Let me try" or "I'll try"
+Grammatical analysis: Subject pronoun error (me/I), auxiliary omitted (let/will)
+
+Utterance 25: "big one" [bɪg wʌn]
+Target: "Big one"
+Grammatical analysis: Adjective + determiner, grammatically appropriate
+
+Utterance 26: "your turn" [joɹ tɜɹn]
+Target: "Your turn"
+Grammatical analysis: Possessive + noun, grammatically appropriate
+
+Utterance 27: "no more play" [noʊ moɹ pleɪ]
+Target: "No more play" or "I don't want to play anymore"
+Grammatical analysis: Negation present, infinitive marker omitted
+
+Utterance 28: "see it" [si ɪt]
+Target: "See it"
+Grammatical analysis: Verb + object, subject omitted
+
+Utterance 29: "me happy" [mi hæpi]
+Target: "I'm happy" or "Me happy"
+Grammatical analysis: Subject pronoun error (me/I), copula omitted
+
+Utterance 30: "where mommy?" [wɛɹ mɑmi]
+Target: "Where is mommy?" or "Where's mommy?"
+Grammatical analysis: Question word appropriate, copula omitted
+
+Utterance 31: "is yellow" [ɪz jɛloʊ]
+Target: "It is yellow" or "(It) is yellow"
+Grammatical analysis: Copula present (strength!), subject pronoun omitted, adjective
+  appropriate
+
+Utterance 32: "go bye bye" [goʊ baɪ baɪ]
+Target: "Bye bye" or "I'm going bye bye"
+Grammatical analysis: Idiomatic phrase, subject/auxiliary omitted
+
+Utterance 33: "two bear" [tu bɛɹ]
+Target: "Two bears"
+Grammatical analysis: Numeral appropriate, plural -s omitted (one of emerging items)
+
+Utterance 34: "baby cry" [beɪbi kɹaɪ]
+Target: "The baby is crying" or "Baby cries"
+Grammatical analysis: Article omitted, copula/auxiliary omitted, third person
+  singular -s omitted
+
+Utterance 35: "you doing?" [ju duɪŋ]
+Target: "What are you doing?" or "Are you doing?"
+Grammatical analysis: Subject present, auxiliary omitted (are), present progressive
+  -ing present, question word omitted (what)
+
+Utterance 36: "me sit here" [mi sɪt hiɹ]
+Target: "I sit here" or "Let me sit here"
+Grammatical analysis: Subject pronoun error (me/I), verb unmarked, locative
+  appropriate
+
+Utterance 37: "broken" [bɹoʊkən]
+Target: "Broken" or "It's broken"
+Grammatical analysis: Past participle used as adjective (appropriate), subject
+  omitted
+
+Utterance 38: "no no no" [noʊ noʊ noʊ]
+Target: (emphatic negation)
+Grammatical analysis: Appropriate for emphasis/disagreement
+
+Utterance 39: "bigger" [bɪgɚ]
+Target: "Bigger"
+Grammatical analysis: Comparative adjective, appropriate morphology
+
+Utterance 40: "what's this?" [wʌts dɪs]
+Target: "What's this?" or "What is this?"
+Grammatical analysis: Question word appropriate, auxiliary present (contracted 's),
+  demonstrative correct (strength!)
+
+Utterance 41: "not fair" [nɑt fɛɹ]
+Target: "Not fair"
+Grammatical analysis: Negation present, adjective appropriate
+
+Utterance 42: "my baby" [maɪ beɪbi]
+Target: "My baby"
+Grammatical analysis: Possessive + noun, grammatically appropriate
+
+Utterance 43: "daddy home" [dædi hoʊm]
+Target: "Daddy is home"
+Grammatical analysis: Subject appropriate, copula omitted
+
+Utterance 44: "run run" [ɹʌn ɹʌn]
+Target: "(Someone is) running running" or "Run, run"
+Grammatical analysis: Reduplication (immature feature), subject/auxiliary/third
+  person marker omitted
+
+Utterance 45: "jump high" [dʒʌmp haɪ]
+Target: "Jump high"
+Grammatical analysis: Verb + adverb, subject/auxiliary omitted
+
+Utterance 46: "colored" [kʌləd]
+Target: "Colored"
+Grammatical analysis: Past participle used as adjective, appropriate
+
+Utterance 47: "mommy mommy" [mɑmi mɑmi]
+Target: "Mommy, mommy"
+Grammatical analysis: Reduplication for emphasis, appropriate for age/context
+
+================================================================================
+MORPHOSYNTACTIC ANALYSIS
+================================================================================
+
+ANALYSIS OF GRAMMATICAL FORMS OBSERVED IN LANGUAGE SAMPLE:
+
+MORPHOLOGICAL FORMS ANALYSIS:
+
+1. ARTICLES (a, the)
+   Observations: Completely absent from language sample (0/47 utterances)
+   Expected at 4;4: Present in 90%+ of utterances
+   Analysis: ABSENT/SIGNIFICANT DELAY
+
+2. COPULA (is, am, are)
+   Present in 2 utterances (#31: "is yellow", #40: "what's this")
+   Present in 2/47 utterances = 4%
+   Expected at 4;4: Present in 85%+ of utterances
+   Analysis: SIGNIFICANTLY DELAYED, but emerging (noted in 2 utterances)
+
+3. AUXILIARY VERBS (is, are, am being used as auxiliary)
+   Present in 1 utterance (#35: "you doing?" - partial)
+   Present in 1/47 utterances = 2%
+   Expected at 4;4: Present in 70%+ of utterances
+   Analysis: SEVERELY ABSENT/SIGNIFICANTLY DELAYED
+
+4. REGULAR PAST TENSE (-ed)
+   Present in 0/47 utterances
+   Expected at 4;4: Present in 50%+ of utterances
+   Analysis: ABSENT
+
+5. THIRD PERSON SINGULAR PRESENT (-s)
+   Present in 0/47 utterances
+   Examples where missing: "car go" (should be "goes"), "she no like" (should be "likes")
+   Expected at 4;4: Present in 70%+ of utterances
+   Analysis: ABSENT/SIGNIFICANT DELAY
+
+6. PLURAL (-s/-es)
+   Present in 1 utterance as attempted form ("two bear" instead of "bears")
+   Plural -s used correctly: 0 utterances
+   Present in 0-2/47 utterances = 0-4%
+   Expected at 4;4: Present in 85%+ of utterances
+   Analysis: EMERGING but not yet productive
+
+7. POSSESSIVE ('s or possessive pronouns)
+   Possessive pronouns present: "mine" (#7, 21), "my" (#12, 42)
+   Possessive 's: 0 utterances
+   Present in 4/47 utterances = 9%
+   Expected at 4;4: Present in 80%+ of utterances
+   Analysis: EMERGING, possessive pronouns present but possessive 's absent
+
+8. IRREGULAR PAST TENSE
+   Present in 0/47 utterances
+   Expected at 4;4: Present in 40%+ of utterances
+   Analysis: ABSENT
+
+9. PRESENT PROGRESSIVE (-ing)
+   Observed: "you doing?" (#35)
+   Present in 1/47 utterances = 2%
+   Note: Most verbs used without -ing: "go" (should be "going"), "run", "jump"
+   Expected at 4;4: Present in 90%+ of utterances when child uses progressive aspect
+   Analysis: SEVERELY DELAYED
+
+10. SUBJECT PRONOUNS
+    Present: she, you, me (used incorrectly for "I")
+    Correct use: Limited
+    Missing completely: Many utterances (#2, 3, 4, 5, 9, 11, 15, 19, 22, 28, 32, 37, 45)
+    Analysis: EMERGING, but frequent omission and pronoun case errors (me for I)
+
+11. OBJECT PRONOUNS
+    Present: it, her (used incorrectly for "she")
+    Analysis: EMERGING with errors
+
+12. NEGATION (no, not, don't)
+    Present in 8 utterances (#3, 9, 10, 13, 22, 27, 38, 41)
+    Negation forms: "no", "not"
+    Missing: "don't" contraction
+    Analysis: PRESENT AND APPROPRIATE (strength!)
+
+13. QUESTIONS
+    Present in 4 utterances (#6, 10, 12, 17, 30, 35, 40)
+    Question formation: Rising intonation, question words (where, what, who/?)
+    Analysis: EMERGING (strength relative to other areas)
+
+SUMMARY OF GRAMMATICAL FORM EMERGENCE:
+
+Present & Age-Appropriate:
+- Negation
+- Simple questions with question words
+- Possessive pronouns (mine, my)
+- Simple verbs (unmarked)
+
+Emerging (Present but not yet productive):
+- Copula (2%)
+- Present progressive -ing (2%)
+- Plural -s (0-4%)
+- Subject pronouns (with errors)
+
+Significantly Delayed/Absent:
+- Articles (0%)
+- Auxiliary verbs (2%)
+- Regular past tense (-ed) (0%)
+- Third person singular present (-s) (0%)
+- Irregular past tense (0%)
+
+OVERALL SYNTACTIC ANALYSIS:
+
+Mean Length of Utterance (MLU):
+- Morphemes: 2.3
+- Words: 2.1
+- Expected for 4;4: 4.5-5.5 morphemes
+- Sofia's MLU is consistent with age 2.5-3 years
+
+Utterance Complexity:
+- Predominantly 2-word utterances (32/47 = 68%)
+- 3-word utterances (12/47 = 26%)
+- 4-word utterances (2/47 = 4%)
+- 5-word utterances (1/47 = 2%)
+- No utterances exceeding 5 words
+
+Simple Sentences Only: Sofia produces simple sentences or phrases with minimal
+grammatical elaboration. No complex sentences, no embedded clauses, no
+coordination observed.
+
+Type-Token Ratio (TTR): 0.42
+Interpretation: This indicates Sofia uses a relatively limited variety of
+different words. Expected TTR for preschoolers is typically 0.45-0.60. Sofia's
+ratio suggests limited vocabulary diversity or repeated use of small set of
+high-frequency words.
+
+================================================================================
+PRAGMATIC SKILLS OBSERVATION CHECKLIST
+================================================================================
+
+SOCIAL COMMUNICATION SKILLS OBSERVED DURING LANGUAGE SAMPLE:
+
+1. EYE CONTACT
+   Observation: Sofia made adequate eye contact with the clinician, though
+     somewhat reduced initially (first 3-4 minutes). Increased as rapport
+     developed.
+   Rating: ADEQUATE
+   Age-expectation: Expected at 4;4
+
+2. TURN-TAKING IN CONVERSATION
+   Observation: Sofia showed emerging turn-taking skills. She required frequent
+     prompts and models for turn-taking. She interrupted occasionally and did
+     not always wait for the clinician to finish speaking before responding.
+     When the clinician asked questions, she usually answered but not always
+     with full participation.
+   Specific examples:
+     - Clinician: "What should the baby do?" Sofia: "baby sit" (appropriate
+       turn-taking)
+     - Clinician: "Where is the mommy?" Sofia: "mommy come" (appropriate)
+     - In some instances, Sofia would repeat clinician's words rather than
+       respond
+   Rating: EMERGING
+   Age-expectation: Expected to be well-established by 4;4
+
+3. TOPIC MAINTENANCE
+   Observation: Sofia maintained topic for 2-3 conversational turns. She would
+     shift topics abruptly or introduce new topics without signaling transitions.
+     With prompting, she could return to previous topics.
+   Examples:
+     - Clinician: "The baby is sitting. What else?"
+     - Sofia: "mommy home" (topic shift to mom, not baby)
+     - With prompt "Where's the baby?", she returned to baby topic
+   Rating: EMERGING
+   Age-expectation: Expected to maintain topics for 4-5 turns at 4;4
+
+4. REQUESTING/DEMANDS
+   Communication style: Sofia primarily used gestural + single-word requests
+   Examples:
+     - "Me wan dat" (with pointing gesture)
+     - "Help please" (with outstretched hands)
+     - "More pees" (with cup/item extended)
+   Forms used: Direct requests ("me want"), imperative ("help"), single words
+   Forms not observed: "Can you...", "Would you...", "May I..."
+   Rating: EMERGING
+   Age-expectation: Expected to use polite forms ("Can you help me?") at 4;4
+
+5. COMMENTING/SHARING IDEAS
+   Observation: Sofia made limited spontaneous comments. Most comments were
+     elicited by clinician questions. Comments were typically labels or
+     descriptions rather than personal sharing.
+   Examples:
+     - "Yellow" (describing color)
+     - "Pretty" (commenting on item)
+     - "Broken" (describing state)
+   Spontaneous vs. Elicited: Approximately 15% spontaneous, 85% elicited
+   Rating: EMERGING
+   Age-expectation: Expected to make frequent spontaneous comments at 4;4
+
+6. GREETING & FAREWELL BEHAVIORS
+   Observation: Sofia waved goodbye at end of session (with model/prompting).
+     Did not initiate greetings. Responded appropriately to clinician's greeting
+     with "hi" but did not expand.
+   Rating: EMERGING
+   Age-expectation: Expected to use greetings/farewells independently at 4;4
+
+7. NARRATIVE SKILLS
+   Observation: Sofia does not produce narratives or coherent story sequences.
+     She can label and describe single items/events but cannot sequence events
+     or produce narrative structure.
+   Examples of label/describe:
+     - "Baby cry"
+     - "Car go fast"
+   Examples of what's absent:
+     - No story beginning ("Once upon a time...")
+     - No sequence ("First... then... after...")
+     - No story ending
+   Rating: SIGNIFICANTLY DELAYED
+   Age-expectation: 4-year-olds typically tell simple 2-3 step stories
+
+8. CONVERSATION INITIATION
+   Observation: Sofia rarely initiated conversation. Most communication was in
+     response to clinician initiation or prompts. In one instance (#30 "where
+     mommy?"), Sofia initiated, but mostly she responded to questions.
+   Initiation rate: Approximately 10-15% of utterances were spontaneous/initiated
+   Rating: EMERGING
+   Age-expectation: Expected to initiate conversation frequently at 4;4
+
+9. REPAIR/CLARIFICATION BEHAVIORS
+   Observation: When not understood, Sofia typically:
+     - Repeated utterance (same form)
+     - Used gesture
+     - Sometimes gave up ("no" or turned away)
+     - Did not use sophisticated repair strategies
+   Examples:
+     - When saying something unclear: [observer says "What?"]
+     - Sofia either repeats or gestures
+   Rating: EMERGING
+   Age-expectation: Expected to use repair strategies ("I said...") at 4;4
+
+10. JOINT ATTENTION
+    Observation: Sofia demonstrated joint attention during play. She could shift
+      attention between toys and clinician's face. She attended to what clinician
+      was pointing to or describing.
+    Rating: ADEQUATE
+    Age-expectation: Expected at 4;4
+
+PRAGMATIC SKILLS SUMMARY:
+
+Strengths:
+- Eye contact (adequate)
+- Joint attention (adequate)
+- Negation and question formation
+- Emerging turn-taking with support
+- Responds to questions (though simply)
+
+Areas of Concern:
+- Limited topic maintenance
+- Minimal spontaneous communication
+- Reduced commenting/idea sharing
+- Difficulty with repair strategies
+- Limited narrative ability
+- Primarily uses directive/imperative forms
+
+Overall Pragmatic Rating: EMERGING / SIGNIFICANTLY BELOW AGE EXPECTATION
+Sofia demonstrates emerging pragmatic skills that are below age-expectation. She
+shows better receptive understanding of social communication than her expressive
+use of pragmatic strategies.
+
+================================================================================
+PLAY SKILLS OBSERVATION
+================================================================================
+
+PLAY SKILLS ASSESSED DURING UNSTRUCTURED PLAY ACTIVITY
+
+Setting: Clinician presented toys including dolls, cars, blocks, kitchen items,
+  animals
+Duration: 10-15 minutes
+Context: Naturalistic play while language sample was collected
+
+1. PLAY TYPE OBSERVED:
+
+PARALLEL PLAY (Primary - approximately 60% of play time)
+- Sofia played near the clinician but with minimal interaction
+- She would play with her own toys while clinician played with similar toys
+- Minimal sharing or cooperation
+- Occasional glancing toward clinician's activities
+- No verbal coordination of play
+
+FUNCTIONAL PLAY (Emerging - approximately 30% of play time)
+- Sofia engaged in play with appropriate toy use:
+  - Fed doll with spoon
+  - Drove car along surface making "vroom" sounds
+  - Placed blocks to build (simple structure)
+  - Pretended to cook in play kitchen
+- These were simple, single-action schemes
+- Brief engagement before shifting to another activity
+
+SYMBOLIC/PRETEND PLAY (Emerging with adult support - approximately 10% of play time)
+- With clinician modeling/prompting:
+  - Sofia engaged in brief pretend scenarios
+  - Example: "Baby sleep" while laying doll on pillow (2-3 second scenario)
+  - Needed clinician prompts to extend play ("What does baby need?")
+  - Did not spontaneously develop extended pretend narratives
+
+2. VERBAL NARRATION DURING PLAY:
+
+Observed: Minimal verbal narration during play
+Examples of narration provided:
+- "Baby sleep"
+- "Car go"
+- "Baby cry"
+- "Me do it"
+
+Characteristics:
+- Simple labels or descriptions
+- Minimal elaboration
+- No complex play narration or direction-giving
+- Limited use of dialogue between play figures
+
+Expected at 4;4: Frequent narration, dialogue between play figures, extended
+  pretend scenarios with vocal accompaniment
+
+Rating: EMERGING / SIGNIFICANTLY BELOW AGE
+
+3. PLAY INDEPENDENCE:
+
+Sofia demonstrated emerging ability to play independently but preferred
+parallel or supported play. When alone with toys, she would engage but:
+- Shifted activities frequently (every 1-2 minutes)
+- Did not develop sustained, complex play
+- Seemed to wait for clinician input or new toys
+
+4. TOY INTEREST & ENGAGEMENT:
+
+High interest: Small manipulatives, cars, kitchen items
+Moderate interest: Dolls, blocks, animals
+Low interest: Picture books (unless labeled items)
+Engagement duration: 2-5 minutes per activity (shorter than age-expected 5-10 minutes)
+
+5. PROBLEM-SOLVING DURING PLAY:
+
+Sofia demonstrated:
+- Good ability to figure out how toys work (assembly, movement)
+- Ability to use objects for intended purpose (car driving, doll feeding)
+- Emerging ability to troubleshoot ("this doesn't fit" - gestural demonstration)
+- Limited verbalization of problem-solving process
+
+6. SOCIAL ASPECTS OF PLAY:
+
+Cooperation: Minimal; Sofia played mostly alongside rather than with clinician
+Imitation: Sofia imitated clinician's actions (driving car, feeding doll)
+Rule-following: Not assessed in unstructured play
+Sharing: Did not initiate sharing; accepted shared items passively
+
+PLAY SKILLS SUMMARY:
+
+Sofia demonstrates play skills that are emerging but slightly below age-expectation:
+- Primarily parallel/functional play; symbolic play emerging with support
+- Minimal verbal narration of play
+- Good fine/gross motor ability for play
+- Shorter engagement duration than age-expected
+- Emerging problem-solving abilities
+
+This pattern is consistent with her overall language delay. Her comprehension and
+motor skills allow for appropriate functional play, but her expressive language
+limitations reduce the complexity and symbolic nature of her play.
+
+================================================================================
+SUMMARY OF INFORMAL ASSESSMENT FINDINGS
+================================================================================
+
+Sofia's informal assessment data are consistent with her standardized test results.
+Key findings include:
+
+1. EXPRESSIVE LANGUAGE:
+   - MLU of 2.3 morphemes (expected 4.5-5.5)
+   - Predominantly 2-word utterances
+   - Significant grammatical delays (missing articles, copula, auxiliary verbs,
+     grammatical markers)
+   - Limited vocabulary diversity (TTR = 0.42)
+
+2. PRAGMATIC LANGUAGE:
+   - Emerging social communication skills
+   - Limited spontaneous communication and commenting
+   - Emerging turn-taking and topic maintenance
+   - Minimal narrative abilities
+   - Primarily gestural and single-word requesting
+
+3. PLAY SKILLS:
+   - Parallel and functional play predominant
+   - Emerging symbolic play with support
+   - Minimal verbal narration
+   - Age-appropriate motor skills but below-age communication during play
+
+4. RECEPTIVE LANGUAGE:
+   - Understands more than she can express
+   - Responds to questions and simple directions
+   - Benefits from visual supports and repetition
+
+OVERALL IMPRESSION:
+Sofia's informal language sample and play observation confirm the presence of
+significant expressive language and speech sound disorders. Her receptive
+language is relatively stronger, her nonverbal cognitive and motor skills are
+age-appropriate, and her pragmatic skills are emerging. The pattern suggests
+primary difficulty with expressive language and phonological production rather
+than comprehension or cognitive limitations.
+
+================================================================================

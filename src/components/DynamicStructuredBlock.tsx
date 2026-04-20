@@ -20,7 +20,19 @@ import type { FieldMode, SourceRef } from '@/types/field-contracts'
 interface FieldSchema {
   key: string
   label: string
-  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select'
+  // Keep in sync with canonical union in src/lib/structured-schemas.ts
+  type:
+    | 'string'
+    | 'boolean'
+    | 'number'
+    | 'array'
+    | 'object'
+    | 'date'
+    | 'checkbox'
+    | 'select'
+    | 'paragraph'
+    | 'enum'
+    | 'table'
   required?: boolean
   options?: string[] // For select/dropdown fields
   placeholder?: string
@@ -45,7 +57,7 @@ interface DynamicStructuredBlockProps {
   onSaveAsTemplate?: (schema: SectionSchema) => void;
   mode?: 'data' | 'template'; // Accept mode as prop instead of managing internally
   sectionId?: string; // Add sectionId for field highlighting
-  updateSectionData?: (sectionId: string, data: Json) => void;
+  updateSectionData?: (sectionId: string, data: Json, content?: string) => void;
 }
 
 // Helper function to get nested values

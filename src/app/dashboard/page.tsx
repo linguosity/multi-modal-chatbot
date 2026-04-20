@@ -36,7 +36,7 @@ export default async function DashboardPage() {
 
   // Fetch section counts per report in a single query
   const reportIds = allReports.map((r) => r.id);
-  let sectionCounts: Record<string, number> = {};
+  const sectionCounts: Record<string, number> = {};
   if (reportIds.length > 0) {
     const { data: sections } = await supabase
       .from("report_sections")

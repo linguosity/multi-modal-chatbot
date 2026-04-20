@@ -104,10 +104,9 @@ interface ProgressPanelProps {
 }
 
 export function ProgressToastContainer({ toasts, onDismiss, className = '' }: ProgressPanelProps) {
-  if (toasts.length === 0) return null
   const [open, setOpen] = useState(true)
+  if (toasts.length === 0) return null
   const processing = toasts.filter(t => t.status === 'processing')
-  const succeeded = toasts.filter(t => t.status === 'success')
   const failed = toasts.filter(t => t.status === 'error' || t.status === 'timeout')
 
   return (

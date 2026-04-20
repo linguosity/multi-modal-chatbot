@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     if (format === 'pdf') {
       const pdfBuffer = await generatePDF(exportData)
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="test-export-${Date.now()}.pdf"`,
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     }
 
     const docxBuffer = await generateDOCX(exportData)
-    return new NextResponse(docxBuffer, {
+    return new NextResponse(new Uint8Array(docxBuffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="test-export-${Date.now()}.docx"`,

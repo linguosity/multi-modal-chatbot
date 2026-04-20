@@ -129,7 +129,7 @@ export default function ReportView() { // Removed props
   console.log('🔍 ReportView - Found student info section:', !!studentInfoSection);
   console.log('🔍 ReportView - Student info section data:', studentInfoSection);
   console.log('🔍 ReportView - Report metadata:', report.metadata);
-  console.log('🔍 ReportView - All sections:', report.sections.map(s => ({ title: s.title, section_type: s.section_type })));
+  console.log('🔍 ReportView - All sections:', report.sections.map(s => ({ title: s.title, sectionType: s.sectionType })));
   
   // Use same priority logic as StudentBioCard
   let studentInfo: StudentInfo = {

@@ -7,8 +7,8 @@ import type { Section } from '@/types/report-types'
  * GET /api/reports/[id]
  * Fetch report metadata + sections from report_sections (single source of truth).
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -64,8 +64,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
  * PUT /api/reports/[id]
  * Update report metadata only. Section updates go through /api/reports/[id]/sections/[sectionId].
  */
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -111,8 +111,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
  * DELETE /api/reports/[id]
  * Delete a report. Cascade on report_sections handles section cleanup.
  */
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createRouteSupabase()
 
   const { data: { user } } = await supabase.auth.getUser()

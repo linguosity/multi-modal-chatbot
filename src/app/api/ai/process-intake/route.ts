@@ -20,6 +20,12 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 export async function POST(request: NextRequest) {
   console.log('🚀 === AI INTAKE API ROUTE START ===')
 
+  // Hoisted so the catch block at the bottom can tear down the SSE stream +
+  // Supabase realtime channel even when the try body throws early.
+  let operationId: string | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let broadcastChannel: any = null
+
   try {
     console.log('✅ Step 1: API route handler called successfully')
     console.log('✅ Step 2: About to parse FormData')
@@ -31,7 +37,7 @@ export async function POST(request: NextRequest) {
     console.log('✅ Step 4: reportId extracted:', reportId)
 
     const sectionIdsRaw = formData.get('sectionIds') as string || '[]'
-    const operationId = (formData.get('operationId') as string | null) || null
+    operationId = (formData.get('operationId') as string | null) || null
     const sectionInfoRaw = formData.get('sectionInfo') as string | null
     const sectionSchemasRaw = formData.get('sectionSchemas') as string | null
     console.log('✅ Step 5: sectionIds raw:', sectionIdsRaw)
@@ -85,7 +91,7 @@ export async function POST(request: NextRequest) {
     // Optional Supabase Realtime broadcast (production-friendly alternative to postgres_changes)
     // Default broadcast to ON unless explicitly disabled
     const BROADCAST = process.env.SUPABASE_BROADCAST_ENABLED !== 'false'
-    let broadcastChannel: any = null
+    // broadcastChannel declared at function scope above
     let broadcastPublish: (event: string, payload: any) => void = () => {}
     if (BROADCAST && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
@@ -148,7 +154,7 @@ export async function POST(request: NextRequest) {
     try { broadcastPublish('progress', { stage: 'uploading_files_complete' }) } catch {}
     dbLog({ stage: 'uploading_files_complete', message: 'All files parsed', event_type: 'stage' }).catch(() => {})
 
-    let processingErrors: string[] = []
+    const processingErrors: string[] = []
 
     console.log('✅ Step 11: Getting target sections with full context...')
     try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text ... replace`) } catch {}
@@ -538,7 +544,7 @@ export async function POST(request: NextRequest) {
       // Extract function call from Gemini response
       const candidate = (response as any).candidates?.[0]
       const responseParts = candidate?.content?.parts || []
-      let fcPart = responseParts.find((p: any) => p.functionCall?.name === 'save_assessment_data')
+      const fcPart = responseParts.find((p: any) => p.functionCall?.name === 'save_assessment_data')
 
       if (!fcPart) {
         console.warn('⚠️ Step 16: No function_call found. Attempting Structured Outputs fallback...')
@@ -743,7 +749,8 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        let updatedData = currentSection?.structured_data || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let updatedData: any = currentSection?.structured_data || {}
 
         // Clean existing data to prevent circular references
         const cleanupResult = dataIntegrityGuard.cleanCorruptedData(updatedData)
@@ -833,8 +840,10 @@ export async function POST(request: NextRequest) {
               .select('structured_data')
               .eq('id', toolsSectionId)
               .single()
-            const toolsData = (toolsRow?.structured_data && typeof toolsRow.structured_data === 'object') ? toolsRow.structured_data : {}
-            const list = Array.isArray(toolsData.tools) ? toolsData.tools : []
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const toolsData: any = (toolsRow?.structured_data && typeof toolsRow.structured_data === 'object') ? toolsRow.structured_data : {}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const list: any[] = Array.isArray(toolsData.tools) ? toolsData.tools : []
             // crude context title from source_reference
             const ref = (update.source_reference as string).toLowerCase()
             const ctxMap: Record<string, string> = {

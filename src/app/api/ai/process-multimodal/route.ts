@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     // Build Gemini content parts array — use native multimodal for PDFs, images, audio
     const contentParts: Part[] = []
-    let processingErrors: string[] = []
+    const processingErrors: string[] = []
 
     if (textContent && textContent.trim()) {
       contentParts.push({ text: `Assessment Notes:\n${textContent}` })
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
     console.log(`📝 [MultiModal API] Built content array with ${contentParts.length} parts`)
 
     // Build system prompt
-    let systemPrompt = reportContextBuilder.buildEnhancedSystemPrompt(reportContext)
+    const systemPrompt = reportContextBuilder.buildEnhancedSystemPrompt(reportContext)
     const targetSectionsWithContext = reportContextBuilder.getTargetSectionsWithContext(reportContext)
     const sectionSchemaById = new Map<string, SectionSchema | undefined>()
     for (const s of targetSectionsWithContext) {
@@ -317,7 +317,8 @@ export async function POST(request: NextRequest) {
           .eq('id', cleanedUpdate.section_id)
           .single()
 
-        let updatedData = currentSection?.structured_data || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let updatedData: any = currentSection?.structured_data || {}
 
         // Clean existing data
         const cleanupResult = dataIntegrityGuard.cleanCorruptedData(updatedData)

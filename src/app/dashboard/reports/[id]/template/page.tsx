@@ -173,7 +173,7 @@ export default function ReportTemplatePage() {
                   console.log('Save as template:', schema)
                   // TODO: Implement save as global template
                 }}
-                updateSectionData={(sectionId: string, data: any, content: string) => {}} // Not used in template mode
+                updateSectionData={(_sectionId: string, _data: unknown, _content?: string) => {}} // Not used in template mode
               />
             </div>
           ) : (

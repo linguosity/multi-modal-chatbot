@@ -28,15 +28,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract content from sections for AI analysis
-    const sectionContents = report.sections?.map((section: any) => ({
+    interface SectionSummary { title: string; content: string; lastUpdated?: string }
+    const sectionContents: SectionSummary[] = report.sections?.map((section: any) => ({
       title: section.title,
       content: section.content || '',
-      lastUpdated: section.lastUpdated
+      lastUpdated: section.lastUpdated,
     })) || []
 
     // Sort by last updated to focus on recent work
     const recentSections = sectionContents
-      .filter(section => section.lastUpdated)
+      .filter((section): section is SectionSummary & { lastUpdated: string } => Boolean(section.lastUpdated))
       .sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
       .slice(0, 5) // Focus on 5 most recent sections
 
