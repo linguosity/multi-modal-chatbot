@@ -143,9 +143,11 @@ export default function ReportView() { // Removed props
     eligibilityStatus: ''
   };
 
-  // First priority: metadata.studentBio
-  if (report.metadata?.studentBio) {
-    const bio = report.metadata.studentBio;
+  // First priority: metadata.studentBio (report.metadata is Json — cast for access)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const metadata = report.metadata as Record<string, any> | null | undefined
+  if (metadata?.studentBio) {
+    const bio = metadata.studentBio;
     studentInfo = {
       firstName: bio.firstName || '',
       lastName: bio.lastName || '',
@@ -582,7 +584,8 @@ export default function ReportView() { // Removed props
                       console.log(`🧪 Client: Hydrating template for section '${section.title}', hasStructured=${hasStructured}`);
                       const hydrated = hydrateSection({
                         html: section.content || '',
-                        data: section.structured_data || {},
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        data: (section.structured_data || {}) as Record<string, any>,
                         reportMeta: (report as any) || {},
                       });
                       console.log(`🧪 Client: Hydrated length=${hydrated?.length || 0}, preview=`, hydrated?.substring(0, 160));

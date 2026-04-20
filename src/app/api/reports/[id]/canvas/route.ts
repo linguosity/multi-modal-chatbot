@@ -94,7 +94,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .order('created_at', { ascending: true })
 
   if (!full.error) {
-    const rows = (full.data ?? []).map((r: Record<string, unknown>) => ({
+    // Cast through unknown because Supabase types the result as a union
+    // including GenericStringError when it can't infer the row shape from
+    // the select string.
+    const dataRows = (full.data ?? []) as unknown as Array<Record<string, unknown>>
+    const rows = dataRows.map((r) => ({
       id: r.id as string,
       filename: r.filename as string,
       file_type: r.file_type as string,
@@ -118,7 +122,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return safeJsonResponse({ error: 'Failed to fetch canvas rows' }, { status: 500 })
     }
 
-    const rows = (base.data ?? []).map((r: Record<string, unknown>) => ({
+    const baseRows = (base.data ?? []) as unknown as Array<Record<string, unknown>>
+    const rows = baseRows.map((r) => ({
       id: r.id as string,
       filename: r.filename as string,
       file_type: r.file_type as string,

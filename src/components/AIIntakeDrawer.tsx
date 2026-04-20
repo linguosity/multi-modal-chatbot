@@ -141,6 +141,10 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
     setIsProcessing(true)
     clearAllToasts()
 
+    // Hoisted so the finally block can close the SSE stream regardless of
+    // whether the try body errored before assigning it.
+    let es: EventSource | null = null
+
     // Snapshot files for the loading-moment overlay before any state changes
     const snapshot: LoadingFile[] = files.map((f, i) => ({
       id: f.id,
@@ -188,8 +192,7 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       formData.append('text', rawText)
       if (operationId) formData.append('operationId', operationId)
 
-      // Subscribe to SSE before sending request
-      let es: EventSource | null = null
+      // Subscribe to SSE before sending request (es hoisted to function scope for finally cleanup)
       if (operationId) {
         try {
           es = new EventSource(`/api/stream/${operationId}`)
@@ -325,7 +328,7 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
         setLoadingOperationId(null)
       }, 900)
       // Close SSE stream if open
-      try { /* @ts-ignore */ es?.close?.() } catch {}
+      try { es?.close?.() } catch {}
     }
   }
 

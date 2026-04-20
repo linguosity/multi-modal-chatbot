@@ -148,7 +148,9 @@ export const clinicalTypographyGuide = {
   errorText: { size: 'xs' as TypographyScale, weight: 'medium' as const },
   statusText: { size: 'xs' as TypographyScale, weight: 'medium' as const },
   modalTitle: { size: 'xl' as TypographyScale, weight: 'semibold' as const },
-  cardTitle: { size: 'base' as TypographyScale, weight: 'medium' as const }
+  cardTitle: { size: 'base' as TypographyScale, weight: 'medium' as const },
+  breadcrumbText: { size: 'xs' as TypographyScale, weight: 'normal' as const },
+  tabText: { size: 'sm' as TypographyScale, weight: 'medium' as const },
 }
 
 // Helper function to get clinical typography class

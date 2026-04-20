@@ -47,6 +47,14 @@
     "src/**/*.enhanced.ts",
     "src/**/*.refactored.ts",
     "src/**/*.minimal.tsx",
-    "src/**/*.ultra-minimal.tsx"
+    "src/**/*.ultra-minimal.tsx",
+    "src/components/editors/**",
+    "src/components/StudentBioCard.tsx",
+    "src/components/StructuredTiptapEditor.tsx",
+    "src/components/NewReportForm.tsx",
+    "src/components/MigrationPanel.tsx",
+    "src/components/CompactAIAssistant.tsx",
+    "src/components/FloatingAIAssistant.tsx",
+    "src/components/dev/**"
   ]
 }

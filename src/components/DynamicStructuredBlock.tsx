@@ -75,7 +75,8 @@ export default function DynamicStructuredBlock({
   sectionId,
   updateSectionData
 }: DynamicStructuredBlockProps) {
-  const [data, setData] = useState<Json>(initialData)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [data, setData] = useState<Record<string, any>>((initialData as Record<string, any>) ?? {})
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -855,9 +856,14 @@ export default function DynamicStructuredBlock({
       {/* Content */}
       {mode === 'template' ? (
         <DynamicSchemaEditor
-          schema={schema}
-          onSchemaChange={onSchemaChange!}
-          onSaveAsTemplate={onSaveAsTemplate!}
+          // DynamicSchemaEditor defines its own SectionSchema shape; cast
+          // through unknown to bridge the duplicate-name drift.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          schema={schema as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onSchemaChange={onSchemaChange as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onSaveAsTemplate={onSaveAsTemplate as any}
         />
       ) : (
         <div className="p-6">
@@ -869,7 +875,7 @@ export default function DynamicStructuredBlock({
               runtime
                 .filter((r: any) => r && r.artifactId)
                 .map((r: any) => [r.artifactId, { artifactId: r.artifactId, confidence: r.confidence } as SourceRef])
-            ).values())
+            ).values()) as SourceRef[]
             if (sectionRefs.length === 0) return null
             return (
               <div className="mb-4">
@@ -917,7 +923,7 @@ export default function DynamicStructuredBlock({
           isOpen={!!previewRef}
           title="Source Preview"
           onClose={() => setPreviewRef(null)}
-          actions={<></>}
+          footer={<></>}
         >
           <div className="p-4 space-y-2 text-sm">
             <div className="text-slate-700"><span className="font-medium">Artifact:</span> {previewRef.artifactId}</div>
