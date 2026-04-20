@@ -27,11 +27,12 @@ interface LoadingMomentProps {
 }
 
 const CYCLE_TEXT: Array<{ title: string; sub: string }> = [
-  { title: 'Reading documents',          sub: 'Parsing PDFs, transcribing audio, OCR-ing photos.' },
-  { title: 'Extracting findings',        sub: 'Pulling scores, quotes, observations, timestamps.' },
-  { title: 'Classifying method + domain',sub: 'Tagging norm-ref vs. observation vs. interview.' },
-  { title: 'Weighing direction',         sub: 'Does this evidence point toward or away from eligibility?' },
-  { title: 'Drafting skeleton',          sub: 'Mapping triangulated findings to your template sections.' },
+  { title: 'De-identifying source files', sub: 'PII stays on your server. The AI never sees real names, DOBs, or addresses.' },
+  { title: 'Reading documents',           sub: 'Parsing PDFs, transcribing audio, OCR-ing photos.' },
+  { title: 'Extracting findings',         sub: 'Pulling scores, quotes, observations, timestamps.' },
+  { title: 'Classifying method + domain', sub: 'Tagging norm-ref vs. observation vs. interview.' },
+  { title: 'Weighing direction',          sub: 'Does this evidence point toward or away from eligibility?' },
+  { title: 'Drafting skeleton',           sub: 'Mapping triangulated findings to your template sections.' },
 ]
 
 const AUTO_ADVANCE_MS = 1800 // fallback pace when no SSE signal arrives

@@ -14,6 +14,7 @@ import { parseWithZod } from '@/lib/ai/structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
 import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { PIIRedactor, persistPIIMappings } from '@/lib/pii/redactor'
 
 // Gemini client is obtained via getGeminiClient() singleton
 
@@ -49,13 +50,23 @@ export async function POST(request: NextRequest) {
 
     const replace = formData.get('replace') === 'true'
     const dryRun = formData.get('dryRun') === 'true'
-    const text = formData.get('text') as string
+    const rawText = formData.get('text') as string
+
+    // ── PII guard (design review §10) ─────────────────────────────────────
+    // Redact PII from the user-provided context text BEFORE it reaches the
+    // Claude / Gemini prompts. File-extracted text (PDF/audio) gets the same
+    // treatment below as it enters the content pipeline.
+    const piiRedactor = new PIIRedactor()
+    const textRedaction = piiRedactor.redact(rawText || '')
+    const text = textRedaction.redactedText
+    try { emitProgress(operationId, `🛡 De-identifying source text: ${textRedaction.entitiesFound.length} entities found`) } catch {}
 
     console.log('📝 Request data summary:', {
       reportId,
       sectionCount: sectionIds.length,
       replace,
-      textLength: text?.length
+      textLength: text?.length,
+      piiEntitiesRedacted: textRedaction.entitiesFound.length,
     })
 
     console.log('✅ Step 7: Validating required fields...')
@@ -312,17 +323,30 @@ export async function POST(request: NextRequest) {
             }
           })
 
-          const extractedText = pdfExtractResponse.text || ''
+          const extractedTextRaw = pdfExtractResponse.text || ''
+          // PII guard: redact before the text reaches the Claude/Gemini prompt.
+          const { redactedText: extractedText, entitiesFound: pdfEnts } = piiRedactor.redact(extractedTextRaw)
+          if (pdfEnts.length > 0) {
+            try { emitProgress(operationId, `🛡 De-identified ${pdfEnts.length} entities in ${f.name}`) } catch {}
+          }
           const textBlock2 = { type: 'text', text: `Main Points from PDF (${f.name}):\n${extractedText}` }
           content.push(textBlock2)
           openaiContent.push(textBlock2)
         } else if (f.type.startsWith('audio/')) {
-          const transcript = await transcribeAudio(f)
+          const transcriptRaw = await transcribeAudio(f)
+          const { redactedText: transcript, entitiesFound: audioEnts } = piiRedactor.redact(transcriptRaw)
+          if (audioEnts.length > 0) {
+            try { emitProgress(operationId, `🛡 De-identified ${audioEnts.length} entities in ${f.name}`) } catch {}
+          }
           const audioBlock = { type: 'text', text: `Audio transcript from ${f.name}:\n${transcript}` }
           content.push(audioBlock)
           openaiContent.push(audioBlock)
         } else if (f.type.startsWith('text/')) {
-          const t = await f.text()
+          const tRaw = await f.text()
+          const { redactedText: t, entitiesFound: textEnts } = piiRedactor.redact(tRaw)
+          if (textEnts.length > 0) {
+            try { emitProgress(operationId, `🛡 De-identified ${textEnts.length} entities in ${f.name}`) } catch {}
+          }
           const textFileBlock = { type: 'text', text: `Text content from ${f.name}:\n${t}` }
           content.push(textFileBlock)
           openaiContent.push(textFileBlock)
@@ -377,6 +401,28 @@ export async function POST(request: NextRequest) {
     try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text`) } catch {}
     try { broadcastPublish('progress', { stage: 'extracting_text_complete' }) } catch {}
     dbLog({ stage: 'extracting_text_complete', message: 'Text extraction complete', event_type: 'stage' }).catch(() => {})
+
+    // ── Persist PII mappings (design review §10) ─────────────────────────
+    // Runs fire-and-forget; the redactor has already rewritten the prompts
+    // so the LLM request proceeds regardless of whether persistence succeeds.
+    const allRedactedEntities = piiRedactor.listAllMappings().map((m) => ({
+      type: m.type,
+      detectedValue: m.detectedValue,
+      token: m.token,
+      action: (m.type === 'DOB' || m.type === 'DATE') ? 'semantic' as const
+            : (m.type === 'ADDRESS' || m.type === 'PHONE' || m.type === 'EMAIL' || m.type === 'MRN' || m.type === 'SSN') ? 'remove' as const
+            : 'replace' as const,
+      confidence: 0.9,
+      needsReview: false,
+    }))
+    if (allRedactedEntities.length > 0) {
+      persistPIIMappings(supabase, reportId, allRedactedEntities).then((res) => {
+        if (res.ok) console.log(`✅ PII: persisted ${res.persisted} mappings`)
+        else if (res.error === 'table_missing') {
+          console.warn('⚠️ PII: pii_mappings table missing — apply migration 004_pii_mappings.sql')
+        }
+      }).catch(() => {})
+    }
 
     console.log('✅ Step 15: Defining tool schema...')
     const reportSchemaTool = {
