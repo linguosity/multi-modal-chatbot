@@ -205,7 +205,15 @@ function suggestBucketId(name: string, kind: EvidenceKind, buckets: Node<BucketN
 
 function CanvasInner() {
   const { report } = useReport()
+  const params = useParams<{ id: string }>()
+  const reportId = params?.id
   const [toast, setToast] = useState<string | null>(null)
+
+  // Persisted state from `/api/reports/[id]/canvas` keyed by file_uploads.id.
+  // Empty map => in-memory demo mode (backend missing, migration unapplied, or
+  // no confirmed attachments yet). The rest of the component works either way.
+  const [persisted, setPersisted] = useState<Record<string, CanvasRow>>({})
+  const [persistenceEnabled, setPersistenceEnabled] = useState(true)
 
   const sections = report?.sections ?? []
   const uploadedFiles = useMemo(() => {
@@ -213,6 +221,39 @@ function CanvasInner() {
     const raw = (meta.uploadedFiles as Array<{ id: string; name?: string; fileName?: string; type?: string }> | undefined) ?? []
     return Array.isArray(raw) ? raw : []
   }, [report])
+
+  // Fetch persisted canvas state once per report.
+  useEffect(() => {
+    if (!reportId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/reports/${reportId}/canvas`, { method: 'GET' })
+        if (!res.ok) {
+          // 404/500 → fall back to in-memory demo. 401 is the same story for
+          // the current user; the page-level auth gate will redirect soon.
+          if (cancelled) return
+          setPersistenceEnabled(res.status !== 401 && res.status !== 404)
+          return
+        }
+        const payload = (await res.json()) as { rows?: CanvasRow[]; degraded?: boolean }
+        if (cancelled) return
+        const rowMap: Record<string, CanvasRow> = {}
+        for (const row of payload.rows ?? []) rowMap[row.id] = row
+        setPersisted(rowMap)
+        // `degraded: true` means migration 002 isn't applied. We can still
+        // persist positions, but attachments won't stick — keep the flag so
+        // we don't PATCH confirmed_section_id and burn a 503.
+        setPersistenceEnabled(!payload.degraded)
+      } catch (err) {
+        console.warn('[canvas] persistence fetch failed, falling back to in-memory', err)
+        if (!cancelled) setPersistenceEnabled(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [reportId])
 
   // ── Build initial nodes ────────────────────────────────────────────────────
   const initialBuckets: Node<BucketNodeData>[] = useMemo(
@@ -246,22 +287,29 @@ function CanvasInner() {
 
   const initialChips: Node<ChipNodeData>[] = useMemo(
     () =>
-      uploadedFiles.map((f, i) => ({
-        id: `chip-${f.id}`,
-        type: 'chip',
-        position: { x: 120, y: 120 + i * 90 },
-        data: {
-          kind: fileKindFromType(f.type || '') as EvidenceKind,
-          name: f.fileName || f.name || 'untitled',
-          meta: (f.type || '').split('/')[1] || 'file',
-          attached: null,
-          nodeId: `chip-${f.id}`,
-          buckets: bucketOptions,
-          onMoveTo: (chipId: string, bucketId: string | null) => moveToRef.current?.(chipId, bucketId),
-        },
-        draggable: true,
-      })),
-    [uploadedFiles, bucketOptions]
+      uploadedFiles.map((f, i) => {
+        const row = persisted[f.id]
+        const attachedSectionId = row?.confirmed_section_id ?? null
+        // Map `confirmed_section_id` (sections table FK) → bucket node id.
+        const attachedBucketId = attachedSectionId ? `${BUCKET_PREFIX}${attachedSectionId}` : null
+        const position = row?.canvas_position ?? { x: 120, y: 120 + i * 90 }
+        return {
+          id: `${CHIP_PREFIX}${f.id}`,
+          type: 'chip',
+          position,
+          data: {
+            kind: fileKindFromType(f.type || '') as EvidenceKind,
+            name: f.fileName || f.name || 'untitled',
+            meta: (f.type || '').split('/')[1] || 'file',
+            attached: attachedBucketId,
+            nodeId: `${CHIP_PREFIX}${f.id}`,
+            buckets: bucketOptions,
+            onMoveTo: (chipId: string, bucketId: string | null) => moveToRef.current?.(chipId, bucketId),
+          },
+          draggable: true,
+        }
+      }),
+    [uploadedFiles, bucketOptions, persisted]
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<ChipNodeData | BucketNodeData>>([
@@ -280,6 +328,59 @@ function CanvasInner() {
     setToast(msg)
     setTimeout(() => setToast(null), 2200)
   }, [])
+
+  // ── Debounced persistence ─────────────────────────────────────────────────
+  // Rapid drags (multiple chips, quick successive onNodeDragStop) batch into a
+  // single PATCH per `PATCH_DEBOUNCE_MS` window. Updates are keyed by fileId
+  // so the last value per file wins, matching "final state" semantics.
+  const pendingRef = useRef<Map<string, PendingUpdate>>(new Map())
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flushPending = useCallback(async () => {
+    flushTimerRef.current = null
+    const batch = Array.from(pendingRef.current.values())
+    pendingRef.current.clear()
+    if (!reportId || batch.length === 0 || !persistenceEnabled) return
+    try {
+      const res = await fetch(`/api/reports/${reportId}/canvas`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: batch }),
+      })
+      if (res.status === 503) {
+        // Migration missing — stop trying for this session.
+        setPersistenceEnabled(false)
+        console.warn('[canvas] migration 002 not applied; canvas persistence disabled for this session')
+      } else if (!res.ok) {
+        console.warn('[canvas] PATCH failed', res.status)
+      }
+    } catch (err) {
+      console.warn('[canvas] PATCH error', err)
+    }
+  }, [reportId, persistenceEnabled])
+
+  const queueUpdate = useCallback(
+    (update: PendingUpdate) => {
+      if (!reportId || !persistenceEnabled) return
+      const existing = pendingRef.current.get(update.fileId) ?? { fileId: update.fileId }
+      pendingRef.current.set(update.fileId, { ...existing, ...update })
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = setTimeout(flushPending, PATCH_DEBOUNCE_MS)
+    },
+    [reportId, persistenceEnabled, flushPending],
+  )
+
+  // Flush any in-flight updates on unmount so the final drag isn't lost.
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current)
+        flushTimerRef.current = null
+        // Fire-and-forget — component is gone, but the PATCH can still succeed.
+        void flushPending()
+      }
+    }
+  }, [flushPending])
 
   /**
    * Keyboard-accessible counterpart to drag-to-attach. Called from the chip
@@ -309,7 +410,14 @@ function CanvasInner() {
       })
     })
     showToast(bucketId ? 'Attached via keyboard' : 'Detached via keyboard')
-  }, [setNodes, showToast])
+
+    // Persist attachment only — position snap is handled by the reducer above.
+    const fileId = chipNodeId.startsWith(CHIP_PREFIX) ? chipNodeId.slice(CHIP_PREFIX.length) : chipNodeId
+    const confirmed_section_id = bucketId?.startsWith(BUCKET_PREFIX)
+      ? bucketId.slice(BUCKET_PREFIX.length)
+      : null
+    queueUpdate({ fileId, confirmed_section_id })
+  }, [setNodes, showToast, queueUpdate])
 
   // Keep the ref current so chip-node <select> onChange handlers (captured at
   // node-construction time) dispatch into the latest callback.
@@ -362,6 +470,7 @@ function CanvasInner() {
       const hit = hitBucket(node as Node<ChipNodeData>, buckets)
       const prevAttached = (node.data as ChipNodeData).attached
 
+      let nextAttached: string | null = prevAttached ?? null
       if (hit && hit.id !== prevAttached) {
         setNodes((ns) =>
           ns.map((n) =>
@@ -371,6 +480,7 @@ function CanvasInner() {
           )
         )
         showToast(`Attached to ${hit.data.num} · ${hit.data.title}`)
+        nextAttached = hit.id
       } else if (!hit && prevAttached) {
         setNodes((ns) =>
           ns.map((n) =>
@@ -380,9 +490,25 @@ function CanvasInner() {
           )
         )
         showToast('Detached from section')
+        nextAttached = null
       }
+
+      // Persist both position and (if it changed) attachment. The debounce
+      // coalesces rapid successive drags into a single PATCH.
+      const fileId = node.id.startsWith(CHIP_PREFIX) ? node.id.slice(CHIP_PREFIX.length) : node.id
+      const update: PendingUpdate = {
+        fileId,
+        x: node.position.x,
+        y: node.position.y,
+      }
+      if (nextAttached !== prevAttached) {
+        update.confirmed_section_id = nextAttached?.startsWith(BUCKET_PREFIX)
+          ? nextAttached.slice(BUCKET_PREFIX.length)
+          : null
+      }
+      queueUpdate(update)
     },
-    [nodes, setNodes, showToast]
+    [nodes, setNodes, showToast, queueUpdate]
   )
 
   // After any node change that might affect attachment, update edges + counts

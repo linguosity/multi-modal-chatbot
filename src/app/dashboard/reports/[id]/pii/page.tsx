@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useReport } from '@/lib/context/ReportContext'
 import { ShieldCheck } from 'lucide-react'
@@ -8,6 +8,12 @@ import type { PIIAction, PIIEntityType } from '@/lib/pii/detect'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+/**
+ * UI-side shape. The API returns DB-native columns (detected_value,
+ * source_file, is_excluded, ...); we map once at fetch time into this
+ * flatter shape so the rest of the component stays unchanged from the
+ * original demo design.
+ */
 interface DetectedPII {
   id: string
   type: PIIEntityType
@@ -17,9 +23,24 @@ interface DetectedPII {
   confidence: number
   action: PIIAction
   flagged?: boolean
+  is_excluded?: boolean
+  is_confirmed?: boolean
 }
 
-// ─── Demo entities (replace with /api/pii/scan?reportId=... once wired) ─────
+interface PIIRow {
+  id: string
+  entity_type: PIIEntityType
+  detected_value: string
+  token: string
+  action: PIIAction
+  source_file: string | null
+  confidence: number | null
+  needs_review: boolean | null
+  is_excluded: boolean | null
+  is_confirmed: boolean | null
+}
+
+// ─── Demo entities (used as fallback when no real detections exist) ─────────
 
 const DEMO: DetectedPII[] = [
   { id: 'p1',  type: 'STUDENT',         detected: 'Mateo Rivera',       token: '[STUDENT_001]',            source: 'parent_intake.pdf · pg 1',   confidence: 0.99, action: 'replace' },
@@ -51,6 +72,22 @@ const TYPE_COLOR: Record<PIIEntityType, string> = {
   OTHER:           '#9a9a9a',
 }
 
+// Map the API row (DB-native column names) into the flat UI shape.
+function rowToEntity(r: PIIRow): DetectedPII {
+  return {
+    id: r.id,
+    type: r.entity_type,
+    detected: r.detected_value,
+    token: r.token,
+    source: r.source_file ?? '(all files)',
+    confidence: typeof r.confidence === 'number' ? r.confidence : 1,
+    action: r.action,
+    flagged: !!r.needs_review,
+    is_excluded: !!r.is_excluded,
+    is_confirmed: !!r.is_confirmed,
+  }
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function PIIConfirmPage() {
@@ -58,14 +95,103 @@ export default function PIIConfirmPage() {
   const params = useParams<{ id: string }>()
   const { report } = useReport()
 
-  const [entities] = useState<DetectedPII[]>(DEMO)
+  // `isDemo` flags that we're showing the fallback sample list — used to
+  // disable live PATCH calls (the demo IDs don't exist in the DB).
+  const [entities, setEntities] = useState<DetectedPII[]>(DEMO)
+  const [isDemo, setIsDemo] = useState(true)
+  const [tableMissing, setTableMissing] = useState(false)
   const [actions, setActions] = useState<Record<string, PIIAction>>(
-    () => Object.fromEntries(entities.map((e) => [e.id, e.action]))
+    () => Object.fromEntries(DEMO.map((e) => [e.id, e.action]))
   )
   const [excluded, setExcluded] = useState<Record<string, boolean>>({})
 
-  const setAction = (id: string, a: PIIAction) => setActions((p) => ({ ...p, [id]: a }))
-  const toggleExcluded = (id: string) => setExcluded((p) => ({ ...p, [id]: !p[id] }))
+  // Fetch real mappings on mount. Falls back to DEMO when the server says
+  // the table is missing or the list is empty.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch(`/api/reports/${params.id}/pii`, { cache: 'no-store' })
+        if (!res.ok) return
+        const json = (await res.json()) as { mappings?: PIIRow[]; tableMissing?: boolean }
+        if (cancelled) return
+
+        if (json.tableMissing) setTableMissing(true)
+
+        const rows = Array.isArray(json.mappings) ? json.mappings : []
+        if (rows.length > 0) {
+          const mapped = rows.map(rowToEntity)
+          setEntities(mapped)
+          setActions(Object.fromEntries(mapped.map((e) => [e.id, e.action])))
+          setExcluded(Object.fromEntries(mapped.filter((e) => e.is_excluded).map((e) => [e.id, true])))
+          setIsDemo(false)
+        }
+      } catch (err) {
+        // Network failure — keep DEMO fallback, log for observability.
+        console.warn('[pii] failed to load mappings', err)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [params.id])
+
+  // ── Dirty-set + debounced PATCH ───────────────────────────────────────────
+  const dirtyRef = useRef<Set<string>>(new Set())
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const actionsRef = useRef(actions)
+  const excludedRef = useRef(excluded)
+  actionsRef.current = actions
+  excludedRef.current = excluded
+
+  const flush = () => {
+    if (isDemo) {
+      dirtyRef.current.clear()
+      return
+    }
+    const ids = Array.from(dirtyRef.current)
+    if (ids.length === 0) return
+    dirtyRef.current.clear()
+    const payload = {
+      updates: ids.map((id) => ({
+        id,
+        action: actionsRef.current[id],
+        is_excluded: !!excludedRef.current[id],
+      })),
+    }
+    fetch(`/api/reports/${params.id}/pii`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch((err) => {
+      console.warn('[pii] failed to persist updates', err)
+    })
+  }
+
+  const scheduleFlush = (id: string) => {
+    dirtyRef.current.add(id)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(flush, 500)
+  }
+
+  // Flush on unmount so we don't drop a pending edit.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      if (dirtyRef.current.size > 0) flush()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const setAction = (id: string, a: PIIAction) => {
+    setActions((p) => ({ ...p, [id]: a }))
+    scheduleFlush(id)
+  }
+  const toggleExcluded = (id: string) => {
+    setExcluded((p) => ({ ...p, [id]: !p[id] }))
+    scheduleFlush(id)
+  }
 
   const grouped = useMemo(() => {
     const map: Record<string, DetectedPII[]> = {}
@@ -78,7 +204,9 @@ export default function PIIConfirmPage() {
   const totalCount = entities.length
   const activeCount = entities.filter((e) => !excluded[e.id]).length
   const flaggedCount = entities.filter((e) => e.flagged && !excluded[e.id]).length
-  const sourceCount = new Set(entities.map((e) => e.source.split('·')[0].trim())).size
+  const sourceCount = new Set(
+    entities.map((e) => (e.source || '').split('·')[0].trim() || 'unknown')
+  ).size
   const categoryCount = Object.keys(grouped).length
 
   const onContinue = () => {
@@ -87,6 +215,8 @@ export default function PIIConfirmPage() {
   const onBack = () => {
     router.push(`/dashboard/reports/${params.id}/triage`)
   }
+
+  const showDemoBanner = isDemo // true when we're showing fallback list
 
   return (
     <div className="min-h-full bg-[var(--paper)] p-6">
@@ -105,6 +235,15 @@ export default function PIIConfirmPage() {
               </p>
             </div>
           </div>
+
+          {/* Demo / empty-state banner */}
+          {showDemoBanner && (
+            <div className="wf-flag warn" role="status" style={{ margin: '6px 0' }}>
+              {tableMissing
+                ? 'PII storage is not yet set up — showing a sample detection list. Apply supabase/migrations/004_pii_mappings.sql to persist real detections.'
+                : 'No real PII detected yet — showing a sample. Upload a file to see real detections.'}
+            </div>
+          )}
 
           {/* Stat strip */}
           <div className="wf-pii-stat-strip">
@@ -148,7 +287,7 @@ export default function PIIConfirmPage() {
                   </div>
                   <div className="wf-pii-detected" title={e.detected}>&ldquo;{e.detected}&rdquo;</div>
                   <div className="wf-pii-token">{a === 'remove' ? '—' : e.token}</div>
-                  <div className="wf-pii-source" title={e.source}>{e.source}</div>
+                  <div className="wf-pii-source" title={e.source || '(all files)'}>{e.source || '(all files)'}</div>
                   <div className="wf-pii-action">
                     <select
                       value={a}

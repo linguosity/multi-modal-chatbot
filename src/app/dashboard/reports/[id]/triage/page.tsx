@@ -152,8 +152,6 @@ export default function TriagePage() {
   // Pending changes waiting for the debounced flush.
   const dirtyRef = useRef<Map<string, { confirmed_section_id?: string | null; evidence_method?: Method; clinical_direction?: Direction; triage_state?: TriageState }>>(new Map())
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const rowsRef = useRef<TriageRow[]>([])
-  rowsRef.current = rows
 
   // ── Load rows on mount / report change ────────────────────────────────────
   useEffect(() => {
@@ -336,14 +334,17 @@ export default function TriagePage() {
         <div className="p-5 flex flex-col gap-3" style={{ borderRight: '1px solid var(--line-2)' }}>
           <div className="flex items-center justify-between">
             <div className="wf-heading" style={{ fontSize: 18 }}>Evidence inbox</div>
-            <div className="flex gap-1.5">
-              <span className="wf-pill terra">● {confirmedCount} confirmed</span>
-              <span className="wf-pill tan">◐ {pendingCount} pending</span>
-              {needsReviewCount > 0 && (
-                <span className="wf-pill" style={{ borderColor: 'var(--terracotta)', color: 'var(--terracotta-ink)', background: '#fff5ee' }}>
-                  ! {needsReviewCount} review
-                </span>
-              )}
+            <div className="flex items-center gap-2">
+              <SaveIndicator status={saveStatus} lastSavedAt={lastSavedAt} tick={tick} persist={persist} />
+              <div className="flex gap-1.5">
+                <span className="wf-pill terra">● {confirmedCount} confirmed</span>
+                <span className="wf-pill tan">◐ {pendingCount} pending</span>
+                {needsReviewCount > 0 && (
+                  <span className="wf-pill" style={{ borderColor: 'var(--terracotta)', color: 'var(--terracotta-ink)', background: '#fff5ee' }}>
+                    ! {needsReviewCount} review
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -473,13 +474,17 @@ export default function TriagePage() {
                 className="wf-btn sm"
                 onClick={() => {
                   // Confirm every row with confidence ≥ 0.75 that is currently pending.
-                  setRows((prev) =>
-                    prev.map((r) =>
+                  setRows((prev) => {
+                    const next = prev.map((r) =>
                       r.state === 'pending' && r.confidence >= 0.75
                         ? { ...r, state: 'confirmed' as TriageState }
                         : r
                     )
-                  )
+                    next.forEach((r, idx) => {
+                      if (r !== prev[idx]) markDirty(r)
+                    })
+                    return next
+                  })
                 }}
                 disabled={!rows.some((r) => r.state === 'pending' && r.confidence >= 0.75)}
                 title="Confirms every pending row with confidence ≥ 75%. Leaves low-confidence rows for review."
@@ -490,7 +495,15 @@ export default function TriagePage() {
                 type="button"
                 className="wf-btn sm ghost"
                 onClick={() => {
-                  setRows((prev) => prev.map((r) => (r.state === 'confirmed' ? { ...r, state: 'pending' as TriageState } : r)))
+                  setRows((prev) => {
+                    const next = prev.map((r) =>
+                      r.state === 'confirmed' ? { ...r, state: 'pending' as TriageState } : r
+                    )
+                    next.forEach((r, idx) => {
+                      if (r !== prev[idx]) markDirty(r)
+                    })
+                    return next
+                  })
                 }}
                 disabled={confirmedCount === 0}
               >
@@ -648,4 +661,36 @@ function DirectionPill({ value, onChange }: { value: Direction; onChange: (val: 
       {labels[value]}
     </button>
   )
+}
+
+function SaveIndicator({
+  status,
+  lastSavedAt,
+  tick: _tick,
+  persist,
+}: {
+  status: SaveStatus
+  lastSavedAt: number | null
+  tick: number
+  persist: boolean
+}) {
+  if (status === 'saving') {
+    return <span className="wf-ticker">Saving…</span>
+  }
+  if (status === 'error') {
+    return <span className="wf-ticker" style={{ color: 'var(--terracotta-ink)' }}>Save failed · retry on next edit</span>
+  }
+  if (status === 'saved' && lastSavedAt) {
+    const seconds = Math.max(0, Math.round((Date.now() - lastSavedAt) / 1000))
+    const label = seconds < 2
+      ? 'just now'
+      : seconds < 60
+        ? `${seconds}s ago`
+        : `${Math.round(seconds / 60)}m ago`
+    return <span className="wf-ticker">{persist ? 'Saved' : 'Saved locally'} · {label}</span>
+  }
+  if (!persist && status === 'idle') {
+    return <span className="wf-ticker" style={{ color: 'var(--ink-3)' }}>in-memory · migration pending</span>
+  }
+  return null
 }
