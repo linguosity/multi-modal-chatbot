@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useParams } from 'next/navigation'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -21,6 +22,30 @@ import '@xyflow/react/dist/style.css'
 
 import { useReport } from '@/lib/context/ReportContext'
 import { EvidenceChip, fileKindFromType, type EvidenceKind } from '@/components/EvidenceChip'
+
+// ─── Canvas persistence ──────────────────────────────────────────────────────
+// Canvas state is stored on `file_uploads` rows: `confirmed_section_id` for the
+// attachment (shared with /triage), and `ai_extraction_result.canvas_position`
+// for the x/y. Chip node ids are `chip-${fileId}`; strip the prefix when
+// talking to the API.
+const CHIP_PREFIX = 'chip-'
+const BUCKET_PREFIX = 'bucket-'
+const PATCH_DEBOUNCE_MS = 500
+
+type CanvasRow = {
+  id: string
+  filename: string
+  file_type: string
+  confirmed_section_id?: string | null
+  canvas_position: { x: number; y: number } | null
+}
+
+type PendingUpdate = {
+  fileId: string
+  confirmed_section_id?: string | null
+  x?: number
+  y?: number
+}
 
 // ─── Node data types ─────────────────────────────────────────────────────────
 

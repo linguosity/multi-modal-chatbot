@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReport } from '@/lib/context/ReportContext'
 import { EvidenceChip, fileKindFromType, type EvidenceKind } from '@/components/EvidenceChip'
 import { ChevronDown } from 'lucide-react'
@@ -19,6 +19,32 @@ interface TriageRow {
   confidence: number
   state: TriageState
 }
+
+const METHOD_SET: ReadonlySet<Method> = new Set<Method>([
+  'norm-ref', 'observation', 'interview', 'lang-sample', 'record', 'other',
+])
+const DIRECTION_SET: ReadonlySet<Direction> = new Set<Direction>([
+  'toward', 'against', 'neutral', 'unknown',
+])
+const TRIAGE_STATE_SET: ReadonlySet<TriageState> = new Set<TriageState>([
+  'pending', 'confirmed', 'needs-review',
+])
+
+interface TriageApiRow {
+  id: string
+  filename: string
+  file_type: string
+  suggested_section_id?: string | null
+  confirmed_section_id?: string | null
+  evidence_method?: string | null
+  clinical_direction?: string | null
+  classification_confidence?: number | null
+  triage_state?: string | null
+}
+
+const DEBOUNCE_MS = 500
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 const METHOD_LABELS: Record<Method, string> = {
   'norm-ref': 'norm-ref',
@@ -60,6 +86,40 @@ function deriveDefaults(name: string, kind: EvidenceKind, sections: Array<{ id: 
   return { sectionId, method, direction, confidence, state }
 }
 
+function toTriageState(value: string | null | undefined): TriageState {
+  return value && TRIAGE_STATE_SET.has(value as TriageState) ? (value as TriageState) : 'pending'
+}
+
+function toMethod(value: string | null | undefined): Method {
+  return value && METHOD_SET.has(value as Method) ? (value as Method) : 'other'
+}
+
+function toDirection(value: string | null | undefined): Direction {
+  return value && DIRECTION_SET.has(value as Direction) ? (value as Direction) : 'unknown'
+}
+
+/**
+ * Shape an API row into the TriageRow the UI operates on. The DB may have
+ * nulls for triage columns (pre-classification or missing migration); we fall
+ * back to stable defaults for those.
+ */
+function apiRowToTriageRow(api: TriageApiRow): TriageRow {
+  const kind = fileKindFromType(api.file_type || '') as EvidenceKind
+  const sectionId = api.confirmed_section_id ?? api.suggested_section_id ?? null
+  const confidenceRaw = typeof api.classification_confidence === 'number' ? api.classification_confidence : 0.7
+  const confidence = Math.max(0, Math.min(1, confidenceRaw))
+  return {
+    id: api.id,
+    name: api.filename || 'untitled',
+    kind,
+    sectionId,
+    method: toMethod(api.evidence_method),
+    direction: toDirection(api.clinical_direction),
+    confidence,
+    state: toTriageState(api.triage_state),
+  }
+}
+
 interface UploadedFile {
   id: string
   name: string
@@ -69,6 +129,7 @@ interface UploadedFile {
 
 export default function TriagePage() {
   const { report } = useReport()
+  const reportId = report?.id
 
   const sections = report?.sections ?? []
 
@@ -79,31 +140,167 @@ export default function TriagePage() {
     return Array.isArray(raw) ? raw : []
   }, [report])
 
-  // Seed triage rows from uploaded files
-  const [rows, setRows] = useState<TriageRow[]>(() =>
-    uploadedFiles.map((f) => {
-      const kind = fileKindFromType(f.type || '') as EvidenceKind
-      const defaults = deriveDefaults(f.fileName || f.name || '', kind, sections.map(s => ({ id: s.id, title: s.title })))
-      return {
-        id: f.id,
-        name: f.fileName || f.name || 'untitled',
-        kind,
-        ...defaults,
+  const [rows, setRows] = useState<TriageRow[]>([])
+  // `persist` is false when the rows come from the in-memory demo fallback
+  // (report.metadata.uploadedFiles). In that case PATCH is a no-op because
+  // the file IDs don't exist in file_uploads.
+  const [persist, setPersist] = useState<boolean>(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
+  const [tick, setTick] = useState(0) // drives the "Saved Ns ago" label refresh
+
+  // Pending changes waiting for the debounced flush.
+  const dirtyRef = useRef<Map<string, { confirmed_section_id?: string | null; evidence_method?: Method; clinical_direction?: Direction; triage_state?: TriageState }>>(new Map())
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rowsRef = useRef<TriageRow[]>([])
+  rowsRef.current = rows
+
+  // ── Load rows on mount / report change ────────────────────────────────────
+  useEffect(() => {
+    if (!reportId) return
+    let cancelled = false
+
+    const buildFallback = (): TriageRow[] =>
+      uploadedFiles.map((f) => {
+        const kind = fileKindFromType(f.type || '') as EvidenceKind
+        const defaults = deriveDefaults(
+          f.fileName || f.name || '',
+          kind,
+          sections.map((s) => ({ id: s.id, title: s.title })),
+        )
+        return {
+          id: f.id,
+          name: f.fileName || f.name || 'untitled',
+          kind,
+          ...defaults,
+        }
+      })
+
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/reports/${reportId}/triage`, { cache: 'no-store' })
+        if (!res.ok) throw new Error(`triage fetch ${res.status}`)
+        const json = (await res.json()) as { rows: TriageApiRow[]; degraded?: boolean }
+        if (cancelled) return
+        const apiRows = Array.isArray(json.rows) ? json.rows : []
+        if (apiRows.length > 0 && !json.degraded) {
+          setRows(apiRows.map(apiRowToTriageRow))
+          setPersist(true)
+        } else {
+          // Empty DB or migration missing → use in-memory demo rows.
+          setRows(buildFallback())
+          setPersist(Boolean(json.degraded) ? false : apiRows.length > 0)
+        }
+      } catch (err) {
+        if (cancelled) return
+        console.warn('Triage load failed, falling back to metadata-only rows', err)
+        setRows(buildFallback())
+        setPersist(false)
       }
+    }
+
+    void load()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId])
+
+  // ── Debounced flush of dirty rows ─────────────────────────────────────────
+  const flush = useCallback(async () => {
+    if (!reportId) return
+    const pending = dirtyRef.current
+    if (pending.size === 0) return
+
+    // Snapshot + clear immediately so concurrent edits queue the next flush.
+    const updates = Array.from(pending.entries()).map(([fileId, patch]) => ({ fileId, ...patch }))
+    pending.clear()
+
+    if (!persist) {
+      // In-memory mode — just mark as "saved" for UX parity without a round-trip.
+      setSaveStatus('saved')
+      setLastSavedAt(Date.now())
+      return
+    }
+
+    setSaveStatus('saving')
+    try {
+      const res = await fetch(`/api/reports/${reportId}/triage`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+      if (res.status === 503) {
+        // Migration missing — downgrade to in-memory mode so the UI still works.
+        console.warn('Triage persistence unavailable (missing migration); switching to in-memory mode.')
+        setPersist(false)
+        setSaveStatus('error')
+        return
+      }
+      if (!res.ok) throw new Error(`triage patch ${res.status}`)
+      setSaveStatus('saved')
+      setLastSavedAt(Date.now())
+    } catch (err) {
+      console.warn('Triage save failed', err)
+      setSaveStatus('error')
+    }
+  }, [reportId, persist])
+
+  const scheduleFlush = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null
+      void flush()
+    }, DEBOUNCE_MS)
+  }, [flush])
+
+  // Flush any pending writes on unmount.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+        void flush()
+      }
+    }
+  }, [flush])
+
+  // Tick the "saved Ns ago" label.
+  useEffect(() => {
+    if (!lastSavedAt) return
+    const timer = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(timer)
+  }, [lastSavedAt])
+
+  const markDirty = useCallback((row: TriageRow) => {
+    dirtyRef.current.set(row.id, {
+      confirmed_section_id: row.state === 'confirmed' ? row.sectionId : null,
+      evidence_method: row.method,
+      clinical_direction: row.direction,
+      triage_state: row.state,
     })
-  )
+    scheduleFlush()
+  }, [scheduleFlush])
 
-  const updateRow = (id: string, patch: Partial<TriageRow>) => {
-    setRows(prev => prev.map(r => (r.id === id ? { ...r, ...patch } : r)))
-  }
+  const updateRow = useCallback((id: string, patch: Partial<TriageRow>) => {
+    setRows((prev) => {
+      const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
+      const updated = next.find((r) => r.id === id)
+      if (updated) markDirty(updated)
+      return next
+    })
+  }, [markDirty])
 
-  const toggleConfirm = (id: string) => {
-    setRows(prev =>
-      prev.map(r =>
-        r.id === id ? { ...r, state: r.state === 'confirmed' ? 'pending' : 'confirmed' } : r
+  const toggleConfirm = useCallback((id: string) => {
+    setRows((prev) => {
+      const next = prev.map((r) =>
+        r.id === id ? { ...r, state: r.state === 'confirmed' ? ('pending' as TriageState) : ('confirmed' as TriageState) } : r
       )
-    )
-  }
+      const updated = next.find((r) => r.id === id)
+      if (updated) markDirty(updated)
+      return next
+    })
+  }, [markDirty])
 
   const confirmedCount = rows.filter(r => r.state === 'confirmed').length
   const pendingCount = rows.filter(r => r.state === 'pending').length

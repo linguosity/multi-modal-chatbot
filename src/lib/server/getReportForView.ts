@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/types/supabase';
 import { hydrateSection } from '@/lib/render/hydrateSection';
 import { hasCircularReference, safeClone } from '@/lib/safe-logger';
+import { buildReidentifier } from '@/lib/pii/reidentify';
 import type { Report, Section } from '@/types/report-types';
 
 // Helper function to extract clean data from infinitely nested structured_data
@@ -85,7 +86,7 @@ export async function getReportForView(reportId: string): Promise<Report | null>
   }
 
   // Transform DB rows to frontend Section type
-  const sections: Section[] = (sectionRows || []).map((row) => ({
+  const sectionsRaw: Section[] = (sectionRows || []).map((row) => ({
     id: row.id,
     report_id: row.report_id,
     sectionType: row.section_type,
@@ -101,11 +102,27 @@ export async function getReportForView(reportId: string): Promise<Report | null>
     isGenerated: row.is_generated,
   }));
 
-  console.log(`📊 Report ${reportData.id}: ${sections.length} sections from report_sections`);
+  // ── PII re-identification (design review §10) ───────────────────────────
+  // Tokens live in the DB after Claude wrote them back; swap to real values
+  // before the view renders. Noop if no mappings / table missing.
+  const reidentifier = await buildReidentifier(supabase, reportId);
+  const sections: Section[] = reidentifier.size() > 0
+    ? sectionsRaw.map((s) => ({
+        ...s,
+        content: typeof s.content === 'string' ? reidentifier.reidentifyString(s.content) : s.content,
+        structured_data: reidentifier.reidentifyDeep(s.structured_data as Json) as Section['structured_data'],
+      }))
+    : sectionsRaw;
+  const reidentifiedMetadata = reidentifier.size() > 0 && reportData.metadata
+    ? reidentifier.reidentifyDeep(reportData.metadata as Json)
+    : reportData.metadata;
+
+  console.log(`📊 Report ${reportData.id}: ${sections.length} sections from report_sections (re-identified: ${reidentifier.size()} tokens)`);
 
   // Combine into Report object
   const report: Report = {
     ...reportData,
+    metadata: reidentifiedMetadata,
     sections,
   };
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
 import { safeJsonResponse } from '@/lib/api/safe-json'
+import { buildReidentifier } from '@/lib/pii/reidentify'
 import type { Section } from '@/types/report-types'
 
 /**
@@ -57,7 +58,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     isGenerated: row.is_generated,
   }))
 
-  return safeJsonResponse({ ...report, sections })
+  // ── PII re-identification (design review §10) ─────────────────────────
+  // AI-generated content was written back with tokens (`[STUDENT_001]`) to
+  // keep real PII out of the LLM. Swap tokens back to real values before
+  // returning to the SLP so the UI renders the intended names.
+  const reidentifier = await buildReidentifier(supabase, id)
+  const reidSections = reidentifier.size() > 0
+    ? sections.map((s) => ({
+        ...s,
+        content: typeof s.content === 'string' ? reidentifier.reidentifyString(s.content) : s.content,
+        structured_data: reidentifier.reidentifyDeep(s.structured_data),
+      }))
+    : sections
+  const reidReport = reidentifier.size() > 0 && report.metadata
+    ? { ...report, metadata: reidentifier.reidentifyDeep(report.metadata) }
+    : report
+
+  return safeJsonResponse({ ...reidReport, sections: reidSections })
 }
 
 /**
