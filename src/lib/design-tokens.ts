@@ -192,7 +192,7 @@ export const cssVariables = {
 }
 
 // Type definitions for design tokens
-export type ColorVariant = 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'clinical'
+export type ColorVariant = 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'clinical'
 export type SizeVariant = 'sm' | 'md' | 'lg' | 'xl'
 export type SpacingScale = keyof typeof tokens.spacing
 export type TypographyScale = keyof typeof tokens.typography.sizes
