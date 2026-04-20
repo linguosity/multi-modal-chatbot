@@ -52,7 +52,9 @@ CREATE INDEX IF NOT EXISTS idx_evidence_scores_included  ON evidence_scores (rep
 
 ALTER TABLE evidence_scores ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can manage their own evidence scores"
+-- Idempotent policy create — drop-if-exists then create, portable across PG versions.
+DROP POLICY IF EXISTS "Users can manage their own evidence scores" ON evidence_scores;
+CREATE POLICY "Users can manage their own evidence scores"
   ON evidence_scores FOR ALL
   USING (report_id IN (SELECT id FROM reports WHERE user_id = auth.uid()))
   WITH CHECK (report_id IN (SELECT id FROM reports WHERE user_id = auth.uid()));

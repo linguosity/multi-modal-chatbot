@@ -41,7 +41,9 @@ CREATE INDEX IF NOT EXISTS idx_pii_mappings_token  ON pii_mappings (report_id, t
 
 ALTER TABLE pii_mappings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can manage their own pii mappings"
+-- Idempotent policy create — drop-if-exists then create, portable across PG versions.
+DROP POLICY IF EXISTS "Users can manage their own pii mappings" ON pii_mappings;
+CREATE POLICY "Users can manage their own pii mappings"
   ON pii_mappings FOR ALL
   USING (report_id IN (SELECT id FROM reports WHERE user_id = auth.uid()))
   WITH CHECK (report_id IN (SELECT id FROM reports WHERE user_id = auth.uid()));
