@@ -71,13 +71,18 @@ const config = {
 
         // New design system colors
         terracotta: {
-          DEFAULT: '#CE7B56',
-          ink: '#8a4a30',
+          DEFAULT: '#D97757',
+          ink: '#b85a3c',
         },
         tan: {
           DEFAULT: '#C9BA94',
           soft: '#ece4cf',
         },
+        plum: {
+          DEFAULT: '#9B7BAE',
+          ink: '#5C3F70',
+        },
+        olive: '#6b8a55',
         paper: {
           DEFAULT: '#f7f5f0',
           2: '#efece4',

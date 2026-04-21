@@ -71,7 +71,7 @@
     --text-label: 13px;        /* Micro-labels */
     --text-heading: 17px;      /* Headings */
 
-    /* New design system — color palette */
+    /* New design system — color palette (handoff spec) */
     --ink: #111111;
     --ink-2: #3a3a3a;
     --ink-3: #6b6b6b;
@@ -81,10 +81,13 @@
     --paper: #f7f5f0;
     --paper-2: #efece4;
     --card-surface: #ffffff;
-    --terracotta: #CE7B56;
-    --terracotta-ink: #8a4a30;
+    --terracotta: #D97757;
+    --terracotta-ink: #b85a3c;
     --tan: #C9BA94;
     --tan-soft: #ece4cf;
+    --plum: #9B7BAE;
+    --plum-ink: #5C3F70;
+    --olive: #6b8a55;
 
     /* New design system — font stacks */
     --font-display: 'Gloock', 'Times New Roman', serif;
@@ -908,9 +911,9 @@
   color: var(--terracotta-ink);
 }
 .wf-conv-verdict[data-tone="nonsupport"] {
-  border-color: #7B5C8E;
+  border-color: var(--plum);
   background: #f5f0f8;
-  color: #5C3F70;
+  color: var(--plum-ink);
 }
 .wf-conv-verdict-sub {
   font-family: var(--font-mono);

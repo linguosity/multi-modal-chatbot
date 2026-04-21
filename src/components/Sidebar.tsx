@@ -32,7 +32,7 @@ export default function Sidebar() {
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded font-mono text-[12px] uppercase tracking-[0.06em] transition-colors",
         isActive
-          ? "bg-[#f7f5f0] border-l-2 border-[#CE7B56] font-semibold text-[#111111]"
+          ? "bg-[#f7f5f0] border-l-2 border-terracotta font-semibold text-[#111111]"
           : "text-[#3a3a3a] hover:bg-[#ede9dc]"
       )}
       aria-current={isActive ? "page" : undefined}
@@ -63,7 +63,7 @@ export default function Sidebar() {
         </div>
         <div className="flex flex-col">
           <span className="font-serif text-[22px] leading-tight tracking-tight text-[#1a1a1a]">
-            Linguosity<span className="text-[#CE7B56]">.</span>
+            Linguosity<span className="text-terracotta">.</span>
           </span>
           <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#6b6b6b] leading-none">
             Speech &middot; Language &middot; Reports
@@ -196,7 +196,7 @@ export default function Sidebar() {
                   </div>
                   <div className="h-1 w-full rounded-full bg-[#d0cec6]">
                     <div
-                      className="h-1 rounded-full bg-[#CE7B56] transition-all"
+                      className="h-1 rounded-full bg-terracotta transition-all"
                       style={{ width: `${progressPct}%` }}
                     />
                   </div>

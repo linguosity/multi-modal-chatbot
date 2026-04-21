@@ -68,14 +68,14 @@ function StageTrack({ stage }: { stage: string }) {
                 i < activeIdx
                   ? 'bg-[#111111] border-[1.5px] border-[#111111]'
                   : i === activeIdx
-                  ? 'bg-[#CE7B56] border-[1.5px] border-[#8a4a30] shadow-[0_0_0_3px_#fff1eb]'
+                  ? 'bg-terracotta border-[1.5px] border-terracotta-ink shadow-[0_0_0_3px_#fff1eb]'
                   : 'bg-white border-[1.5px] border-[#d0d0d0]'
               }`}
             />
             <span
               className={`absolute top-[14px] whitespace-nowrap text-[9px] tracking-[0.06em] uppercase ${
                 i === activeIdx
-                  ? 'text-[#8a4a30] font-semibold'
+                  ? 'text-terracotta-ink font-semibold'
                   : i < activeIdx
                   ? 'text-[#6b6b6b]'
                   : 'text-[#9a9a9a]'
@@ -129,7 +129,7 @@ function ReportCard({
                 )}
               </div>
               <div className="flex items-center gap-1.5 text-[10.5px] text-[#6b6b6b] tracking-[0.04em] uppercase">
-                <span className="text-[#8a4a30] text-[11px]">&#x2302;</span>
+                <span className="text-terracotta-ink text-[11px]">&#x2302;</span>
                 <span>local only</span>
                 <span className="opacity-50">&middot;</span>
                 <span>{report.type || 'Report'}</span>
@@ -140,7 +140,7 @@ function ReportCard({
             <div className="text-[9px] tracking-[0.12em] uppercase text-[#6b6b6b]">
               cloud ID
             </div>
-            <div className="font-mono text-[12.5px] font-semibold tracking-[0.03em] text-[#8a4a30]">
+            <div className="font-mono text-[12.5px] font-semibold tracking-[0.03em] text-terracotta-ink">
               {cloudId}
             </div>
           </div>
@@ -205,7 +205,7 @@ function NewReportCard() {
             />
             <path
               d="M18 10 V26 M10 18 H26"
-              stroke="#8a4a30"
+              stroke="#b85a3c"
               strokeWidth="2"
               strokeLinecap="round"
             />
@@ -215,7 +215,7 @@ function NewReportCard() {
         <div className="text-[12px] text-[#3a3a3a] leading-[1.5] max-w-[28ch] mt-1">
           Upload sources &rarr; Linguosity builds a draft.
         </div>
-        <div className="mt-1.5 px-3.5 py-[7px] border-[1.5px] border-[#1a1a1a] bg-white text-[11px] tracking-[0.08em] uppercase text-[#8a4a30] font-semibold">
+        <div className="mt-1.5 px-3.5 py-[7px] border-[1.5px] border-[#1a1a1a] bg-white text-[11px] tracking-[0.08em] uppercase text-terracotta-ink font-semibold">
           Begin intake &rarr;
         </div>
       </div>
@@ -245,7 +245,7 @@ export function DashboardContent({ reports, sectionCounts }: DashboardContentPro
           />
           <path
             d="M10 14 L13 17 L19 10"
-            stroke="#8a4a30"
+            stroke="#b85a3c"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -279,7 +279,7 @@ export function DashboardContent({ reports, sectionCounts }: DashboardContentPro
         </div>
         <div className="w-[1.5px] bg-[#1a1a1a] opacity-30" />
         <div className="flex-1 px-5 py-[18px] flex flex-col gap-1">
-          <div className="font-serif text-[32px] leading-none tracking-tight text-[#8a4a30]">
+          <div className="font-serif text-[32px] leading-none tracking-tight text-terracotta-ink">
             {needAttention.length}
           </div>
           <div className="text-[10.5px] tracking-[0.1em] uppercase text-[#6b6b6b]">

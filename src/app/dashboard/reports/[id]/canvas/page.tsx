@@ -600,8 +600,8 @@ function CanvasInner() {
             pannable
             zoomable
             nodeColor={(n) => {
-              if (n.type === 'bucket') return (n.data as BucketNodeData).count > 0 ? '#CE7B56' : '#efece4'
-              return (n.data as ChipNodeData).attached ? '#CE7B56' : '#9a9a9a'
+              if (n.type === 'bucket') return (n.data as BucketNodeData).count > 0 ? '#D97757' : '#efece4'
+              return (n.data as ChipNodeData).attached ? '#D97757' : '#9a9a9a'
             }}
             maskColor="rgba(247, 245, 240, 0.7)"
             style={{ background: 'var(--card-surface)', border: '1px solid var(--line-2)' }}
