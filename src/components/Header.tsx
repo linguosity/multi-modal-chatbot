@@ -1,6 +1,6 @@
 'use client'
 
-import { Save, FileDown, X, Trash2, Mic, Square } from "lucide-react";
+import { Save, FileDown, X, Trash2, Mic, Square, Settings as SettingsIcon } from "lucide-react";
 import Link from 'next/link'
 import { BaseModal } from '@/components/ui/base-modal'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,6 @@ import { AIIntakeDrawer } from "@/components/AIIntakeDrawer";
 import { usePathname, useRouter } from "next/navigation";
 import { useReport } from "@/lib/context/ReportContext";
 import { useState, useEffect, useRef } from "react";
-import { SettingsButton } from '@/components/UserSettingsModal'
 
 export default function Header() {
   const pathname = usePathname();
@@ -280,8 +279,15 @@ export default function Header() {
             )}
           </div>
         </BaseModal>
-        {/* Global user settings (defaults for locked fields, state, etc.) */}
-        <SettingsButton />
+        {/* Global user settings — link to /settings page */}
+        <Link
+          href="/settings"
+          className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--paper-2)] rounded-md transition-colors"
+          aria-label="Account settings"
+        >
+          <SettingsIcon className="h-4 w-4" />
+          <span className="hidden sm:inline">Settings</span>
+        </Link>
         {/* Repair sync removed — report_sections is sole source of truth */}
         
         <SplitButton
