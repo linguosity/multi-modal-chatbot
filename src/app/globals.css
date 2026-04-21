@@ -1330,6 +1330,193 @@
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+ * Dashboard — landing screen (privacy banner, stats strip, cards grid)
+ * ────────────────────────────────────────────────────────────────────────── */
+.wf-dash-priv {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px;
+  background: #fff5ee;
+  border: 1.5px solid var(--line);
+  box-shadow: 4px 4px 0 var(--tan-soft);
+}
+.wf-dash-priv-title { font-family: var(--font-display); font-size: 17px; letter-spacing: -0.005em; }
+.wf-dash-priv-body { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; max-width: 72ch; }
+.wf-dash-priv-body code {
+  font-family: var(--font-mono);
+  background: var(--card-surface);
+  border: 1px solid var(--line-2);
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+.wf-dash-reveal-btn {
+  padding: 8px 14px;
+  border: 1.5px solid var(--line);
+  background: var(--card-surface);
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  white-space: nowrap;
+  transition: background 120ms;
+  color: var(--ink); cursor: pointer;
+}
+.wf-dash-reveal-btn:hover { background: var(--paper-2); }
+
+.wf-dash-strip {
+  display: flex;
+  background: var(--card-surface);
+  border: 1.5px solid var(--line);
+}
+.wf-dash-strip-cell { flex: 1; padding: 18px 22px; display: flex; flex-direction: column; gap: 4px; }
+.wf-dash-strip-num { font-family: var(--font-display); font-size: 32px; line-height: 1; letter-spacing: -0.02em; }
+.wf-dash-strip-num.warn { color: var(--terracotta-ink); }
+.wf-dash-strip-lbl {
+  font-size: 10.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.wf-dash-strip-divider { width: 1.5px; background: var(--line); opacity: 0.3; }
+
+.wf-dash-section-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 1.5px solid var(--line);
+  padding-bottom: 8px;
+}
+.wf-dash-section-title { font-family: var(--font-display); font-size: 20px; letter-spacing: -0.01em; }
+.wf-dash-section-actions { display: flex; gap: 14px; }
+.wf-dash-filter {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding-bottom: 2px;
+  border: none; background: transparent;
+}
+.wf-dash-filter.active { color: var(--ink); border-bottom: 1.5px solid var(--terracotta); }
+
+.wf-dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+
+.wf-dash-card {
+  background: var(--card-surface);
+  border: 1.5px solid var(--line);
+  padding: 16px 18px 14px;
+  display: flex; flex-direction: column; gap: 12px;
+  cursor: pointer;
+  transition: transform 120ms, box-shadow 120ms;
+  text-align: left;
+  color: var(--ink);
+  text-decoration: none;
+}
+.wf-dash-card:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--tan-soft); }
+.wf-dash-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.wf-dash-card-local { display: flex; gap: 10px; align-items: center; }
+.wf-dash-avatar {
+  width: 36px; height: 36px;
+  border: 1.5px solid var(--line);
+  background: var(--paper-2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 14px; letter-spacing: -0.01em;
+}
+.wf-dash-local-name { font-family: var(--font-display); font-size: 15px; letter-spacing: -0.005em; }
+.wf-dash-redacted {
+  letter-spacing: -0.08em; color: var(--ink-3);
+  font-family: var(--font-mono); font-size: 13px;
+}
+.wf-dash-local-meta {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px; color: var(--ink-3);
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.wf-dash-lock { color: var(--terracotta-ink); font-size: 11px; }
+.wf-dash-meta-sep { opacity: 0.5; }
+.wf-dash-card-id {
+  text-align: right;
+  padding: 4px 8px;
+  border: 1px dashed var(--line-2);
+  background: var(--paper);
+}
+.wf-dash-id-label { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.wf-dash-id-value {
+  font-family: var(--font-mono);
+  font-size: 12.5px; font-weight: 600;
+  letter-spacing: 0.03em; color: var(--terracotta-ink);
+}
+.wf-dash-card-rule { height: 1px; background: var(--line-2); }
+.wf-dash-card-track { padding: 4px 2px 14px; }
+.wf-dash-track { display: flex; align-items: center; position: relative; }
+.wf-dash-track-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--card-surface);
+  border: 1.5px solid var(--line-2);
+  position: relative; flex-shrink: 0;
+}
+.wf-dash-track-dot.done { background: var(--ink); border-color: var(--ink); }
+.wf-dash-track-dot.active {
+  background: var(--terracotta);
+  border-color: var(--terracotta-ink);
+  box-shadow: 0 0 0 3px #fff1eb;
+}
+.wf-dash-track-line { flex: 1; height: 1.5px; background: var(--line-2); margin: 0 2px; }
+.wf-dash-track-line.done { background: var(--ink); }
+.wf-dash-track-label {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-4); white-space: nowrap;
+}
+.wf-dash-track-dot.active .wf-dash-track-label { color: var(--terracotta-ink); font-weight: 600; }
+.wf-dash-track-dot.done .wf-dash-track-label { color: var(--ink-3); }
+
+.wf-dash-card-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-top: 4px; }
+.wf-dash-meta-cell { display: flex; flex-direction: column; gap: 2px; }
+.wf-dash-meta-k {
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.wf-dash-meta-v { font-size: 12px; color: var(--ink); }
+.wf-dash-meta-v.warn { color: var(--terracotta-ink); font-weight: 600; }
+
+.wf-dash-flag {
+  margin-top: 2px;
+  padding: 6px 10px;
+  font-size: 11px;
+  border-left: 2.5px solid var(--terracotta);
+  background: #fff5ee;
+  color: var(--terracotta-ink);
+}
+.wf-dash-flag.urgent { border-left-color: var(--terracotta-ink); color: var(--terracotta-ink); font-weight: 600; }
+
+.wf-dash-card-new {
+  background: repeating-linear-gradient(45deg, var(--paper) 0 6px, var(--paper-2) 6px 12px);
+  border: 1.5px dashed var(--line);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 220px;
+  padding: 20px;
+}
+.wf-dash-card-new:hover { background: #fff5ee; border-style: solid; }
+.wf-dash-new-plus { margin-bottom: 6px; }
+.wf-dash-new-title { font-family: var(--font-display); font-size: 20px; letter-spacing: -0.01em; }
+.wf-dash-new-sub { font-size: 12px; color: var(--ink-2); line-height: 1.5; max-width: 28ch; }
+.wf-dash-new-cta {
+  margin-top: 6px;
+  padding: 7px 14px;
+  border: 1.5px solid var(--line);
+  background: var(--card-surface);
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--terracotta-ink);
+  font-weight: 600;
+}
+
+.wf-dash-card:focus-visible,
+.wf-dash-reveal-btn:focus-visible,
+.wf-dash-filter:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
  * Settings page (/settings) — 9-section hub with left rail
  * Shared with onboarding (chip + toggle primitives below).
  * ────────────────────────────────────────────────────────────────────────── */
@@ -1566,4 +1753,8 @@
   .wf-bar > span { transition: none; }
   .wf-chip { transition: none; }
   .wf-lib-card { transition: none; }
+  .wf-dash-card { transition: none; }
+  .wf-dash-reveal-btn { transition: none; }
+  .wf-onb-toggle { transition: none; }
+  .wf-onb-toggle-knob { transition: none; }
 }

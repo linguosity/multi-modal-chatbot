@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type ReportRow = {
   id: string;
@@ -21,26 +21,51 @@ interface DashboardContentProps {
   sectionCounts: Record<string, number>;
 }
 
-const STAGES = ['upload', 'triage', 'skeleton', 'drafting', 'review', 'completed'] as const;
-const STAGE_LABELS = ['Upload', 'Triage', 'Skeleton', 'Drafting', 'Review', 'Done'];
+const LS_REVEAL = 'linguo-dash-reveal';
 
-function mapStatusToStage(status: string): string {
-  const map: Record<string, string> = {
-    draft: 'skeleton',
-    in_progress: 'drafting',
-    completed: 'completed',
-    finalized: 'completed',
-  };
-  return map[status] || 'upload';
+/** Six stages, matching the wireframe flow (Upload → Done). */
+const STAGES = ['upload', 'triage', 'skeleton', 'convergence', 'prose', 'done'] as const;
+type Stage = (typeof STAGES)[number];
+const STAGE_DOT_LABELS: Record<Stage, string> = {
+  upload: 'Upload',
+  triage: 'Triage',
+  skeleton: 'Skeleton',
+  convergence: 'Convergence',
+  prose: 'Prose',
+  done: 'Done',
+};
+const STAGE_DESCRIPTIONS: Record<Stage, string> = {
+  upload: 'Uploading sources',
+  triage: 'Triaging evidence',
+  skeleton: 'Building skeleton',
+  convergence: 'Evaluating convergence',
+  prose: 'Drafting prose',
+  done: 'Finalized',
+};
+
+function statusToStage(status: string): Stage {
+  switch (status) {
+    case 'completed':
+    case 'finalized':
+      return 'done';
+    case 'in_progress':
+      return 'prose';
+    case 'draft':
+      return 'skeleton';
+    default:
+      return 'upload';
+  }
 }
 
 function initials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const parts = name.trim().split(/\s+/);
+  return (
+    parts
+      .map(w => w[0] || '')
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'SL'
+  );
 }
 
 function timeAgo(date: string): string {
@@ -54,42 +79,46 @@ function timeAgo(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function StageTrack({ stage }: { stage: string }) {
-  const idx = STAGES.indexOf(stage as (typeof STAGES)[number]);
-  const activeIdx = idx >= 0 ? idx : 0;
+function sourceCount(r: ReportRow): number {
+  const files = (r.metadata as any)?.uploadedFiles;
+  if (Array.isArray(files)) return files.length;
+  return 0;
+}
 
+function cloudId(r: ReportRow): string {
+  const key = r.student_id || r.id;
+  const suffix = String(key).replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase();
+  return `${r.student_id ? 'STU' : 'RPT'}-${suffix}`;
+}
+
+/** Flag a report if it's been stalled in progress for more than 3 days. */
+function computeFlag(r: ReportRow): null | { kind: 'urgent' | 'due-soon'; text: string } {
+  if (r.status === 'completed' || r.status === 'finalized') return null;
+  const staleMs = Date.now() - new Date(r.updated_at).getTime();
+  if (r.status === 'in_progress' && staleMs > 3 * 86400000) {
+    return { kind: 'urgent', text: '◆ Stalled more than 3 days — pick up where you left off' };
+  }
+  return null;
+}
+
+// ─── Stage track ──────────────────────────────────────────────────────────
+
+function StageTrack({ stage }: { stage: Stage }) {
+  const activeIdx = STAGES.indexOf(stage);
   return (
-    <div className="flex items-center w-full py-1">
-      {STAGE_LABELS.map((label, i) => (
-        <div key={label} className="flex items-center" style={{ flex: i < STAGE_LABELS.length - 1 ? 1 : 'none' }}>
-          <div className="relative flex flex-col items-center">
-            <div
-              className={`w-[9px] h-[9px] rounded-full shrink-0 ${
-                i < activeIdx
-                  ? 'bg-[#111111] border-[1.5px] border-[#111111]'
-                  : i === activeIdx
-                  ? 'bg-terracotta border-[1.5px] border-terracotta-ink shadow-[0_0_0_3px_#fff1eb]'
-                  : 'bg-white border-[1.5px] border-[#d0d0d0]'
-              }`}
-            />
-            <span
-              className={`absolute top-[14px] whitespace-nowrap text-[9px] tracking-[0.06em] uppercase ${
-                i === activeIdx
-                  ? 'text-terracotta-ink font-semibold'
-                  : i < activeIdx
-                  ? 'text-[#6b6b6b]'
-                  : 'text-[#9a9a9a]'
-              }`}
-            >
-              {label}
-            </span>
+    <div className="wf-dash-track">
+      {STAGES.map((s, i) => (
+        <div key={s} className="flex items-center" style={{ flex: i < STAGES.length - 1 ? 1 : 'none' }}>
+          <div
+            className={
+              'wf-dash-track-dot ' +
+              (i < activeIdx ? 'done' : i === activeIdx ? 'active' : '')
+            }
+          >
+            <span className="wf-dash-track-label">{STAGE_DOT_LABELS[s]}</span>
           </div>
-          {i < STAGE_LABELS.length - 1 && (
-            <div
-              className={`flex-1 h-[1.5px] mx-[2px] ${
-                i < activeIdx ? 'bg-[#111111]' : 'bg-[#d0d0d0]'
-              }`}
-            />
+          {i < STAGES.length - 1 && (
+            <div className={'wf-dash-track-line ' + (i < activeIdx ? 'done' : '')} />
           )}
         </div>
       ))}
@@ -97,244 +126,240 @@ function StageTrack({ stage }: { stage: string }) {
   );
 }
 
+// ─── Report card ─────────────────────────────────────────────────────────
+
 function ReportCard({
   report,
-  sectionCount,
   reveal,
 }: {
   report: ReportRow;
-  sectionCount: number;
   reveal: boolean;
 }) {
-  const stage = mapStatusToStage(report.status);
-  const stageLabel = STAGE_LABELS[STAGES.indexOf(stage as (typeof STAGES)[number])] || 'Upload';
+  const stage = statusToStage(report.status);
   const name = report.student_name || report.title || 'Untitled';
-  const cloudId = `RPT-${report.id.slice(0, 4).toUpperCase()}`;
+  const id = cloudId(report);
+  const flag = computeFlag(report);
+  const sources = sourceCount(report);
 
   return (
-    <Link href={`/dashboard/reports/${report.id}`} className="block">
-      <div className="bg-white border-[1.5px] border-[#1a1a1a] p-4 pb-3.5 flex flex-col gap-3 cursor-pointer transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[4px_4px_0_#ece4cf]">
-        {/* Top row: avatar + name | cloud ID */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex gap-2.5 items-center">
-            <div className="w-9 h-9 border-[1.5px] border-[#1a1a1a] bg-[#efece4] flex items-center justify-center font-serif text-sm tracking-tight">
-              {reveal ? initials(name) : '..'}
+    <Link href={`/dashboard/reports/${report.id}`} className="wf-dash-card">
+      <div className="wf-dash-card-head">
+        <div className="wf-dash-card-local" title="Stays on your device">
+          <div className="wf-dash-avatar">{reveal ? initials(name) : '· ·'}</div>
+          <div className="flex flex-col gap-0.5">
+            <div className="wf-dash-local-name">
+              {reveal ? name : <span className="wf-dash-redacted">████████ ██████</span>}
             </div>
-            <div className="flex flex-col gap-0.5">
-              <div className="font-serif text-[15px] tracking-tight leading-tight">
-                {reveal ? name : (
-                  <span className="tracking-[-0.08em] text-[#6b6b6b] font-mono text-[13px]">
-                    ████████ ██████
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 text-[10.5px] text-[#6b6b6b] tracking-[0.04em] uppercase">
-                <span className="text-terracotta-ink text-[11px]">&#x2302;</span>
-                <span>local only</span>
-                <span className="opacity-50">&middot;</span>
-                <span>{report.type || 'Report'}</span>
-              </div>
-            </div>
-          </div>
-          <div className="text-right px-2 py-1 border border-dashed border-[#d0d0d0] bg-[#f7f5f0]">
-            <div className="text-[9px] tracking-[0.12em] uppercase text-[#6b6b6b]">
-              cloud ID
-            </div>
-            <div className="font-mono text-[12.5px] font-semibold tracking-[0.03em] text-terracotta-ink">
-              {cloudId}
+            <div className="wf-dash-local-meta">
+              <span className="wf-dash-lock" aria-hidden>⌂</span>
+              <span>local only</span>
+              <span className="wf-dash-meta-sep">·</span>
+              <span>{report.type || 'Report'}</span>
             </div>
           </div>
         </div>
-
-        {/* Divider */}
-        <div className="h-px bg-[#d0d0d0]" />
-
-        {/* Stage track */}
-        <div className="px-0.5 pt-1 pb-4">
-          <StageTrack stage={stage} />
+        <div className="wf-dash-card-id" title="Synthetic ID used for AI / cloud storage">
+          <div className="wf-dash-id-label">cloud ID</div>
+          <div className="wf-dash-id-value">{id}</div>
         </div>
+      </div>
 
-        {/* Meta row */}
-        <div className="grid grid-cols-4 gap-2 pt-1">
-          <div className="flex flex-col gap-0.5">
-            <div className="text-[9px] tracking-[0.1em] uppercase text-[#9a9a9a]">Stage</div>
-            <div className="text-[12px] text-[#111111]">{stageLabel}</div>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <div className="text-[9px] tracking-[0.1em] uppercase text-[#9a9a9a]">Sections</div>
-            <div className="text-[12px] text-[#111111]">{sectionCount}</div>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <div className="text-[9px] tracking-[0.1em] uppercase text-[#9a9a9a]">Last edit</div>
-            <div className="text-[12px] text-[#111111]">{timeAgo(report.updated_at)}</div>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <div className="text-[9px] tracking-[0.1em] uppercase text-[#9a9a9a]">Created</div>
-            <div className="text-[12px] text-[#111111]">
-              {new Date(report.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })}
-            </div>
+      <div className="wf-dash-card-rule" />
+
+      <div className="wf-dash-card-track">
+        <StageTrack stage={stage} />
+      </div>
+
+      <div className="wf-dash-card-meta">
+        <div className="wf-dash-meta-cell">
+          <div className="wf-dash-meta-k">Stage</div>
+          <div className="wf-dash-meta-v">{STAGE_DESCRIPTIONS[stage]}</div>
+        </div>
+        <div className="wf-dash-meta-cell">
+          <div className="wf-dash-meta-k">Sources</div>
+          <div className="wf-dash-meta-v">{sources || '—'}</div>
+        </div>
+        <div className="wf-dash-meta-cell">
+          <div className="wf-dash-meta-k">Last edit</div>
+          <div className="wf-dash-meta-v">{timeAgo(report.updated_at)}</div>
+        </div>
+        <div className="wf-dash-meta-cell">
+          <div className="wf-dash-meta-k">Created</div>
+          <div className="wf-dash-meta-v">
+            {new Date(report.created_at).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            })}
           </div>
         </div>
       </div>
+
+      {flag && <div className={`wf-dash-flag ${flag.kind}`}>{flag.text}</div>}
     </Link>
   );
 }
 
-function NewReportCard() {
+// ─── New report card ─────────────────────────────────────────────────────
+
+function NewReportCard({ nextIdHint }: { nextIdHint: string }) {
   return (
-    <Link href="/dashboard/reports/new" className="block">
-      <div
-        className="border-[1.5px] border-dashed border-[#1a1a1a] flex flex-col items-center justify-center text-center min-h-[220px] p-5 cursor-pointer transition-all hover:bg-[#fff5ee] hover:border-solid"
-        style={{
-          background: 'repeating-linear-gradient(45deg, #f7f5f0 0 6px, #efece4 6px 12px)',
-        }}
-      >
-        <div className="mb-1.5">
-          <svg width="36" height="36" viewBox="0 0 36 36">
-            <circle
-              cx="18"
-              cy="18"
-              r="16.5"
-              fill="none"
-              stroke="#1a1a1a"
-              strokeWidth="1.5"
-              strokeDasharray="3 3"
-            />
-            <path
-              d="M18 10 V26 M10 18 H26"
-              stroke="#b85a3c"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
-        <div className="font-serif text-xl tracking-tight">Start a new report</div>
-        <div className="text-[12px] text-[#3a3a3a] leading-[1.5] max-w-[28ch] mt-1">
-          Upload sources &rarr; Linguosity builds a draft.
-        </div>
-        <div className="mt-1.5 px-3.5 py-[7px] border-[1.5px] border-[#1a1a1a] bg-white text-[11px] tracking-[0.08em] uppercase text-terracotta-ink font-semibold">
-          Begin intake &rarr;
-        </div>
+    <Link href="/dashboard/reports/new" className="wf-dash-card wf-dash-card-new">
+      <div className="wf-dash-new-plus">
+        <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">
+          <circle cx="18" cy="18" r="16.5" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="3 3" />
+          <path d="M18 10 V26 M10 18 H26" stroke="var(--terracotta-ink)" strokeWidth="2" strokeLinecap="round" />
+        </svg>
       </div>
+      <div className="wf-dash-new-title">Start a new report</div>
+      <div className="wf-dash-new-sub">
+        Upload sources → Linguosity builds a draft.<br />
+        Next ID will be <b>{nextIdHint}</b>.
+      </div>
+      <div className="wf-dash-new-cta">Begin intake →</div>
     </Link>
   );
 }
 
-export function DashboardContent({ reports, sectionCounts }: DashboardContentProps) {
+// ─── Main component ─────────────────────────────────────────────────────
+
+export function DashboardContent({ reports }: DashboardContentProps) {
   const [reveal, setReveal] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'due' | 'student' | 'stage'>('all');
 
-  const active = reports.filter((r) => r.status !== 'completed' && r.status !== 'finalized');
-  const done = reports.filter((r) => r.status === 'completed' || r.status === 'finalized');
-  const needAttention = reports.filter(
-    (r) => r.status === 'in_progress' && new Date(r.updated_at) < new Date(Date.now() - 3 * 86400000)
-  );
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LS_REVEAL);
+      if (saved !== null) setReveal(saved !== 'false');
+    } catch {
+      // ignore storage access failures
+    }
+  }, []);
+
+  const toggleReveal = () => {
+    setReveal(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem(LS_REVEAL, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const active = reports.filter(r => r.status !== 'completed' && r.status !== 'finalized');
+  const done = reports.filter(r => r.status === 'completed' || r.status === 'finalized');
+  const flagged = reports.filter(r => computeFlag(r));
+
+  const thisMonthFinalized = done.filter(r => {
+    const d = new Date(r.finalized_date || r.updated_at);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+
+  // Approximate "caseload students" by unique student_id or title
+  const caseload = new Set(reports.map(r => r.student_id || r.student_name || r.id)).size;
+
+  // Suggest next cloud ID roughly — count student-tagged reports + 1, three-digit padded
+  const nextIdHint = `STU-${String((reports.filter(r => r.student_id).length + 1) * 1 + 421).padStart(4, '0')}`;
 
   return (
     <div className="flex flex-col gap-6">
       {/* Privacy banner */}
-      <div className="flex items-center gap-4 px-5 py-4 bg-[#fff5ee] border-[1.5px] border-[#1a1a1a] shadow-[4px_4px_0_#ece4cf]">
-        <svg width="28" height="28" viewBox="0 0 28 28" className="shrink-0">
+      <div className="wf-dash-priv">
+        <svg width="28" height="28" viewBox="0 0 28 28" style={{ flexShrink: 0 }} aria-hidden="true">
           <path
             d="M14 3 L23 6 V14 C23 20 19 24 14 25 C9 24 5 20 5 14 V6 Z"
-            stroke="#1a1a1a"
-            strokeWidth="1.5"
-            fill="#fff5ee"
+            stroke="var(--line)" strokeWidth="1.5" fill="#fff5ee"
           />
           <path
             d="M10 14 L13 17 L19 10"
-            stroke="#b85a3c"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
+            stroke="var(--terracotta-ink)" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" fill="none"
           />
         </svg>
         <div className="flex flex-col gap-1 flex-1">
-          <div className="font-serif text-[17px] tracking-tight">
-            Identifying info stays on this device
-          </div>
-          <div className="text-[12.5px] text-[#3a3a3a] leading-[1.5] max-w-[72ch]">
+          <div className="wf-dash-priv-title">Identifying info stays on this device</div>
+          <div className="wf-dash-priv-body">
             Names, DOBs, addresses &amp; MRNs are held in your browser. Linguosity generates a
-            stable <strong>cloud ID</strong> used for AI and server storage.
+            stable <b>cloud ID</b> (like <code>STU-0421</code>) used for AI and server storage.
           </div>
         </div>
         <button
-          onClick={() => setReveal(!reveal)}
-          className="px-3.5 py-2 border-[1.5px] border-[#1a1a1a] bg-white font-mono text-[11px] tracking-[0.06em] uppercase whitespace-nowrap hover:bg-[#efece4] transition-colors"
+          type="button"
+          onClick={toggleReveal}
+          className="wf-dash-reveal-btn"
+          aria-pressed={reveal}
         >
-          {reveal ? '\u25C9 Hide names' : '\u25CB Reveal names'}
+          {reveal ? '◉ Hide names' : '○ Reveal names'}
         </button>
       </div>
 
       {/* Stats strip */}
-      <div className="flex bg-white border-[1.5px] border-[#1a1a1a]">
-        <div className="flex-1 px-5 py-[18px] flex flex-col gap-1">
-          <div className="font-serif text-[32px] leading-none tracking-tight">{active.length}</div>
-          <div className="text-[10.5px] tracking-[0.1em] uppercase text-[#6b6b6b]">
-            in progress
-          </div>
+      <div className="wf-dash-strip">
+        <div className="wf-dash-strip-cell">
+          <div className="wf-dash-strip-num">{active.length}</div>
+          <div className="wf-dash-strip-lbl">in progress</div>
         </div>
-        <div className="w-[1.5px] bg-[#1a1a1a] opacity-30" />
-        <div className="flex-1 px-5 py-[18px] flex flex-col gap-1">
-          <div className="font-serif text-[32px] leading-none tracking-tight text-terracotta-ink">
-            {needAttention.length}
-          </div>
-          <div className="text-[10.5px] tracking-[0.1em] uppercase text-[#6b6b6b]">
-            need attention
-          </div>
+        <div className="wf-dash-strip-divider" />
+        <div className="wf-dash-strip-cell">
+          <div className={`wf-dash-strip-num ${flagged.length ? 'warn' : ''}`}>{flagged.length}</div>
+          <div className="wf-dash-strip-lbl">need attention</div>
         </div>
-        <div className="w-[1.5px] bg-[#1a1a1a] opacity-30" />
-        <div className="flex-1 px-5 py-[18px] flex flex-col gap-1">
-          <div className="font-serif text-[32px] leading-none tracking-tight">{done.length}</div>
-          <div className="text-[10.5px] tracking-[0.1em] uppercase text-[#6b6b6b]">
-            finalized
-          </div>
+        <div className="wf-dash-strip-divider" />
+        <div className="wf-dash-strip-cell">
+          <div className="wf-dash-strip-num">{thisMonthFinalized}</div>
+          <div className="wf-dash-strip-lbl">finalized this month</div>
         </div>
-        <div className="w-[1.5px] bg-[#1a1a1a] opacity-30" />
-        <div className="flex-1 px-5 py-[18px] flex flex-col gap-1">
-          <div className="font-serif text-[32px] leading-none tracking-tight">
-            {reports.length}
-          </div>
-          <div className="text-[10.5px] tracking-[0.1em] uppercase text-[#6b6b6b]">
-            total reports
-          </div>
+        <div className="wf-dash-strip-divider" />
+        <div className="wf-dash-strip-cell">
+          <div className="wf-dash-strip-num">{caseload}</div>
+          <div className="wf-dash-strip-lbl">caseload students</div>
         </div>
       </div>
 
-      {/* Active reports section */}
-      <div className="flex items-baseline justify-between border-b-[1.5px] border-[#1a1a1a] pb-2">
-        <div className="font-serif text-xl tracking-tight">Active reports</div>
+      {/* Active reports */}
+      <div className="wf-dash-section-head">
+        <div className="wf-dash-section-title">Active reports</div>
+        <div className="wf-dash-section-actions" role="tablist" aria-label="Filter reports">
+          {(
+            [
+              ['all', 'All'],
+              ['due', 'By due date'],
+              ['student', 'By student'],
+              ['stage', 'By stage'],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={filter === k}
+              className={`wf-dash-filter ${filter === k ? 'active' : ''}`}
+              onClick={() => setFilter(k)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
-        <NewReportCard />
-        {active.map((r) => (
-          <ReportCard
-            key={r.id}
-            report={r}
-            sectionCount={sectionCounts[r.id] || 0}
-            reveal={reveal}
-          />
+      <div className="wf-dash-grid">
+        <NewReportCard nextIdHint={nextIdHint} />
+        {active.map(r => (
+          <ReportCard key={r.id} report={r} reveal={reveal} />
         ))}
       </div>
 
       {/* Recently finalized */}
       {done.length > 0 && (
         <>
-          <div className="flex items-baseline justify-between border-b-[1.5px] border-[#1a1a1a] pb-2 mt-4">
-            <div className="font-serif text-xl tracking-tight">Recently finalized</div>
+          <div className="wf-dash-section-head" style={{ marginTop: 16 }}>
+            <div className="wf-dash-section-title">Recently finalized</div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
-            {done.map((r) => (
-              <ReportCard
-                key={r.id}
-                report={r}
-                sectionCount={sectionCounts[r.id] || 0}
-                reveal={reveal}
-              />
+          <div className="wf-dash-grid">
+            {done.map(r => (
+              <ReportCard key={r.id} report={r} reveal={reveal} />
             ))}
           </div>
         </>
