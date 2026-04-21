@@ -3,8 +3,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useReport } from '@/lib/context/ReportContext'
-import { ShieldCheck } from 'lucide-react'
 import type { PIIAction, PIIEntityType } from '@/lib/pii/detect'
+
+/** Hand-drawn shield + checkmark — see wireframes/src/pii-confirm.jsx */
+function ShieldGlyph() {
+  return (
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path
+        d="M22 4 L36 9 V22 C36 31 30 38 22 40 C14 38 8 31 8 22 V9 Z"
+        stroke="var(--line)"
+        strokeWidth="1.5"
+        fill="#fff5ee"
+      />
+      <path
+        d="M16 22 L20 26 L29 17"
+        stroke="var(--terracotta-ink)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  )
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -210,10 +231,10 @@ export default function PIIConfirmPage() {
   const categoryCount = Object.keys(grouped).length
 
   const onContinue = () => {
-    router.push(`/dashboard/reports/${params.id}`)
+    router.push(`/dashboard/reports/${params.id}/triage`)
   }
   const onBack = () => {
-    router.push(`/dashboard/reports/${params.id}/triage`)
+    router.push(`/dashboard/reports/${params.id}/sources`)
   }
 
   const showDemoBanner = isDemo // true when we're showing fallback list
@@ -224,7 +245,7 @@ export default function PIIConfirmPage() {
         <div className="wf-pii-wrap">
           {/* Header */}
           <div className="wf-pii-header">
-            <ShieldCheck className="h-11 w-11" style={{ color: 'var(--terracotta-ink)', flexShrink: 0 }} />
+            <ShieldGlyph />
             <div className="flex flex-col gap-1 flex-1">
               <div className="wf-label">Step 2 of 4 · before analysis · {report?.title}</div>
               <h1 className="wf-heading" style={{ fontSize: 28, margin: 0, lineHeight: 1.1 }}>
@@ -342,11 +363,11 @@ export default function PIIConfirmPage() {
           {/* Footer */}
           <div className="wf-pii-footer">
             <button type="button" className="wf-btn ghost" onClick={onBack}>
-              ← Back to triage
+              ← Back to upload
             </button>
             <div className="flex items-center gap-3">
               <span className="wf-sm" style={{ fontSize: 10.5 }}>
-                <span style={{ color: '#6b8a55' }}>✓</span> All entities reviewed
+                <span style={{ color: 'var(--olive)' }}>✓</span> All entities reviewed
               </span>
               <button type="button" className="wf-btn primary" onClick={onContinue}>
                 Confirm &amp; analyze {activeCount} entit{activeCount === 1 ? 'y' : 'ies'} →
