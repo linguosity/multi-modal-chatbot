@@ -130,7 +130,9 @@ export default function WorkingSurfacePage() {
         />
       )}
 
-      {tab === 'canvas' && <CanvasStub />}
+      {tab === 'canvas' && (
+        <CanvasStub onOpenCanvas={() => router.push(`/dashboard/reports/${params.id}/canvas`)} />
+      )}
 
       {tab === 'tray' && (
         <TrayView sections={sections} files={files} filesBySection={filesBySection} />
@@ -219,7 +221,7 @@ function OutlineView({
 
 // ─── Canvas stub ─────────────────────────────────────────────────────────────
 
-function CanvasStub() {
+function CanvasStub({ onOpenCanvas }: { onOpenCanvas: () => void }) {
   return (
     <div className="p-5">
       <div
@@ -227,13 +229,17 @@ function CanvasStub() {
         style={{ padding: 40, background: 'var(--paper-2)' }}
       >
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>
-          Canvas · coming soon
+          Canvas · spatial board
         </div>
-        <div className="wf-sm mb-4">
-          A spatial board for dragging evidence chips onto section buckets with pan/zoom, wires, and auto-layout.
+        <div className="wf-sm mb-4" style={{ maxWidth: '52ch', marginInline: 'auto' }}>
+          A full-screen workspace for dragging evidence chips onto section buckets with pan,
+          zoom, and keyboard-accessible move-to menus. Opens in its own route.
         </div>
-        <div className="wf-hand accent" style={{ fontSize: 20 }}>
-          preview once ROADMAP Phase 5 lands
+        <button type="button" className="wf-btn primary" onClick={onOpenCanvas}>
+          Open Canvas →
+        </button>
+        <div className="wf-hand accent mt-3" style={{ fontSize: 18 }}>
+          ★ interactive
         </div>
       </div>
     </div>
