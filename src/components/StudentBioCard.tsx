@@ -1,9 +1,8 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { User, Edit3, Check, X, Calendar, GraduationCap, Globe, Hash } from 'lucide-react'
+import { Edit3, Check, X } from 'lucide-react'
 import { useReport } from '@/lib/context/ReportContext'
-import { StudentBio } from '@/lib/schemas/report'
 
 interface StudentBioData {
   firstName: string
@@ -16,9 +15,15 @@ interface StudentBioData {
   eligibilityStatus: string
 }
 
+/**
+ * Compact student metadata card. The read view is a borderless two-column
+ * definition list — bold labels on the left, regular-weight values on the
+ * right, generous row spacing. The "database admin panel" gridlines and
+ * gray header cells have been retired.
+ */
 export function StudentBioCard() {
   const { report, handleSave } = useReport()
-  const [isHovered, setIsHovered] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [showMigrationWarning, setShowMigrationWarning] = useState(false)
   const [editData, setEditData] = useState<StudentBioData>({
@@ -26,118 +31,74 @@ export function StudentBioCard() {
     lastName: 'Name',
     dateOfBirth: '',
     age: '',
-    studentId: '', // User-generated school ID, not report UUID
+    studentId: '',
     grade: '',
     primaryLanguages: 'English',
-    eligibilityStatus: 'Pending'
+    eligibilityStatus: 'Pending',
   })
 
-  // Initialize editData from report metadata or localStorage when report loads
   useEffect(() => {
-    if (report) {
-      const studentInfoSection = report.sections.find(
-        (section) => section.title === 'Student Information'
-      );
-
-      let bioData: StudentBioData = {
-        firstName: 'Student',
-        lastName: 'Name',
-        dateOfBirth: '',
-        age: '',
-        studentId: '',
-        grade: '',
-        primaryLanguages: 'English',
-        eligibilityStatus: 'Pending'
-      };
-
-      // Prioritize studentBio from metadata
-      if (report.metadata?.studentBio) {
-        const bio = report.metadata.studentBio;
-        bioData = { ...bioData, ...bio };
-      } 
-      // Then, check the student information section
-      else if (studentInfoSection?.structured_data) {
-        const structuredData = studentInfoSection.structured_data;
-        bioData = {
-          ...bioData,
-          firstName: structuredData.first_name || bioData.firstName,
-          lastName: structuredData.last_name || bioData.lastName,
-          dateOfBirth: structuredData.date_of_birth || bioData.dateOfBirth,
-          age: structuredData.age || bioData.age,
-          studentId: structuredData.student_id || bioData.studentId,
-          grade: structuredData.grade || bioData.grade,
-          primaryLanguages:
-            structuredData.primary_languages ||
-            structuredData.home_languages ||
-            bioData.primaryLanguages,
-          eligibilityStatus:
-            structuredData.eligibility_status || bioData.eligibilityStatus,
-        };
+    if (!report) return
+    const studentInfoSection = report.sections.find(
+      (section) => section.title === 'Student Information',
+    )
+    let bioData: StudentBioData = {
+      firstName: 'Student',
+      lastName: 'Name',
+      dateOfBirth: '',
+      age: '',
+      studentId: '',
+      grade: '',
+      primaryLanguages: 'English',
+      eligibilityStatus: 'Pending',
+    }
+    if (report.metadata?.studentBio) {
+      bioData = { ...bioData, ...(report.metadata.studentBio as StudentBioData) }
+    } else if (studentInfoSection?.structured_data) {
+      const sd = studentInfoSection.structured_data as Record<string, string>
+      bioData = {
+        ...bioData,
+        firstName: sd.first_name || bioData.firstName,
+        lastName: sd.last_name || bioData.lastName,
+        dateOfBirth: sd.date_of_birth || bioData.dateOfBirth,
+        age: sd.age || bioData.age,
+        studentId: sd.student_id || bioData.studentId,
+        grade: sd.grade || bioData.grade,
+        primaryLanguages:
+          sd.primary_languages || sd.home_languages || bioData.primaryLanguages,
+        eligibilityStatus: sd.eligibility_status || bioData.eligibilityStatus,
       }
-      // Finally, fall back to localStorage
-      else {
-        const storageKey = `studentBio_${report.id}`;
-        const savedBio = localStorage.getItem(storageKey);
-        if (savedBio) {
-          try {
-            const bio = JSON.parse(savedBio);
-            bioData = { ...bioData, ...bio };
-          } catch (e) {
-            console.error('Failed to parse saved student bio:', e);
-          }
+    } else {
+      const saved = localStorage.getItem(`studentBio_${report.id}`)
+      if (saved) {
+        try {
+          bioData = { ...bioData, ...JSON.parse(saved) }
+        } catch {
+          /* ignore */
         }
       }
-      setEditData(bioData);
     }
-  }, [report]);
-  
-  const cardRef = useRef<HTMLDivElement>(null)
+    setEditData(bioData)
+  }, [report])
+
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-
-  const handleMouseEnter = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-      timeoutRef.current = undefined
-    }
-    setIsHovered(true)
-  }
-
-  const handleMouseLeave = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
-    timeoutRef.current = setTimeout(() => {
-      if (!isEditing) {
-        setIsHovered(false)
-      }
-    }, 200)
-  }
-
-  const handleEdit = () => {
-    setIsEditing(true)
-    setIsHovered(true)
-  }
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    },
+    [],
+  )
 
   const handleSaveBio = async () => {
-    if (!report) return;
-
-    // Always save to localStorage as backup
-    const storageKey = `studentBio_${report.id}`;
-    localStorage.setItem(storageKey, JSON.stringify(editData));
-
-    // Find the index of the student information section
-    const studentInfoSectionIndex = report.sections.findIndex(
-      (section) => section.title === 'Student Information'
-    );
-
-    const updatedSections = [...report.sections];
-
-    if (studentInfoSectionIndex !== -1) {
-      // Update the structured_data of the existing section
-      updatedSections[studentInfoSectionIndex] = {
-        ...updatedSections[studentInfoSectionIndex],
+    if (!report) return
+    localStorage.setItem(`studentBio_${report.id}`, JSON.stringify(editData))
+    const idx = report.sections.findIndex((s) => s.title === 'Student Information')
+    const updatedSections = [...report.sections]
+    if (idx !== -1) {
+      updatedSections[idx] = {
+        ...updatedSections[idx],
         structured_data: {
-          ...updatedSections[studentInfoSectionIndex].structured_data,
+          ...updatedSections[idx].structured_data,
           first_name: editData.firstName,
           last_name: editData.lastName,
           date_of_birth: editData.dateOfBirth,
@@ -147,42 +108,25 @@ export function StudentBioCard() {
           primary_languages: editData.primaryLanguages,
           eligibility_status: editData.eligibilityStatus,
         },
-      };
+      }
     }
-
-    // Update the report with student bio data in metadata and sections
     const updatedReport = {
       ...report,
-      metadata: {
-        ...report.metadata,
-        studentBio: editData,
-      },
+      metadata: { ...report.metadata, studentBio: editData },
       sections: updatedSections,
-    };
-    
+    }
     try {
       await handleSave(updatedReport)
-      console.log('✅ Student bio saved successfully')
       setIsEditing(false)
-      setIsHovered(false)
+      setIsOpen(false)
       setShowMigrationWarning(false)
-    } catch (error) {
-      console.error('Failed to save student bio to database:', error)
-      console.log('✅ Student bio saved to localStorage as fallback')
-      // Show migration warning if it's a metadata column issue
-      if (error instanceof Error && (error.message.includes('metadata') || error.message.includes('PGRST204'))) {
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes('metadata') || err.message.includes('PGRST204'))) {
         setShowMigrationWarning(true)
       }
-      // Still close editing mode since we saved to localStorage
       setIsEditing(false)
-      setIsHovered(false)
+      setIsOpen(false)
     }
-  }
-
-  const handleCancel = () => {
-    // Reset to original data
-    setIsEditing(false)
-    setIsHovered(false)
   }
 
   const calculateAge = (birthDate: string) => {
@@ -198,217 +142,165 @@ export function StudentBioCard() {
   }
 
   const handleDateChange = (date: string) => {
-    setEditData({
-      ...editData,
-      dateOfBirth: date,
-      age: calculateAge(date)
-    })
+    setEditData({ ...editData, dateOfBirth: date, age: calculateAge(date) })
   }
 
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-    }
-  }, [])
+  // ── Compact display ────────────────────────────────────────────────────
+  const displayName =
+    [editData.lastName, editData.firstName].filter(Boolean).join(', ').trim() || 'Student name'
+  const displayMeta = [
+    editData.grade ? `Grade ${editData.grade}` : null,
+    editData.age ? `Age ${editData.age}` : null,
+    editData.primaryLanguages || null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="relative">
-      {/* Migration Warning */}
       {showMigrationWarning && (
-        <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-          <div className="flex items-start gap-2">
-            <div className="text-orange-600 mt-0.5">⚠️</div>
-            <div className="flex-1">
-              <p className="text-sm text-orange-800 font-medium">Database Update Required</p>
-              <p className="text-xs text-orange-700 mt-1">
-                Student bio saved locally, but database needs updating for permanent storage.
-              </p>
-              <button
-                onClick={() => setShowMigrationWarning(false)}
-                className="text-xs text-orange-600 hover:text-orange-800 mt-1 underline"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
+        <div className="mb-3 rounded border border-[#d7a495] bg-[#faf0eb] px-3 py-2 text-[13px] text-[#8a4a30]">
+          Student bio saved locally — the <code className="font-mono text-[12px]">metadata</code> column
+          isn&rsquo;t available yet for permanent storage.{' '}
+          <button
+            onClick={() => setShowMigrationWarning(false)}
+            className="underline hover:no-underline"
+          >
+            Dismiss
+          </button>
         </div>
       )}
-      
-      {/* Compact Bio Display */}
-      <div
-        ref={cardRef}
-        className="bg-blue-50 border border-blue-200 rounded-lg p-4 cursor-pointer transition-all duration-200 hover:shadow-md"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded border border-[#d0cec6] bg-[var(--card-surface)] px-4 py-3 text-left transition-colors hover:border-[#9a9a9a]"
       >
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 rounded-full p-2">
-            <User className="h-4 w-4 text-white" />
+        <div className="min-w-0">
+          <div
+            style={{ fontFamily: 'var(--font-display)' }}
+            className="text-[16px] leading-tight text-[#111] truncate"
+          >
+            {displayName}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold text-blue-900 text-base truncate">
-              {editData.lastName || 'Name'}, {editData.firstName || 'Student'}
-            </div>
-            <div className="text-sm text-blue-700 mt-1">
-              {editData.studentId && (
-                <span className="font-mono bg-blue-100 px-2 py-0.5 rounded text-xs mr-2">
-                  ID: {editData.studentId}
-                </span>
-              )}
-              {editData.grade ? `Grade ${editData.grade}` : 'Grade --'} • {editData.age ? `Age ${editData.age}` : 'Age --'}
-            </div>
+          <div className="mt-0.5 text-[12px] text-[#6b6b6b] truncate">
+            {editData.studentId ? `${editData.studentId}` : 'No student ID'}
+            {displayMeta ? ` · ${displayMeta}` : ''}
           </div>
-          <Edit3 className="h-3 w-3 text-blue-600 opacity-60" />
         </div>
-      </div>
+        <Edit3 className="size-4 text-[#9a9a9a]" aria-hidden="true" />
+      </button>
 
-      {/* Expanded Hover Card */}
-      {isHovered && (
-        <div
-          className="absolute top-0 left-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-80"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Student Information</h3>
-            {!isEditing && (
+      {isOpen && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-40 w-[420px] rounded border border-[#d0cec6] bg-[var(--card-surface)] p-5 shadow-[6px_6px_0_rgba(17,17,17,0.06)]">
+          <div className="mb-3 flex items-center justify-between">
+            <h3
+              style={{ fontFamily: 'var(--font-display)' }}
+              className="text-[17px] leading-tight text-[#111]"
+            >
+              Student information
+            </h3>
+            {!isEditing ? (
               <button
-                onClick={handleEdit}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                onClick={() => setIsEditing(true)}
+                className="text-[12px] text-[#6b6b6b] hover:text-[#111]"
               >
-                <Edit3 className="h-4 w-4" />
+                Edit
               </button>
-            )}
+            ) : null}
           </div>
 
-          <div className="space-y-3">
-            {/* Name */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">First Name</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.firstName}
-                    onChange={(e) => setEditData({ ...editData, firstName: e.target.value })}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                ) : (
-                  <div className="text-sm text-gray-900">{editData.firstName}</div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Last Name</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.lastName}
-                    onChange={(e) => setEditData({ ...editData, lastName: e.target.value })}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                ) : (
-                  <div className="text-sm text-gray-900">{editData.lastName}</div>
-                )}
-              </div>
-            </div>
-
-            {/* DOB & Age */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  <Calendar className="h-3 w-3 inline mr-1" />
-                  Date of Birth
-                </label>
-                {isEditing ? (
-                  <input
-                    type="date"
-                    value={editData.dateOfBirth}
-                    onChange={(e) => handleDateChange(e.target.value)}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                ) : (
-                  <div className="text-sm text-gray-900">
-                    {editData.dateOfBirth ? new Date(editData.dateOfBirth).toLocaleDateString() : '--'}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Age</label>
-                <div className="text-sm text-gray-900">{editData.age || '--'}</div>
-              </div>
-            </div>
-
-            {/* Student ID & Grade */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  <Hash className="h-3 w-3 inline mr-1" />
-                  Student ID
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.studentId}
-                    onChange={(e) => setEditData({ ...editData, studentId: e.target.value })}
-                    placeholder="e.g. 12345678 or SM-2024-001"
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                  />
-                ) : (
-                  <div className="text-sm text-gray-900 font-mono">{editData.studentId || '--'}</div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  <GraduationCap className="h-3 w-3 inline mr-1" />
-                  Grade
-                </label>
-                {isEditing ? (
-                  <select
-                    value={editData.grade}
-                    onChange={(e) => setEditData({ ...editData, grade: e.target.value })}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    <option value="Pre-K">Pre-K</option>
-                    <option value="TK">TK</option>
-                    <option value="K">K</option>
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i + 1} value={`${i + 1}`}>{i + 1}st/nd/rd/th</option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="text-sm text-gray-900">{editData.grade || '--'}</div>
-                )}
-              </div>
-            </div>
-
-            {/* Languages & Eligibility */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                <Globe className="h-3 w-3 inline mr-1" />
-                Primary Language(s)
-              </label>
+          {/* Borderless definition list — bold labels left, values right. */}
+          <dl className="grid grid-cols-[140px_1fr] gap-y-3.5 text-[13.5px]">
+            <Row label="First name" editing={isEditing}>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.primaryLanguages}
-                  onChange={(e) => setEditData({ ...editData, primaryLanguages: e.target.value })}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                <TextInput
+                  value={editData.firstName}
+                  onChange={(v) => setEditData({ ...editData, firstName: v })}
                 />
               ) : (
-                <div className="text-sm text-gray-900">{editData.primaryLanguages}</div>
+                editData.firstName || <Empty />
               )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Eligibility Status</label>
+            </Row>
+            <Row label="Last name" editing={isEditing}>
+              {isEditing ? (
+                <TextInput
+                  value={editData.lastName}
+                  onChange={(v) => setEditData({ ...editData, lastName: v })}
+                />
+              ) : (
+                editData.lastName || <Empty />
+              )}
+            </Row>
+            <Row label="Date of birth" editing={isEditing}>
+              {isEditing ? (
+                <input
+                  type="date"
+                  value={editData.dateOfBirth}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className={inputCls}
+                />
+              ) : editData.dateOfBirth ? (
+                new Date(editData.dateOfBirth).toLocaleDateString()
+              ) : (
+                <Empty />
+              )}
+            </Row>
+            <Row label="Age" editing={isEditing}>
+              {editData.age || <Empty />}
+            </Row>
+            <Row label="Student ID" editing={isEditing}>
+              {isEditing ? (
+                <TextInput
+                  value={editData.studentId}
+                  onChange={(v) => setEditData({ ...editData, studentId: v })}
+                  placeholder="e.g. SM-2024-001"
+                />
+              ) : editData.studentId ? (
+                <span className="font-mono text-[12.5px]">{editData.studentId}</span>
+              ) : (
+                <Empty />
+              )}
+            </Row>
+            <Row label="Grade" editing={isEditing}>
+              {isEditing ? (
+                <select
+                  value={editData.grade}
+                  onChange={(e) => setEditData({ ...editData, grade: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">—</option>
+                  <option value="Pre-K">Pre-K</option>
+                  <option value="TK">TK</option>
+                  <option value="K">K</option>
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i + 1} value={`${i + 1}`}>
+                      Grade {i + 1}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                editData.grade || <Empty />
+              )}
+            </Row>
+            <Row label="Language(s)" editing={isEditing}>
+              {isEditing ? (
+                <TextInput
+                  value={editData.primaryLanguages}
+                  onChange={(v) => setEditData({ ...editData, primaryLanguages: v })}
+                />
+              ) : (
+                editData.primaryLanguages || <Empty />
+              )}
+            </Row>
+            <Row label="Eligibility" editing={isEditing}>
               {isEditing ? (
                 <select
                   value={editData.eligibilityStatus}
-                  onChange={(e) => setEditData({ ...editData, eligibilityStatus: e.target.value })}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  onChange={(e) =>
+                    setEditData({ ...editData, eligibilityStatus: e.target.value })
+                  }
+                  className={inputCls}
                 >
                   <option value="Pending">Pending</option>
                   <option value="Eligible">Eligible</option>
@@ -416,40 +308,101 @@ export function StudentBioCard() {
                   <option value="Re-evaluation Required">Re-evaluation Required</option>
                 </select>
               ) : (
-                <div className="text-sm text-gray-900">
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                    editData.eligibilityStatus === 'Eligible' ? 'bg-green-100 text-green-800' :
-                    editData.eligibilityStatus === 'Not Eligible' ? 'bg-red-100 text-red-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {editData.eligibilityStatus || 'Pending'}
-                  </span>
-                </div>
+                <EligibilityBadge value={editData.eligibilityStatus} />
               )}
-            </div>
-          </div>
+            </Row>
+          </dl>
 
-          {/* Action Buttons */}
-          {isEditing && (
-            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-200">
+          <div className="mt-5 flex justify-end gap-2 border-t border-dashed border-[#d0cec6] pt-4">
+            {isEditing ? (
+              <>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="inline-flex items-center gap-1 rounded px-3 py-1 text-[13px] text-[#6b6b6b] hover:text-[#111]"
+                >
+                  <X className="size-3" /> Cancel
+                </button>
+                <button
+                  onClick={handleSaveBio}
+                  className="inline-flex items-center gap-1 rounded bg-terracotta px-3 py-1 text-[13px] font-medium text-white hover:opacity-90"
+                >
+                  <Check className="size-3" /> Save
+                </button>
+              </>
+            ) : (
               <button
-                onClick={handleCancel}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-800 rounded"
+                onClick={() => setIsOpen(false)}
+                className="rounded px-3 py-1 text-[13px] text-[#6b6b6b] hover:text-[#111]"
               >
-                <X className="h-3 w-3" />
-                Cancel
+                Close
               </button>
-              <button
-                onClick={handleSaveBio}
-                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded"
-              >
-                <Check className="h-3 w-3" />
-                Save
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>
+  )
+}
+
+// ── Definition-list row + tiny helpers ───────────────────────────────────
+
+const inputCls =
+  'w-full rounded border border-[#d0cec6] bg-white px-2 py-1 text-[13px] focus:border-terracotta focus:outline-none focus:ring-0'
+
+function Row({
+  label,
+  editing: _editing,
+  children,
+}: {
+  label: string
+  editing: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <>
+      <dt className="font-medium text-[#3a3a3a]">{label}</dt>
+      <dd className="text-[#111]">{children}</dd>
+    </>
+  )
+}
+
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className={inputCls}
+    />
+  )
+}
+
+function Empty() {
+  return <span className="text-[#9a9a9a]">—</span>
+}
+
+function EligibilityBadge({ value }: { value: string }) {
+  const v = (value || '').toLowerCase()
+  const tone =
+    v === 'eligible'
+      ? 'border-[#8eb397] bg-[#e8f0df] text-[#4e6a52]'
+      : v === 'not eligible'
+        ? 'border-[#d7a495] bg-[#faf0eb] text-[#8a4a30]'
+        : v.includes('re-eval')
+          ? 'border-[#d4b86b] bg-[#fef9e7] text-[#7a6135]'
+          : 'border-[#d0cec6] bg-[#efece4] text-[#3a3a3a]'
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11.5px] ${tone}`}>
+      {value || 'Pending'}
+    </span>
   )
 }

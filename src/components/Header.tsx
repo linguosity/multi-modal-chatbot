@@ -11,6 +11,26 @@ import { usePathname, useRouter } from "next/navigation";
 import { useReport } from "@/lib/context/ReportContext";
 import { useState, useEffect, useRef } from "react";
 
+/** Status chip with semantic colors — replaces the old "OTHER" uppercase
+ *  mono badge. Gray = draft, amber = in review, green = finalized. */
+function StatusPill({ status }: { status?: string | null }) {
+  const s = (status || '').toLowerCase()
+  const { label, cls } =
+    s === 'completed' || s === 'finalized'
+      ? { label: 'Finalized', cls: 'border-[#8eb397] bg-[#e8f0df] text-[#4e6a52]' }
+      : s === 'in_progress'
+        ? { label: 'In review', cls: 'border-[#d4b86b] bg-[#fef9e7] text-[#7a6135]' }
+        : { label: 'Draft', cls: 'border-[#d0cec6] bg-[#efece4] text-[#3a3a3a]' }
+  return (
+    <span
+      className={`mr-2 hidden sm:inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11.5px] ${cls}`}
+      title={`Status: ${label}`}
+    >
+      {label}
+    </span>
+  )
+}
+
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -231,11 +251,7 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2.5">
-        {report && (
-          <span className="text-[11px] tracking-[0.12em] uppercase text-[#6b6b6b] font-mono mr-2 hidden sm:inline">
-            {report.type || 'Report'}
-          </span>
-        )}
+        {report && <StatusPill status={report.status} />}
         {isViewMode && (
           <>
             {/* Minimal actions in report view to reduce clutter */}

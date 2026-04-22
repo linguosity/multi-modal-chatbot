@@ -20,6 +20,7 @@
   html, body {
     overflow-x: hidden;
     max-width: 100vw;
+    font-family: var(--font-sans);
   }
   :root {
     --background: 43 33% 95.5%;
@@ -89,8 +90,15 @@
     --plum-ink: #5C3F70;
     --olive: #6b8a55;
 
-    /* New design system — font stacks */
+    /* New design system — font stacks.
+     * Policy: display serif (Gloock) for H1/H2 only — the "formal document"
+     * signal. One neutral sans (--font-sans) for nav, tables, body, UI chrome.
+     * Mono (--font-mono) reserved for identifiers, file-type badges, tokenized
+     * strings, and audit-log codes — NOT for general labels. Hand (--font-hand)
+     * is a flourish, used sparingly. */
     --font-display: 'Gloock', 'Times New Roman', serif;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     --font-mono: 'Inconsolata', ui-monospace, 'SF Mono', monospace;
     --font-hand: 'Caveat', cursive;
 
@@ -246,13 +254,13 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 .wf-label {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--ink-3);
 }
-.wf-label.bold { color: var(--ink); font-weight: 700; }
+.wf-label.bold { color: var(--ink); font-weight: 600; }
 
 .wf-heading {
   font-family: var(--font-display);
@@ -261,7 +269,7 @@
   color: var(--ink);
 }
 
-.wf-sm { font-size: 11px; color: var(--ink-3); }
+.wf-sm { font-size: 12px; color: var(--ink-3); }
 
 .wf-hand { font-family: var(--font-hand); color: var(--ink-2); font-size: 17px; line-height: 1.1; }
 .wf-hand.accent { color: var(--terracotta-ink); }
@@ -281,12 +289,11 @@
 
 .wf-pill {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border: 1px solid var(--line-2);
   border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
+  font-size: 11.5px;
+  letter-spacing: 0;
   color: var(--ink-2);
   background: var(--card-surface);
 }
@@ -295,14 +302,14 @@
 .wf-pill.dark  { background: var(--ink); color: var(--card-surface); border-color: var(--line); }
 
 .wf-btn {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 7px 14px;
   border: 1.5px solid var(--line);
   background: var(--card-surface);
-  border-radius: 2px;
-  text-transform: uppercase;
+  border-radius: 3px;
+  text-transform: none;
   display: inline-flex; align-items: center; gap: 8px;
   transition: transform 80ms, box-shadow 80ms;
   box-shadow: 3px 3px 0 var(--line);
@@ -423,10 +430,9 @@
 }
 
 .wf-ticker {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--ink-3);
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
 }
 
 /* Tiny icon (box with letter) */
