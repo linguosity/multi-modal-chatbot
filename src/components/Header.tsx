@@ -192,10 +192,43 @@ export default function Header() {
     // and update the report sections accordingly
   };
 
+  // Progress indicator: X of Y sections complete. Lives here (top of the
+  // report area, next to the title) instead of buried in the sidebar TOC.
+  const sectionStatus = (s: { content: string | null; structured_data: unknown }) => {
+    const hasContent = typeof s.content === 'string' && s.content.trim().length > 0
+    const hasData = s.structured_data != null && Object.keys(s.structured_data as object).length > 0
+    if (hasContent && hasData) return 'complete'
+    if (hasContent || hasData) return 'partial'
+    return 'empty'
+  }
+  const totalSections = report?.sections?.length ?? 0
+  const completeSections = report?.sections?.filter((s) => sectionStatus(s) === 'complete').length ?? 0
+  const progressPct = totalSections > 0 ? Math.round((completeSections / totalSections) * 100) : 0
+
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between
                        bg-[#f7f5f0] border-b-[1.5px] border-[#1a1a1a] px-7 py-[18px]">
-      <Breadcrumb items={breadcrumbItems} />
+      <div className="flex items-center gap-5 min-w-0">
+        <Breadcrumb items={breadcrumbItems} />
+        {/* Progress indicator — only render when we're inside a report.
+            User's "compass" for where they are in the work. */}
+        {report && totalSections > 0 && (
+          <div
+            className="hidden md:flex items-center gap-2 text-[12px] text-[#6b6b6b]"
+            aria-label={`Report progress: ${completeSections} of ${totalSections} sections complete`}
+          >
+            <div className="h-1 w-24 rounded-full bg-[#d0cec6] overflow-hidden">
+              <div
+                className="h-full bg-terracotta transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <span className="whitespace-nowrap">
+              {completeSections}/{totalSections} complete
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-2.5">
         {report && (

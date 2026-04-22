@@ -441,18 +441,19 @@
   flex-shrink: 0;
 }
 
-/* Chat popup (bottom-left FAB + panel) */
+/* Chat popup — bottom-RIGHT FAB + panel. Used to live bottom-left but that
+ * collided with the sidebar's Contents TOC. Right side keeps it out of the
+ * navigation tower. */
 .wf-chat-fab {
-  position: fixed; left: 20px; bottom: 20px; z-index: 40;
+  position: fixed; right: 20px; bottom: 20px; z-index: 40;
   display: inline-flex; align-items: center; gap: 10px;
   padding: 10px 16px 10px 14px;
   border: 1.5px solid var(--line);
   background: var(--terracotta);
   color: #fff;
   border-radius: 999px;
-  font-family: var(--font-mono);
   font-size: 12.5px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   box-shadow: 4px 4px 0 var(--line);
   transition: transform 80ms, box-shadow 80ms;
@@ -462,12 +463,12 @@
 .wf-chat-fab-badge {
   background: var(--card-surface); color: var(--terracotta);
   border-radius: 3px; padding: 1px 6px;
-  font-size: 10px; letter-spacing: 0.1em;
+  font-size: 10px; letter-spacing: 0.08em;
   border: 1px solid var(--line);
 }
 
 .wf-chat-panel {
-  position: fixed; left: 20px; bottom: 20px; z-index: 40;
+  position: fixed; right: 20px; bottom: 20px; z-index: 40;
   width: 360px; max-height: 560px;
   display: flex; flex-direction: column;
   background: var(--card-surface);
