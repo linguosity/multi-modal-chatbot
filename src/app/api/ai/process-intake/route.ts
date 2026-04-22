@@ -274,6 +274,7 @@ export async function POST(request: NextRequest) {
 
     const VERBOSE = (process.env.NEXT_PUBLIC_PROGRESS_VERBOSE === 'true') || (process.env.NEXT_PUBLIC_SSE_VERBOSE === 'true')
     for (const f of files) {
+      console.log(`📎 File: name="${f.name}" type="${f.type}" size=${(f.size / 1024 / 1024).toFixed(2)}MB`)
       try {
         // collect source metadata for report metadata.uploadedFiles
         const metaType = f.type.startsWith('application/pdf') ? 'pdf' : (f.type.startsWith('image/') ? 'image' : (f.type.startsWith('audio/') ? 'audio' : (f.type.startsWith('text/') ? 'text' : 'document')))
@@ -293,7 +294,8 @@ export async function POST(request: NextRequest) {
           const pdfExtractResponse = await pdfAnthropic.messages.create({
             model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
             max_tokens: 2000,
-            temperature: 0.1,
+            // Note: Claude Opus 4.7 doesn't accept `temperature` — the model
+            // sets it implicitly. Older models like sonnet-4.6 do accept it.
             system: [
               'You are an expert Speech-Language Pathologist extracting MAIN POINTS from assessment PDFs for a clinical report.',
               'Goal: produce a concise, high-signal summary tailored for SLP reporting, not a verbatim transcript.',
@@ -389,7 +391,10 @@ export async function POST(request: NextRequest) {
           try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
         }
       } catch (e) {
-        processingErrors.push(`${f.name}: ${(e as Error).message}`)
+        const err = e as Error
+        processingErrors.push(`${f.name}: ${err.message}`)
+        console.error(`❌ File processing failed for ${f.name}:`, err.message)
+        if (err.stack) console.error(err.stack.split('\n').slice(0, 5).join('\n'))
         if (VERBOSE) {
           try { emitProgress(operationId, `❌ Failed to update ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
         }
