@@ -676,7 +676,7 @@ export default function DynamicStructuredBlock({
                 const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
                 const runtimeRefs: SourceRef[] = runtime
                   .filter((r: any) => r && r.field_path === fieldPath)
-                  .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                  .map((r: any) => ({ artifactId: r.artifactId, page: r.page, confidence: r.confidence }))
                 return runtimeRefs.length ? (
                   <ProvenanceChips
                     sources={runtimeRefs}
@@ -756,7 +756,7 @@ export default function DynamicStructuredBlock({
                 const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
                 const runtimeRefs: SourceRef[] = runtime
                   .filter((r: any) => r && r.field_path === fieldPath)
-                  .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                  .map((r: any) => ({ artifactId: r.artifactId, page: r.page, confidence: r.confidence }))
                 return runtimeRefs.length ? (
                   <ProvenanceChips
                     sources={runtimeRefs}
@@ -821,7 +821,7 @@ export default function DynamicStructuredBlock({
               const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
               const runtimeRefs: SourceRef[] = runtime
                 .filter((r: any) => r && r.field_path === fieldPath)
-                .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                .map((r: any) => ({ artifactId: r.artifactId, page: r.page, confidence: r.confidence }))
               const combined = [...schemaRefs, ...runtimeRefs]
               return combined.length ? (
                 <ProvenanceChips
@@ -871,10 +871,15 @@ export default function DynamicStructuredBlock({
             const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
             if (!show) return null
             const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
+            // Deduplicate by artifactId + page so "Hernandez.pdf p.4" and
+            // "Hernandez.pdf p.7" appear as separate chips in the section header.
             const sectionRefs: SourceRef[] = Array.from(new Map(
               runtime
                 .filter((r: any) => r && r.artifactId)
-                .map((r: any) => [r.artifactId, { artifactId: r.artifactId, confidence: r.confidence } as SourceRef])
+                .map((r: any) => {
+                  const key = `${r.artifactId}::${r.page ?? ''}`
+                  return [key, { artifactId: r.artifactId, page: r.page, confidence: r.confidence } as SourceRef]
+                })
             ).values()) as SourceRef[]
             if (sectionRefs.length === 0) return null
             return (

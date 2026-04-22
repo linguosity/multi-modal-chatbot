@@ -3,6 +3,34 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 // Primary AI: Claude Opus 4.7 via anthropic-compat. Gemini is kept only for
 // audio transcription (Claude has no native audio support yet).
 import Anthropic from '@/lib/ai/anthropic-compat'
+
+/**
+ * Consume a Claude response's content array and build a single string with
+ * citation pages inlined after their cited text (as [p.N] or [p.N-M]).
+ *
+ * Requires citations to have been enabled on the source document block with
+ * `citations: { enabled: true }`. Each text block may carry its own citations
+ * array — we surface them as suffixes so downstream steps (the main tool-use
+ * analyzer) can copy the page ref into source_reference.
+ */
+function inlinePageRefs(content: any[]): string {
+  const parts: string[] = []
+  for (const b of Array.isArray(content) ? content : []) {
+    if (b?.type !== 'text') continue
+    const citations = Array.isArray(b.citations) ? b.citations : []
+    const pages = new Set<string>()
+    for (const c of citations) {
+      if (c?.type === 'page_location' && typeof c.start_page_number === 'number') {
+        const s = c.start_page_number
+        const e = c.end_page_number
+        pages.add(s && e && s !== e ? `p.${s}-${e}` : `p.${s}`)
+      }
+    }
+    const ref = pages.size > 0 ? ` [${Array.from(pages).join(', ')}]` : ''
+    parts.push((b.text || '') + ref)
+  }
+  return parts.join('\n')
+}
 import { processMultipleFiles, transcribeAudio, fileToBase64 } from '@/lib/ai/gemini-file-processor'
 import { validateAndCleanFieldUpdate, dataIntegrityGuard } from '@/lib/data-integrity-guard'
 import { reportContextBuilder } from '@/lib/report-context-builder'
@@ -294,52 +322,58 @@ export async function POST(request: NextRequest) {
           const pdfExtractResponse = await pdfAnthropic.messages.create({
             model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
             max_tokens: 8192,
-            // Note: Claude Opus 4.7 doesn't accept `temperature` — the model
-            // sets it implicitly.
+            // Note: Claude Opus 4.7 doesn't accept `temperature`.
             //
-            // Prompt rationale: the previous "concise / no long quotes" prompt
-            // dropped ~70% of report content by character count — losing parent
-            // quotes, language-sample utterances, pragmatic function labels,
-            // and context an SLP needs for the finished report. The main
-            // analysis step downstream shrinks things into tool fields; the
-            // pre-extraction step should PRESERVE detail so the main step
-            // has something real to work with. Measured fact-coverage jumped
-            // from 82% → 86% on the Levi Hernandez assessment, and quote/
-            // utterance fidelity went from lossy to verbatim.
+            // System is passed as an array so we can mark the stable prompt
+            // as cache-eligible. Prompt caching cuts repeat-call input cost
+            // to ~10% and latency to ~15% — first call warms the cache, every
+            // subsequent PDF in the same session (5-min TTL) is a cache hit.
             system: [
-              'You are an expert Speech-Language Pathologist extracting the FULL CONTENT of an assessment PDF for downstream structured processing.',
-              'Goal: preserve clinically-relevant detail faithfully. Another AI step will reduce this into structured fields — your job is NOT to summarize; it is to surface every fact.',
-              'Preserve verbatim:',
-              '- All proper nouns (student, parent, teacher, school, district, evaluator, test names)',
-              '- All numeric values: standard scores, percentiles, confidence intervals, raw scores, standard-deviation statements, ages (e.g. "2;11"), dates',
-              '- Eligibility language (e.g. "DOES NOT SUPPORT", "Ed Code 56333", specific criteria statements)',
-              '- Direct quotes from parent / teacher / student, especially the ones that anchor clinical judgment',
-              '- Language-sample utterances when present (they are evidence, not filler)',
-              '- Recommendations with the exact phrasing the report uses',
-              'Structure the output with short section headers that mirror the report (Reason for Referral, Background, Tools, Findings by Domain, Eligibility, Summary, Recommendations). Use bullets within each.',
-              'If a field is empty in the source, mark it as [not provided]. Aim for completeness over brevity.',
-              'Do not invent data. Do not speculate. Preserve clinical caveats and any "DOES NOT SUPPORT" / "does support" statements verbatim.',
-              'Output plain text with section headers + bullets. No JSON, no commentary outside the extraction.'
-            ].join('\n'),
+              {
+                type: 'text',
+                cache_control: { type: 'ephemeral' },
+                text: [
+                  'You are an expert Speech-Language Pathologist extracting the FULL CONTENT of an assessment PDF for downstream structured processing.',
+                  'Goal: preserve clinically-relevant detail faithfully. Another AI step will reduce this into structured fields — your job is NOT to summarize; it is to surface every fact.',
+                  'Preserve verbatim:',
+                  '- All proper nouns (student, parent, teacher, school, district, evaluator, test names)',
+                  '- All numeric values: standard scores, percentiles, confidence intervals, raw scores, standard-deviation statements, ages (e.g. "2;11"), dates',
+                  '- Eligibility language (e.g. "DOES NOT SUPPORT", "Ed Code 56333", specific criteria statements)',
+                  '- Direct quotes from parent / teacher / student, especially the ones that anchor clinical judgment',
+                  '- Language-sample utterances when present (they are evidence, not filler)',
+                  '- Recommendations with the exact phrasing the report uses',
+                  'Structure the output with short section headers that mirror the report (Reason for Referral, Background, Tools, Findings by Domain, Eligibility, Summary, Recommendations). Use bullets within each.',
+                  'If a field is empty in the source, mark it as [not provided]. Aim for completeness over brevity.',
+                  'Do not invent data. Do not speculate. Preserve clinical caveats and any "DOES NOT SUPPORT" / "does support" statements verbatim.',
+                  'Output plain text with section headers + bullets. No JSON, no commentary outside the extraction.',
+                  'Citations are enabled on the source document — when you quote or paraphrase a specific passage, ground it so page references can be attached automatically.',
+                ].join('\n'),
+              },
+            ],
             messages: [{
               role: 'user',
               content: [
                 {
                   type: 'document',
                   source: { type: 'base64', media_type: 'application/pdf', data: base64Data },
-                },
+                  // Enabling citations makes Claude's response blocks carry
+                  // { type: 'page_location', start_page_number, end_page_number, cited_text }
+                  // markers that inlinePageRefs() weaves into the output text as [p.N].
+                  citations: { enabled: true },
+                } as any,
                 {
                   type: 'text',
-                  text: 'Extract the MAIN POINTS from this assessment PDF for a clinical SLP report. Be concise with bulleted format.',
+                  text: 'Extract the content of this assessment PDF faithfully per the system instructions.',
                 },
               ],
             }],
           })
 
-          const extractedTextRaw = pdfExtractResponse.content
-            .filter((b: any) => b.type === 'text')
-            .map((b: any) => b.text)
-            .join('\n')
+          const extractedTextRaw = inlinePageRefs(pdfExtractResponse.content as any[])
+          try {
+            const u: any = (pdfExtractResponse as any).usage || {}
+            console.log(`  💰 PDF extract usage — in:${u.input_tokens} out:${u.output_tokens} cache_write:${u.cache_creation_input_tokens || 0} cache_hit:${u.cache_read_input_tokens || 0}`)
+          } catch {}
           // PII guard: redact before the text reaches the Claude/Gemini prompt.
           const { redactedText: extractedText, entitiesFound: pdfEnts } = piiRedactor.redact(extractedTextRaw)
           if (pdfEnts.length > 0) {
@@ -557,11 +591,30 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const systemInstruction = [
-        systemPrompt,
-        `REPORT SCHEMA (JSON, selected sections):\n${JSON.stringify(schemaPayload).slice(0, 120000)}`,
-        allowedPathsText,
-      ].join('\n\n')
+      // Split the system instruction so we can cache the stable piece.
+      // `systemPrompt` is the deployment-wide SLP role/constraints — same on
+      // every call, so it's a cache-hit candidate. The report schema payload
+      // and allowed-paths block are per-report and stay uncached. Cache reads
+      // are ~10% of cold-call cost; the 5-min TTL is enough to span a typical
+      // SLP session where multiple sources get analyzed back-to-back.
+      const systemBlocks: any[] = [
+        {
+          type: 'text',
+          cache_control: { type: 'ephemeral' },
+          text: systemPrompt
+            + '\n\nWhen you emit a field update, set `source_reference` to the page marker from the '
+            + 'pre-extracted content (e.g. "p.4" or "p.2-3"). Those brackets in the input are provenance '
+            + 'anchors — copy them verbatim so clinicians can click through to the source.',
+        },
+        {
+          type: 'text',
+          text: `REPORT SCHEMA (JSON, selected sections):\n${JSON.stringify(schemaPayload).slice(0, 120000)}`,
+        },
+        {
+          type: 'text',
+          text: allowedPathsText,
+        },
+      ]
 
       // Convert our internal content array → Anthropic content blocks.
       // Text and image_url blocks are normalized; already-Anthropic blocks pass through.
@@ -584,13 +637,20 @@ export async function POST(request: NextRequest) {
       const response = await anthropic.messages.create({
         model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
         max_tokens: 8192,
-        system: systemInstruction,
+        system: systemBlocks,
         messages: [{ role: 'user', content: claudeUserContent as any }],
-        tools: [reportSchemaTool],
+        // cache_control on the tool marks the entire tools array as cacheable.
+        // Cache key also includes the tool_choice, so forced-tool calls cache
+        // separately from auto calls.
+        tools: [{ ...reportSchemaTool, cache_control: { type: 'ephemeral' } }],
         tool_choice: { type: 'tool', name: 'save_assessment_data' },
       })
 
       console.log('✅ Step 16: Claude API call returned')
+      try {
+        const u: any = (response as any).usage || {}
+        console.log(`  💰 Main call usage — in:${u.input_tokens} out:${u.output_tokens} cache_write:${u.cache_creation_input_tokens || 0} cache_hit:${u.cache_read_input_tokens || 0}`)
+      } catch {}
       try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai`) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_complete' }) } catch {}
       console.log('✅ Step 17: Extracting tool_use block from response...')
@@ -859,14 +919,29 @@ export async function POST(request: NextRequest) {
           }
         } catch {}
 
-        // Persist provenance if provided
+        // Persist provenance if provided.
+        //
+        // Parse page references out of the source_reference string so the
+        // UI chip can show "{file} p.4" instead of a raw "p.4" doubled
+        // with the artifactId. If source_reference was just a page marker
+        // (no filename, common when only one file was uploaded), fall back
+        // to the first uploaded file's name.
         try {
           if (update.source_reference || typeof update.confidence === 'number') {
-            const prov = {
+            const refStr = String(update.source_reference || '').trim()
+            const pageMatch = refStr.match(/p\.\s?(\d+)(?:\s?-\s?\d+)?/i)
+            const pageNum = pageMatch ? parseInt(pageMatch[1], 10) : undefined
+            let artifactId = refStr
+              .replace(/\s*\[?p\.\s?\d+(?:-\d+)?\]?\s*/gi, '')
+              .replace(/^[\s,;:\-·]+|[\s,;:\-·]+$/g, '')
+              .trim()
+            if (!artifactId) artifactId = files[0]?.name || 'source'
+            const prov: Record<string, unknown> = {
               field_path: cleanedUpdate.field_path,
-              artifactId: update.source_reference as string,
-              confidence: typeof update.confidence === 'number' ? update.confidence : undefined
+              artifactId,
+              confidence: typeof update.confidence === 'number' ? update.confidence : undefined,
             }
+            if (pageNum) prov.page = pageNum
             const provKey = '__provenance'
             const currentProv = (updatedData && typeof updatedData === 'object') ? (updatedData[provKey] || []) : []
             const nextProv = Array.isArray(currentProv) ? [...currentProv, prov] : [prov]

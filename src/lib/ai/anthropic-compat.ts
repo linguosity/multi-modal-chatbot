@@ -30,17 +30,28 @@ type AnthropicMessageParam = {
   content: string | AnthropicContentBlock[]
 }
 
+type AnthropicCacheControl = { type: 'ephemeral'; ttl?: '5m' | '1h' }
+
 type AnthropicTool = {
   name: string
   description?: string
   input_schema: any
+  cache_control?: AnthropicCacheControl
 }
+
+type AnthropicSystemBlock = { type: 'text'; text: string; cache_control?: AnthropicCacheControl }
 
 type CreateParams = {
   model?: string
   max_tokens?: number
   temperature?: number
-  system?: string
+  /**
+   * String for simple cases; array of text blocks (each with optional
+   * `cache_control: { type: "ephemeral" }`) when you want to mark stable
+   * sections as cache-eligible. Prompt caching cuts cache-hit input cost to
+   * ~10% and latency to ~15% of a cold call.
+   */
+  system?: string | AnthropicSystemBlock[]
   messages: AnthropicMessageParam[]
   tools?: AnthropicTool[]
   tool_choice?: { type: 'tool'; name: string } | 'auto' | undefined
@@ -80,8 +91,11 @@ class Anthropic {
       const client = getClient(this.apiKey)
       const model = resolveModel(params.model || this.defaultModel)
 
-      // Split messages into system prompt + conversation
-      let systemText = params.system || ''
+      // Collect role:'system' messages + explicit params.system. When the
+      // caller passes system as an array (for cache_control markers), pass it
+      // straight through and append any role:'system' message text as a
+      // trailing uncached block. When system is a plain string, concatenate.
+      let systemParam: any = params.system ?? ''
       const conversation: any[] = []
       for (const m of params.messages) {
         if (m.role === 'system') {
@@ -92,7 +106,11 @@ class Anthropic {
                   .filter((b): b is Extract<AnthropicContentBlock, { type: 'text' }> => b.type === 'text')
                   .map((b) => b.text)
                   .join('\n')
-          systemText = systemText ? `${systemText}\n${extra}` : extra
+          if (Array.isArray(systemParam)) {
+            if (extra) systemParam = [...systemParam, { type: 'text', text: extra }]
+          } else {
+            systemParam = systemParam ? `${systemParam}\n${extra}` : extra
+          }
           continue
         }
         conversation.push({ role: m.role, content: m.content })
@@ -103,14 +121,17 @@ class Anthropic {
         max_tokens: params.max_tokens ?? 4096,
         messages: conversation,
       }
-      if (systemText) requestBody.system = systemText
+      if (Array.isArray(systemParam) ? systemParam.length > 0 : systemParam) {
+        requestBody.system = systemParam
+      }
       if (params.temperature !== undefined) requestBody.temperature = params.temperature
       if (params.tools && params.tools.length > 0) {
-        requestBody.tools = params.tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          input_schema: t.input_schema,
-        }))
+        // Pass tools through as-is — allows cache_control markers to survive.
+        requestBody.tools = params.tools.map((t) => {
+          const out: any = { name: t.name, description: t.description, input_schema: t.input_schema }
+          if (t.cache_control) out.cache_control = t.cache_control
+          return out
+        })
       }
       if (
         params.tool_choice &&
@@ -125,6 +146,10 @@ class Anthropic {
       return {
         content: response.content as unknown as AnthropicContentBlock[],
         stop_reason: response.stop_reason ?? 'stop',
+        // Expose usage so callers can log cache behavior.
+        // `cache_creation_input_tokens` > 0 → cache write (cold call).
+        // `cache_read_input_tokens` > 0    → cache hit (warm call).
+        usage: (response as any).usage ?? undefined,
       }
     },
   }
