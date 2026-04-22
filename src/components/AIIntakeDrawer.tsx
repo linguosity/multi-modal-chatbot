@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
@@ -119,11 +119,25 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
     setFiles(prev => prev.filter(f => f.id !== id))
   }
 
-  // Initialize selection with all sections when drawer opens and none selected
+  // Reset the section selection whenever the underlying report changes
+  // (navigating Report A → Report B). Without this, selectedSectionIds
+  // carries stale IDs from the previous report into the next intake call,
+  // which fails server-side validation (the old IDs don't exist for the new
+  // report). Covers both "fresh open with empty selection" and "report id
+  // changed under an already-open drawer".
+  const lastReportIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (isOpen && report?.sections && selectedSectionIds.length === 0) {
+    if (!report?.sections) return
+    const rid = report.id ?? null
+    if (rid !== lastReportIdRef.current) {
+      setSelectedSectionIds(report.sections.map(s => s.id))
+      lastReportIdRef.current = rid
+      return
+    }
+    if (isOpen && selectedSectionIds.length === 0) {
       setSelectedSectionIds(report.sections.map(s => s.id))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, report])
 
   // Listen for the "open-ai" event to open the drawer programmatically
