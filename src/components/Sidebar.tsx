@@ -1,20 +1,6 @@
 'use client'
 
-import {
-  Home,
-  Plus,
-  FileText,
-  Pen,
-  Book,
-  Eye,
-  Sparkles,
-  Library,
-  Filter,
-  LayoutList,
-  Gauge,
-  Workflow,
-  ShieldCheck,
-} from 'lucide-react'
+import { Home, Plus, Library } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useParams } from 'next/navigation'
@@ -109,85 +95,6 @@ export default function Sidebar() {
           Tool library
         </NavLink>
       </div>
-
-      {/* This report — workflow stages + report-scoped actions (Phase B will
-          lift these into a horizontal stepper above the report content.) */}
-      {inReport && (
-        <div>
-          <GroupLabel>This report</GroupLabel>
-          <NavLink
-            href={`/dashboard/reports/${id}/data`}
-            icon={FileText}
-            isActive={pathname.endsWith('/data')}
-          >
-            Data entry
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/template`}
-            icon={Pen}
-            isActive={pathname.endsWith('/template')}
-          >
-            Edit template
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/sources`}
-            icon={Book}
-            isActive={pathname.endsWith('/sources')}
-          >
-            Sources
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/pii`}
-            icon={ShieldCheck}
-            isActive={pathname.endsWith('/pii')}
-          >
-            Privacy
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/triage`}
-            icon={Filter}
-            isActive={pathname.endsWith('/triage')}
-          >
-            Triage
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/surface`}
-            icon={LayoutList}
-            isActive={pathname.endsWith('/surface')}
-          >
-            Working surface
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/convergence`}
-            icon={Gauge}
-            isActive={pathname.endsWith('/convergence')}
-          >
-            Convergence
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/canvas`}
-            icon={Workflow}
-            isActive={pathname.endsWith('/canvas')}
-          >
-            Canvas
-          </NavLink>
-          <NavLink
-            href={`/dashboard/reports/${id}/view`}
-            icon={Eye}
-            isActive={pathname.endsWith('/view')}
-          >
-            View report
-          </NavLink>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event('open-ai'))}
-            className="mx-2 flex w-[calc(100%-1rem)] items-center gap-2.5 rounded px-3 py-1.5 text-[13px] font-normal text-[#3a3a3a] transition-colors hover:bg-[#ede9dc]"
-          >
-            <Sparkles className="size-4 shrink-0 opacity-80" />
-            AI assistant
-          </button>
-        </div>
-      )}
 
       {/* Contents — table of contents, derived from report.sections.
           Progress bar moved out to the Header so it lives next to the
