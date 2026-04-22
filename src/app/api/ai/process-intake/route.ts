@@ -636,7 +636,11 @@ export async function POST(request: NextRequest) {
       const anthropic = new Anthropic()
       const response = await anthropic.messages.create({
         model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
-        max_tokens: 8192,
+        // Opus 4.7 supports up to 32k output tokens. A full SLP report
+        // extraction emits 40+ structured updates; each has 5-7 JSON fields
+        // plus prose values. 8192 truncated mid-tool-use on a real 12-section
+        // report — switching to 16384 leaves ~2x headroom.
+        max_tokens: 16384,
         system: systemBlocks,
         messages: [{ role: 'user', content: claudeUserContent as any }],
         // cache_control on the tool marks the entire tools array as cacheable.
@@ -649,7 +653,11 @@ export async function POST(request: NextRequest) {
       console.log('✅ Step 16: Claude API call returned')
       try {
         const u: any = (response as any).usage || {}
-        console.log(`  💰 Main call usage — in:${u.input_tokens} out:${u.output_tokens} cache_write:${u.cache_creation_input_tokens || 0} cache_hit:${u.cache_read_input_tokens || 0}`)
+        const sr: any = (response as any).stop_reason
+        console.log(`  💰 Main call usage — in:${u.input_tokens} out:${u.output_tokens} cache_write:${u.cache_creation_input_tokens || 0} cache_hit:${u.cache_read_input_tokens || 0} stop:${sr}`)
+        if (sr === 'max_tokens') {
+          console.warn('  ⚠️ stop_reason=max_tokens — response was truncated; bump max_tokens if this recurs')
+        }
       } catch {}
       try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai`) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_complete' }) } catch {}
