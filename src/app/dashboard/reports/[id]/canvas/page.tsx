@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -204,6 +204,7 @@ function suggestBucketId(name: string, kind: EvidenceKind, buckets: Node<BucketN
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 function CanvasInner() {
+  const router = useRouter()
   const { report } = useReport()
   const params = useParams<{ id: string }>()
   const reportId = params?.id
@@ -555,11 +556,33 @@ function CanvasInner() {
   return (
     <div className="h-full flex flex-col bg-[var(--paper)]">
       <div className="px-6 pt-5 pb-3" style={{ borderBottom: '1.5px solid var(--line)' }}>
-        <div className="wf-label">Canvas · {report?.title}</div>
-        <h1 className="wf-heading" style={{ fontSize: 26, marginTop: 4 }}>Spatial board.</h1>
-        <p className="wf-sm mt-1">
-          Drag chips into section buckets to attach them. Use <b>✦ Auto-layout</b> to let AI cluster everything by suggestion, then fine-tune.
-        </p>
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <div className="wf-label">Canvas · {report?.title}</div>
+            <h1 className="wf-heading" style={{ fontSize: 26, marginTop: 4 }}>Spatial board.</h1>
+            <p className="wf-sm mt-1">
+              Drag chips into section buckets to attach them. Use <b>✦ Auto-layout</b> to let AI cluster everything by suggestion, then fine-tune.
+            </p>
+          </div>
+          {reportId && (
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                className="wf-btn ghost sm"
+                onClick={() => router.push(`/dashboard/reports/${reportId}/surface`)}
+              >
+                ← Surface
+              </button>
+              <button
+                type="button"
+                className="wf-btn sm"
+                onClick={() => router.push(`/dashboard/reports/${reportId}/convergence`)}
+              >
+                Convergence →
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -639,6 +662,17 @@ function CanvasInner() {
               <div className="wf-heading" style={{ fontSize: 18, marginBottom: 6 }}>No evidence yet.</div>
               <div className="wf-sm">Upload files via AI intake to see chips on the canvas.</div>
             </div>
+          </div>
+        )}
+
+        {/* Legend — interaction hints, wireframe canvas-legend */}
+        {chipCount > 0 && (
+          <div className="wf-canvas-legend" aria-hidden="true">
+            <div className="wf-canvas-legend-title">How to use</div>
+            <div><b>Drag</b> chip → bucket to attach</div>
+            <div><b>Move-to ↱</b> on each chip (keyboard)</div>
+            <div><b>Auto-layout</b> clusters by AI suggestion</div>
+            <div><b>Scroll</b> to zoom, drag empty space to pan</div>
           </div>
         )}
       </div>

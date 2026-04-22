@@ -1995,6 +1995,38 @@
   outline-offset: 2px;
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * Canvas overlays — legend card + toast
+ * ────────────────────────────────────────────────────────────────────────── */
+.wf-canvas-legend {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--card-surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  box-shadow: 3px 3px 0 rgba(17, 17, 17, 0.08);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  line-height: 1.5;
+  max-width: 220px;
+  pointer-events: none;
+  z-index: 10;
+}
+.wf-canvas-legend b { color: var(--ink); font-weight: 600; }
+.wf-canvas-legend-title {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: 4px;
+}
+
 /* Respect motion preferences — WCAG 2.3.3 */
 @media (prefers-reduced-motion: reduce) {
   /* Pre-existing AI highlight animations */
