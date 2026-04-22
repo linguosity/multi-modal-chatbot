@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useReport } from '@/lib/context/ReportContext'
 import { EvidenceChip, fileKindFromType, type EvidenceKind } from '@/components/EvidenceChip'
 import { ChevronDown } from 'lucide-react'
@@ -128,6 +129,7 @@ interface UploadedFile {
 }
 
 export default function TriagePage() {
+  const router = useRouter()
   const { report } = useReport()
   const reportId = report?.id
 
@@ -322,11 +324,24 @@ export default function TriagePage() {
   return (
     <div className="min-h-full bg-[var(--paper)]">
       <div className="px-6 pt-5 pb-3" style={{ borderBottom: '1.5px solid var(--line)' }}>
-        <div className="wf-label">Step 3 · {report?.title}</div>
-        <h1 className="wf-heading" style={{ fontSize: 26, marginTop: 4 }}>Triage evidence.</h1>
-        <p className="wf-sm mt-1">
-          Linguosity pre-classified each source by section, method, and direction. Confirm each row or reroute with the dropdowns. Confirmed chips flow into the skeleton on the right.
-        </p>
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <div className="wf-label">Step 3 · {report?.title}</div>
+            <h1 className="wf-heading" style={{ fontSize: 26, marginTop: 4 }}>Triage evidence.</h1>
+            <p className="wf-sm mt-1">
+              Linguosity pre-classified each source by section, method, and direction. Confirm each row or reroute with the dropdowns. Confirmed chips flow into the skeleton on the right.
+            </p>
+          </div>
+          {reportId && (
+            <button
+              type="button"
+              className="wf-btn ghost sm shrink-0"
+              onClick={() => router.push(`/dashboard/reports/${reportId}/pii`)}
+            >
+              ← Back to PII
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', minHeight: 'calc(100vh - 180px)' }}>
@@ -513,7 +528,17 @@ export default function TriagePage() {
               <button
                 type="button"
                 className="wf-btn sm primary"
-                disabled={confirmedCount === 0}
+                disabled={confirmedCount === 0 || !reportId}
+                onClick={async () => {
+                  // Flush any pending edits before navigating so the skeleton view
+                  // sees the latest state.
+                  if (debounceRef.current) {
+                    clearTimeout(debounceRef.current)
+                    debounceRef.current = null
+                  }
+                  await flush()
+                  if (reportId) router.push(`/dashboard/reports/${reportId}/surface`)
+                }}
               >
                 Send {confirmedCount} confirmed → skeleton ▸
               </button>
