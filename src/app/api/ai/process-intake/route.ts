@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-// Gemini SDK for all AI processing
-import { getGeminiClient, resolveModel } from '@/lib/ai/gemini-client'
-import { FunctionCallingConfigMode } from '@google/genai'
+// Primary AI: Claude Opus 4.7 via anthropic-compat. Gemini is kept only for
+// audio transcription (Claude has no native audio support yet).
+import Anthropic from '@/lib/ai/anthropic-compat'
 import { processMultipleFiles, transcribeAudio, fileToBase64 } from '@/lib/ai/gemini-file-processor'
 import { validateAndCleanFieldUpdate, dataIntegrityGuard } from '@/lib/data-integrity-guard'
 import { reportContextBuilder } from '@/lib/report-context-builder'
@@ -16,7 +16,7 @@ import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { PIIRedactor, persistPIIMappings } from '@/lib/pii/redactor'
 
-// Gemini client is obtained via getGeminiClient() singleton
+// Claude client is instantiated per-request via `new Anthropic()`
 
 export async function POST(request: NextRequest) {
   console.log('🚀 === AI INTAKE API ROUTE START ===')
@@ -283,47 +283,55 @@ export async function POST(request: NextRequest) {
           try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()} ... replace`) } catch {}
         }
         if (f.type === 'application/pdf') {
-          // Send PDF to Gemini to extract a concise, report-ready "Main Points" summary for SLP
+          // Send PDF to Claude to extract a concise, report-ready "Main Points"
+          // summary for SLP. Pre-extraction keeps token cost down for the main
+          // analysis call AND gives PII redaction text to work on.
           const arrayBuffer = await f.arrayBuffer()
           const base64Data = Buffer.from(arrayBuffer).toString('base64')
 
-          const ai = getGeminiClient()
-          const pdfModel = resolveModel()
-          const pdfExtractResponse = await ai.models.generateContent({
-            model: pdfModel,
-            contents: [{
+          const pdfAnthropic = new Anthropic()
+          const pdfExtractResponse = await pdfAnthropic.messages.create({
+            model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
+            max_tokens: 2000,
+            temperature: 0.1,
+            system: [
+              'You are an expert Speech-Language Pathologist extracting MAIN POINTS from assessment PDFs for a clinical report.',
+              'Goal: produce a concise, high-signal summary tailored for SLP reporting, not a verbatim transcript.',
+              'Include only the most decision-relevant details with brief page references when clear (e.g., [p.3]).',
+              'Focus areas (use only those present):',
+              '- Demographics: name/initials, age, grade, primary language(s)',
+              '- Referral reason / concerns (parent/teacher/clinician)',
+              '- Background: medical/educational/services history; hearing/vision status',
+              '- Assessment tools used (e.g., CELF-Preschool-3, PLS-5, GFTA-3, language sample), forms, dates',
+              '- Key scores/results: core/composite/indices, subtests, scaled/standard scores, percentiles; norms/date',
+              '- Observations: attention/behavior/regulation, speech intelligibility, fluency, voice, pragmatics',
+              '- Strengths and needs: expressive/receptive/pragmatics/speech sound patterns noted',
+              '- Diagnostic impressions / eligibility (if stated)',
+              '- Recommendations: services/frequency/setting, goals focus, accommodations, home carryover',
+              'Constraints:',
+              '- Be concise (bulleted). No long quotes. No speculation. No formatting beyond bullets and short headers.',
+              '- Do not invent data. If a field is not present, omit it.',
+              '- Output strictly as plain text bullets suitable to pass onward (no JSON, no extra commentary).'
+            ].join('\n'),
+            messages: [{
               role: 'user',
-              parts: [
-                { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-                { text: `Extract the MAIN POINTS from this assessment PDF for a clinical SLP report. Be concise with bulleted format.` }
-              ]
+              content: [
+                {
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data: base64Data },
+                },
+                {
+                  type: 'text',
+                  text: 'Extract the MAIN POINTS from this assessment PDF for a clinical SLP report. Be concise with bulleted format.',
+                },
+              ],
             }],
-            config: {
-              systemInstruction: [
-                'You are an expert Speech-Language Pathologist extracting MAIN POINTS from assessment PDFs for a clinical report.',
-                'Goal: produce a concise, high-signal summary tailored for SLP reporting, not a verbatim transcript.',
-                'Include only the most decision-relevant details with brief page references when clear (e.g., [p.3]).',
-                'Focus areas (use only those present):',
-                '- Demographics: name/initials, age, grade, primary language(s)',
-                '- Referral reason / concerns (parent/teacher/clinician)',
-                '- Background: medical/educational/services history; hearing/vision status',
-                '- Assessment tools used (e.g., CELF-Preschool-3, PLS-5, GFTA-3, language sample), forms, dates',
-                '- Key scores/results: core/composite/indices, subtests, scaled/standard scores, percentiles; norms/date',
-                '- Observations: attention/behavior/regulation, speech intelligibility, fluency, voice, pragmatics',
-                '- Strengths and needs: expressive/receptive/pragmatics/speech sound patterns noted',
-                '- Diagnostic impressions / eligibility (if stated)',
-                '- Recommendations: services/frequency/setting, goals focus, accommodations, home carryover',
-                'Constraints:',
-                '- Be concise (bulleted). No long quotes. No speculation. No formatting beyond bullets and short headers.',
-                '- Do not invent data. If a field is not present, omit it.',
-                '- Output strictly as plain text bullets suitable to pass onward (no JSON, no extra commentary).'
-              ].join('\n'),
-              temperature: 0.1,
-              maxOutputTokens: 2000,
-            }
           })
 
-          const extractedTextRaw = pdfExtractResponse.text || ''
+          const extractedTextRaw = pdfExtractResponse.content
+            .filter((b: any) => b.type === 'text')
+            .map((b: any) => b.text)
+            .join('\n')
           // PII guard: redact before the text reaches the Claude/Gemini prompt.
           const { redactedText: extractedText, entitiesFound: pdfEnts } = piiRedactor.redact(extractedTextRaw)
           if (pdfEnts.length > 0) {
@@ -341,7 +349,12 @@ export async function POST(request: NextRequest) {
           const audioBlock = { type: 'text', text: `Audio transcript from ${f.name}:\n${transcript}` }
           content.push(audioBlock)
           openaiContent.push(audioBlock)
-        } else if (f.type.startsWith('text/')) {
+        } else if (
+          f.type.startsWith('text/') ||
+          f.type === 'application/rtf' ||
+          /\.(txt|md|csv|html|rtf)$/i.test(f.name)
+        ) {
+          // Read as text. RTF markup goes through verbatim; Claude handles it.
           const tRaw = await f.text()
           const { redactedText: t, entitiesFound: textEnts } = piiRedactor.redact(tRaw)
           if (textEnts.length > 0) {
@@ -503,30 +516,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid applyUpdates JSON' }, { status: 400 })
       }
     } else {
-      console.log('🤖 Step 16: Calling GPT-5 (Responses API) with required tool...')
+      console.log('🤖 Step 16: Calling Claude Opus 4.7 with forced tool...')
       try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai ... replace`) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_start' }) } catch {}
-
-      // Define Gemini function declarations
-      const geminiTools = [{
-        functionDeclarations: [{
-          name: reportSchemaTool.name,
-          description: reportSchemaTool.description,
-          parametersJsonSchema: reportSchemaTool.input_schema,
-        }]
-      }]
-
-      // Convert content to Gemini Parts
-      const toGeminiPart = (part: any) => {
-        if (part?.type === 'text' || part?.type === 'input_text') {
-          return { text: part.text }
-        }
-        if (part?.type === 'image_url') {
-          // Image URLs not supported inline; skip or convert
-          return { text: `[Image: ${part.image_url?.url || part.image_url}]` }
-        }
-        return { text: typeof part === 'string' ? part : JSON.stringify(part) }
-      }
 
       // Compose Report Schema JSON (selected sections only) to provide full structural context
       const schemaPayload: any = []
@@ -554,48 +546,53 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Build Gemini system instruction from all system messages
-      const geminiSystemInstruction = [
+      const systemInstruction = [
         systemPrompt,
         `REPORT SCHEMA (JSON, selected sections):\n${JSON.stringify(schemaPayload).slice(0, 120000)}`,
         allowedPathsText,
       ].join('\n\n')
 
-      // Build Gemini user content parts
-      const geminiUserParts = (openaiContent as any[]).map(toGeminiPart)
+      // Convert our internal content array → Anthropic content blocks.
+      // Text and image_url blocks are normalized; already-Anthropic blocks pass through.
+      const toClaudePart = (part: any) => {
+        if (part?.type === 'text' || part?.type === 'input_text') {
+          return { type: 'text', text: part.text }
+        }
+        if (part?.type === 'image_url') {
+          const url = typeof part.image_url === 'string' ? part.image_url : (part.image_url?.url || '')
+          const m = typeof url === 'string' ? url.match(/^data:([^;]+);base64,(.+)$/) : null
+          if (m) return { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }
+          return { type: 'text', text: `[Image URL: ${url}]` }
+        }
+        if (part?.type === 'image' || part?.type === 'document') return part
+        return { type: 'text', text: typeof part === 'string' ? part : JSON.stringify(part) }
+      }
+      const claudeUserContent = (openaiContent as any[]).map(toClaudePart)
 
-      const ai = getGeminiClient()
-      const geminiModel = resolveModel()
-
-      const response = await ai.models.generateContent({
-        model: geminiModel,
-        contents: [{ role: 'user', parts: geminiUserParts }],
-        config: {
-          systemInstruction: geminiSystemInstruction,
-          tools: geminiTools,
-          toolConfig: {
-            functionCallingConfig: {
-              mode: FunctionCallingConfigMode.ANY,
-              allowedFunctionNames: ['save_assessment_data'],
-            },
-          },
-        },
+      const anthropic = new Anthropic()
+      const response = await anthropic.messages.create({
+        model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
+        max_tokens: 8192,
+        system: systemInstruction,
+        messages: [{ role: 'user', content: claudeUserContent as any }],
+        tools: [reportSchemaTool],
+        tool_choice: { type: 'tool', name: 'save_assessment_data' },
       })
 
-      console.log('✅ Step 16: Gemini API call returned')
+      console.log('✅ Step 16: Claude API call returned')
       try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai`) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_complete' }) } catch {}
-      console.log('✅ Step 17: Extracting tool call from response...')
+      console.log('✅ Step 17: Extracting tool_use block from response...')
 
-      // Extract function call from Gemini response
-      const candidate = (response as any).candidates?.[0]
-      const responseParts = candidate?.content?.parts || []
-      const fcPart = responseParts.find((p: any) => p.functionCall?.name === 'save_assessment_data')
+      // Claude returns a content array; find the forced tool_use block.
+      const toolBlock: any = (response.content as any[]).find(
+        (b: any) => b?.type === 'tool_use' && b?.name === 'save_assessment_data'
+      )
 
-      if (!fcPart) {
-        console.warn('⚠️ Step 16: No function_call found. Attempting Structured Outputs fallback...')
+      if (!toolBlock) {
+        console.warn('⚠️ Step 16: No tool_use block found. Attempting Structured Outputs fallback...')
 
-        // Structured Outputs fallback via parseWithZod
+        // Structured Outputs fallback via parseWithZod (also Claude-backed)
         const UpdateSchema = z.object({
           section_id: z.string(),
           field_path: z.string(),
@@ -606,12 +603,24 @@ export async function POST(request: NextRequest) {
         })
         const UpdatesEnvelope = z.object({ updates: z.array(UpdateSchema) })
 
+        // parseWithZod is text-only — flatten content blocks to text.
+        const fallbackUserText = (openaiContent as any[])
+          .map((p: any) =>
+            p?.type === 'text' || p?.type === 'input_text'
+              ? p.text
+              : p?.type === 'image_url'
+                ? `[Image: ${p.image_url?.url || p.image_url}]`
+                : ''
+          )
+          .filter(Boolean)
+          .join('\n\n')
+
         const so = await parseWithZod(
           UpdatesEnvelope,
           'assessment_updates',
           [
             { role: 'system', content: `${systemPrompt}\n\nReturn only JSON with { updates: [...] } strictly matching the schema.` },
-            { role: 'user', content: geminiUserParts.map((p: any) => p.text || '').join('\n\n') },
+            { role: 'user', content: fallbackUserText },
           ]
         )
 
@@ -619,8 +628,11 @@ export async function POST(request: NextRequest) {
           updates = so.data.updates
           console.log(`✅ Step 17: Parsed ${updates.length} updates via Structured Outputs fallback`)
         } else {
-          // Last resort: check if response has text that contains JSON
-          const responseText = response.text || ''
+          // Last resort: look for JSON in any text block of the primary response
+          const responseText = (response.content as any[])
+            .filter((b: any) => b.type === 'text')
+            .map((b: any) => b.text)
+            .join('\n')
           let parsed: any = null
           try { parsed = JSON.parse(responseText) } catch {
             const fence = responseText.match(/```(?:json)?\n([\s\S]*?)\n```/i)
@@ -634,19 +646,18 @@ export async function POST(request: NextRequest) {
             updates = parsed.updates
             console.log(`✅ Step 17: Parsed ${updates.length} updates from text JSON fallback`)
           } else {
-            console.error('❌ Step 16: No function_call and JSON fallback failed.')
+            console.error('❌ Step 16: No tool_use and JSON fallback failed.')
             throw new Error('No tool call found in response from model')
           }
         }
       }
 
-      if (fcPart && fcPart.functionCall?.args) {
-        const args = fcPart.functionCall.args
-        updates = (args as any).updates || []
-        if (Array.isArray((args as any).domain_summary)) {
-          domainSummary = (args as any).domain_summary
+      if (toolBlock && toolBlock.input) {
+        updates = toolBlock.input.updates || []
+        if (Array.isArray(toolBlock.input.domain_summary)) {
+          domainSummary = toolBlock.input.domain_summary
         }
-        console.log(`✅ Step 17: Extracted ${updates.length} updates from model`)
+        console.log(`✅ Step 17: Extracted ${updates.length} updates from Claude`)
       }
     }
 

@@ -155,7 +155,7 @@ export default function UploadStagedPage() {
               type="file"
               multiple
               className="hidden"
-              accept="image/*,.pdf,audio/*,.docx,.csv,.txt,.html"
+              accept="image/*,.pdf,audio/*,.docx,.csv,.txt,.md,.html,.rtf"
               onChange={e => {
                 addFiles(e.target.files)
                 e.target.value = ''
