@@ -894,16 +894,60 @@ export default function DynamicStructuredBlock({
               </div>
             )
           })()}
-          {/* Dynamic Fields */}
-          <div className={`${isHeaderSection ? 'rounded-md border border-gray-200 bg-gray-50/60 p-3' : ''}`}>
-            <div className={`${isHeaderSection ? 'grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3' : 'grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6'} mb-6 items-start`}>
-            {schema.fields.map(field => (
-              <React.Fragment key={field.key}>
-                {renderField(field, data[field.key])}
-              </React.Fragment>
-            ))}
+          {/* Dynamic Fields.
+              For Student-Information-style headers, split into two lanes:
+                - Main: clinician-edited manual fields (the reps they care about)
+                - Auto-filled aside: computed / locked / AI-extracted fields
+              For non-header sections, keep the simple single-grid render so
+              those editors aren't destabilized. */}
+          {isHeaderSection ? (() => {
+            const isAutoField = (f: FieldSchema) => !!f.mode && f.mode !== 'manual'
+            const manualFields = schema.fields.filter((f) => !isAutoField(f))
+            const autoFields = schema.fields.filter(isAutoField)
+            return (
+              <div className={`mb-6 ${autoFields.length > 0 ? 'grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5 items-start' : ''}`}>
+                <div className="rounded-md border border-gray-200 bg-gray-50/60 p-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 items-start">
+                    {manualFields.map((field) => (
+                      <React.Fragment key={field.key}>
+                        {renderField(field, data[field.key])}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+                {autoFields.length > 0 && (
+                  <aside
+                    className="rounded-md border border-gray-200 bg-[#faf9f5] p-3 lg:sticky lg:top-4"
+                    aria-label="Auto-filled fields"
+                  >
+                    <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
+                      <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 12l2 2 4-4" />
+                        <path d="M12 2L4 7v6c0 5 3.8 8.5 8 9 4.2-.5 8-4 8-9V7l-8-5z" />
+                      </svg>
+                      <span>Auto-filled</span>
+                      <span className="ml-1 opacity-60">· {autoFields.length}</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      {autoFields.map((field) => (
+                        <React.Fragment key={field.key}>
+                          {renderField(field, data[field.key])}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </aside>
+                )}
+              </div>
+            )
+          })() : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 items-start">
+              {schema.fields.map((field) => (
+                <React.Fragment key={field.key}>
+                  {renderField(field, data[field.key])}
+                </React.Fragment>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       )}
 
