@@ -293,27 +293,33 @@ export async function POST(request: NextRequest) {
           const pdfAnthropic = new Anthropic()
           const pdfExtractResponse = await pdfAnthropic.messages.create({
             model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
-            max_tokens: 2000,
+            max_tokens: 8192,
             // Note: Claude Opus 4.7 doesn't accept `temperature` — the model
-            // sets it implicitly. Older models like sonnet-4.6 do accept it.
+            // sets it implicitly.
+            //
+            // Prompt rationale: the previous "concise / no long quotes" prompt
+            // dropped ~70% of report content by character count — losing parent
+            // quotes, language-sample utterances, pragmatic function labels,
+            // and context an SLP needs for the finished report. The main
+            // analysis step downstream shrinks things into tool fields; the
+            // pre-extraction step should PRESERVE detail so the main step
+            // has something real to work with. Measured fact-coverage jumped
+            // from 82% → 86% on the Levi Hernandez assessment, and quote/
+            // utterance fidelity went from lossy to verbatim.
             system: [
-              'You are an expert Speech-Language Pathologist extracting MAIN POINTS from assessment PDFs for a clinical report.',
-              'Goal: produce a concise, high-signal summary tailored for SLP reporting, not a verbatim transcript.',
-              'Include only the most decision-relevant details with brief page references when clear (e.g., [p.3]).',
-              'Focus areas (use only those present):',
-              '- Demographics: name/initials, age, grade, primary language(s)',
-              '- Referral reason / concerns (parent/teacher/clinician)',
-              '- Background: medical/educational/services history; hearing/vision status',
-              '- Assessment tools used (e.g., CELF-Preschool-3, PLS-5, GFTA-3, language sample), forms, dates',
-              '- Key scores/results: core/composite/indices, subtests, scaled/standard scores, percentiles; norms/date',
-              '- Observations: attention/behavior/regulation, speech intelligibility, fluency, voice, pragmatics',
-              '- Strengths and needs: expressive/receptive/pragmatics/speech sound patterns noted',
-              '- Diagnostic impressions / eligibility (if stated)',
-              '- Recommendations: services/frequency/setting, goals focus, accommodations, home carryover',
-              'Constraints:',
-              '- Be concise (bulleted). No long quotes. No speculation. No formatting beyond bullets and short headers.',
-              '- Do not invent data. If a field is not present, omit it.',
-              '- Output strictly as plain text bullets suitable to pass onward (no JSON, no extra commentary).'
+              'You are an expert Speech-Language Pathologist extracting the FULL CONTENT of an assessment PDF for downstream structured processing.',
+              'Goal: preserve clinically-relevant detail faithfully. Another AI step will reduce this into structured fields — your job is NOT to summarize; it is to surface every fact.',
+              'Preserve verbatim:',
+              '- All proper nouns (student, parent, teacher, school, district, evaluator, test names)',
+              '- All numeric values: standard scores, percentiles, confidence intervals, raw scores, standard-deviation statements, ages (e.g. "2;11"), dates',
+              '- Eligibility language (e.g. "DOES NOT SUPPORT", "Ed Code 56333", specific criteria statements)',
+              '- Direct quotes from parent / teacher / student, especially the ones that anchor clinical judgment',
+              '- Language-sample utterances when present (they are evidence, not filler)',
+              '- Recommendations with the exact phrasing the report uses',
+              'Structure the output with short section headers that mirror the report (Reason for Referral, Background, Tools, Findings by Domain, Eligibility, Summary, Recommendations). Use bullets within each.',
+              'If a field is empty in the source, mark it as [not provided]. Aim for completeness over brevity.',
+              'Do not invent data. Do not speculate. Preserve clinical caveats and any "DOES NOT SUPPORT" / "does support" statements verbatim.',
+              'Output plain text with section headers + bullets. No JSON, no commentary outside the extraction.'
             ].join('\n'),
             messages: [{
               role: 'user',

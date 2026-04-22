@@ -45,3 +45,4 @@ wireframes/
 # Local test fixtures (not runtime)
 test-case-study/
 test_input/
+scripts/out/
