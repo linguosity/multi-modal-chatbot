@@ -443,33 +443,68 @@ export default function DynamicStructuredBlock({
           </div>
         ))
 
-      case 'select':
+      case 'select': {
+        // §2 primitive upgrade: when the option set is short (≤5), render
+        // as a segmented control so the full answer space is visible without
+        // a dropdown interaction. Dropdown still used for longer lists.
+        const options = field.options || []
+        const useSegmented = options.length > 0 && options.length <= 5 && !isLocked
         return wrapWithHighlight(fieldPath, (
           <div key={fieldPath} className={`space-y-0.5 ${widthClass}`}>
             <LabelRow />
-            <select
-              value={value || ''}
-              onChange={(e) => updateFieldValue(e.target.value, true)}
-              className={isHeaderSection ? inputBaseClass : smallInputClass}
-              disabled={isLocked}
-              title={isLocked ? 'Locked by user settings' : undefined}
-            >
-              <option value="">Select an option...</option>
-              {(field.options || []).map((option, index) => (
-                <option key={index} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            {useSegmented ? (
+              <div
+                role="radiogroup"
+                aria-label={field.label}
+                className="inline-flex rounded-md border border-gray-300 bg-white overflow-hidden"
+              >
+                {options.map((option) => {
+                  const isSelected = value === option
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => updateFieldValue(option, true)}
+                      className={
+                        'px-3 py-1.5 text-[13px] transition-colors border-l first:border-l-0 border-gray-200 ' +
+                        (isSelected
+                          ? 'bg-terracotta text-white font-medium'
+                          : 'bg-white text-gray-700 hover:bg-gray-50')
+                      }
+                    >
+                      {option}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <select
+                value={value || ''}
+                onChange={(e) => updateFieldValue(e.target.value, true)}
+                className={isHeaderSection ? inputBaseClass : smallInputClass}
+                disabled={isLocked}
+                title={isLocked ? 'Locked by user settings' : undefined}
+              >
+                <option value="">Select an option...</option>
+                {options.map((option, index) => (
+                  <option key={index} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            )}
             {SHOW_PROVENANCE && field.source_refs?.length ? (
-              <ProvenanceChips 
-                sources={field.source_refs} 
+              <ProvenanceChips
+                sources={field.source_refs}
                 className="mt-1"
                 onOpenPreview={(ref) => setPreviewRef(ref)}
               />
             ) : null}
           </div>
         ))
+      }
 
       case 'number':
         return wrapWithHighlight(fieldPath, (
@@ -867,6 +902,52 @@ export default function DynamicStructuredBlock({
         />
       ) : (
         <div className="p-6">
+          {/* §5 per-section completion meter. Counts fields on the schema
+              (descending one level into object children) and shows how many
+              are filled. Skipped when the section has zero fields. */}
+          {(() => {
+            const isFilled = (v: unknown): boolean => {
+              if (v === null || v === undefined) return false
+              if (typeof v === 'string') return v.trim().length > 0
+              if (typeof v === 'boolean') return true
+              if (typeof v === 'number') return Number.isFinite(v)
+              if (Array.isArray(v)) return v.length > 0
+              if (typeof v === 'object') return Object.keys(v as object).length > 0
+              return !!v
+            }
+            let filled = 0
+            let total = 0
+            for (const f of schema.fields) {
+              if (f.type === 'object' && f.children?.length) {
+                const obj = (data as Record<string, unknown>)?.[f.key]
+                for (const child of f.children) {
+                  total++
+                  if (isFilled((obj as Record<string, unknown> | undefined)?.[child.key])) filled++
+                }
+              } else {
+                total++
+                if (isFilled((data as Record<string, unknown>)?.[f.key])) filled++
+              }
+            }
+            if (total === 0) return null
+            const pct = Math.round((filled / total) * 100)
+            return (
+              <div
+                className="mb-4 flex items-center gap-3"
+                aria-label={`${filled} of ${total} fields filled`}
+              >
+                <div className="h-1 flex-1 rounded-full bg-gray-200 overflow-hidden">
+                  <div
+                    className="h-full bg-terracotta transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="whitespace-nowrap text-[11.5px] text-gray-500">
+                  {filled} of {total} fields · {pct}%
+                </span>
+              </div>
+            )
+          })()}
           {(() => {
             const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
             if (!show) return null
