@@ -1075,10 +1075,12 @@ export default function DynamicStructuredBlock({
         />
       ) : (
         <div className="p-6">
-          {/* §5 per-section completion meter. Counts fields on the schema
-              (descending one level into object children) and shows how many
-              are filled. Skipped when the section has zero fields. */}
-          {(() => {
+          {/* §5 per-section completion meter.
+              Sections that already render a more meaningful progress unit
+              (eligibility "criteria decided", validity "factors decided")
+              opt out — otherwise the page would show two contradictory
+              progress meters (LING-103). */}
+          {!['eligibility_checklist', 'validity_statement'].includes(schema.key) && (() => {
             const isFilled = (v: unknown): boolean => {
               if (v === null || v === undefined) return false
               if (typeof v === 'string') return v.trim().length > 0

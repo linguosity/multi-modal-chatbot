@@ -272,13 +272,19 @@ export default function Header() {
         {!isViewMode && (
           <>
         <AIIntakeDrawer onProcessData={handleAIIntakeProcess} />
-        {/* Realtime badge */}
-        {(() => {
+        {/* Realtime/diagnostic badge — gated behind a debug env var so
+            internal channel state ("Broadcast: TIMED_OUT | PG: DISABLED")
+            isn't visible to clinicians or screen readers in production.
+            Set NEXT_PUBLIC_DEBUG_BANNER=true to bring it back in dev. */}
+        {process.env.NEXT_PUBLIC_DEBUG_BANNER === 'true' && (() => {
           const on = (realtime?.broadcast === 'SUBSCRIBED') || (realtime?.pg === 'SUBSCRIBED')
           const label = on ? 'Realtime: ON' : 'Realtime: OFF'
           const cls = on ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'
           return (
-            <span className={`hidden sm:inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${cls}`} title={`Broadcast: ${realtime?.broadcast || 'n/a'} | PG: ${realtime?.pg || 'n/a'}`}>
+            <span
+              className={`hidden sm:inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${cls}`}
+              title={`Broadcast: ${realtime?.broadcast || 'n/a'} | PG: ${realtime?.pg || 'n/a'}`}
+            >
               {label}
             </span>
           )
