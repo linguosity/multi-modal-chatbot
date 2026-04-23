@@ -30,10 +30,13 @@ export type CriterionCardProps = {
   /** Bound to the YesNoDecision. Pass `undefined` (or null) for "not yet decided". */
   decision?: boolean | null
   onDecisionChange: (next: boolean) => void
-  /** Bound to the justification TextLong. */
+  /** Bound to the justification TextLong. Pass `undefined` for the
+   *  onJustificationChange handler to hide the justification section
+   *  entirely (used by validity factors that only carry a decision). */
   justification?: string
-  onJustificationChange: (next: string) => void
+  onJustificationChange?: (next: string) => void
   justificationPlaceholder?: string
+  justificationLabel?: string
   /** Optional list of source references (file p.N, etc.) to show under the textarea. */
   evidence?: string[]
   /** Optional AI-draft action — wired by parent. If omitted, the button is hidden. */
@@ -51,6 +54,7 @@ export function CriterionCard({
   justification,
   onJustificationChange,
   justificationPlaceholder,
+  justificationLabel = 'Justification',
   evidence,
   onAIDraft,
   aiDrafting,
@@ -100,36 +104,38 @@ export function CriterionCard({
         />
       </div>
 
-      <div className="border-t border-dashed border-gray-200" />
-
-      {/* Justification */}
-      <div className="p-4">
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[11.5px] text-gray-500">Justification</span>
-          {onAIDraft && (
-            <button
-              type="button"
-              onClick={onAIDraft}
-              disabled={aiDrafting}
-              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11.5px] text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-            >
-              <Sparkles className="size-3" aria-hidden="true" />
-              {aiDrafting ? 'Drafting…' : 'AI draft'}
-            </button>
-          )}
-        </div>
-        <textarea
-          value={justification || ''}
-          onChange={(e) => onJustificationChange(e.target.value)}
-          placeholder={justificationPlaceholder}
-          className="w-full min-h-[80px] rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-terracotta focus:outline-none focus:ring-0"
-        />
-        {evidence && evidence.length > 0 && (
-          <div className="mt-2 text-[11.5px] text-gray-500">
-            Evidence from: {evidence.join(', ')}
+      {onJustificationChange && (
+        <>
+          <div className="border-t border-dashed border-gray-200" />
+          <div className="p-4">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[11.5px] text-gray-500">{justificationLabel}</span>
+              {onAIDraft && (
+                <button
+                  type="button"
+                  onClick={onAIDraft}
+                  disabled={aiDrafting}
+                  className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11.5px] text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                >
+                  <Sparkles className="size-3" aria-hidden="true" />
+                  {aiDrafting ? 'Drafting…' : 'AI draft'}
+                </button>
+              )}
+            </div>
+            <textarea
+              value={justification || ''}
+              onChange={(e) => onJustificationChange(e.target.value)}
+              placeholder={justificationPlaceholder}
+              className="w-full min-h-[80px] rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-terracotta focus:outline-none focus:ring-0"
+            />
+            {evidence && evidence.length > 0 && (
+              <div className="mt-2 text-[11.5px] text-gray-500">
+                Evidence from: {evidence.join(', ')}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }

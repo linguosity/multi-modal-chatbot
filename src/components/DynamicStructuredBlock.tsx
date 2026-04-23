@@ -18,6 +18,23 @@ import ProvenanceChips from '@/components/ui/provenance-chips'
 import { CriterionCard } from '@/components/primitives/CriterionCard'
 import type { FieldMode, SourceRef } from '@/types/field-contracts'
 
+/** Read a deep value via "a.b.c" dotted path. */
+function readPath(obj: unknown, path: string): unknown {
+  return path.split('.').reduce<any>((acc, k) => (acc == null ? acc : acc[k]), obj as any)
+}
+
+/** Write a deep value via dotted path, returning a structurally-shared copy. */
+function writePath<T extends Record<string, any>>(obj: T, path: string, val: unknown): T {
+  const [head, ...rest] = path.split('.')
+  if (rest.length === 0) {
+    return { ...obj, [head]: val } as T
+  }
+  const next = obj && typeof obj === 'object' && obj[head] && typeof obj[head] === 'object'
+    ? obj[head]
+    : {}
+  return { ...obj, [head]: writePath(next as Record<string, any>, rest.join('.'), val) } as T
+}
+
 /**
  * Per-criterion config for the Eligibility Checklist (Template C). Each
  * row binds a YesNoDecision (decisionKey: boolean) to a justification
@@ -76,6 +93,69 @@ const ELIGIBILITY_CRITERIA: Array<{
     required: true,
     definition:
       'The student\u2019s needs cannot be met without specially designed instruction. General education accommodations alone are insufficient.',
+  },
+]
+
+/**
+ * Per-criterion config for the Validity Statement (Template C). Validity
+ * uses dotted paths because the schema groups cooperation and factors
+ * into nested objects. Most factor cards are decision-only — no separate
+ * justification — and lean on `hide justification when no handler` from
+ * CriterionCard.
+ */
+const VALIDITY_CRITERIA: Array<{
+  num: string
+  title: string
+  decisionPath: string
+  justificationPath?: string
+  definition: string
+  required?: boolean
+  yesLabel?: string
+  noLabel?: string
+}> = [
+  {
+    num: '1',
+    title: 'Results provide a valid representation',
+    decisionPath: 'is_valid',
+    definition:
+      'Whether the assessment results are considered an accurate representation of the student\u2019s current speech and language skills.',
+    required: true,
+  },
+  {
+    num: '2',
+    title: 'Student was cooperative throughout',
+    decisionPath: 'student_cooperation.cooperative',
+    justificationPath: 'student_cooperation.understanding',
+    definition:
+      'Did the student engage appropriately with testing tasks throughout the session?',
+    required: true,
+  },
+  {
+    num: '3',
+    title: 'Attention factors affected validity',
+    decisionPath: 'validity_factors.attention_issues',
+    definition:
+      'Difficulty sustaining attention during testing that may have impacted results.',
+    yesLabel: 'Affected',
+    noLabel: 'Did not affect',
+  },
+  {
+    num: '4',
+    title: 'Motivation factors affected validity',
+    decisionPath: 'validity_factors.motivation_problems',
+    definition:
+      'Reduced engagement or task refusal that may have impacted results.',
+    yesLabel: 'Affected',
+    noLabel: 'Did not affect',
+  },
+  {
+    num: '5',
+    title: 'Cultural / linguistic factors affected validity',
+    decisionPath: 'validity_factors.cultural_considerations',
+    definition:
+      'Cultural or linguistic mismatch with normed populations that may have impacted score interpretation.',
+    yesLabel: 'Affected',
+    noLabel: 'Did not affect',
   },
 ]
 
@@ -1038,12 +1118,94 @@ export default function DynamicStructuredBlock({
             )
           })()}
           {/* Dynamic Fields.
-              Eligibility Checklist gets its own Template C render: a stack
-              of CriterionCards, one per criterion pair (decision +
-              justification). Student-Information-style headers split into
-              manual + auto lanes. Everything else falls through to the
-              default single-grid render. */}
-          {schema.key === 'eligibility_checklist' ? (() => {
+              Eligibility Checklist + Validity Statement get Template C
+              renders (stacks of CriterionCards). Student-Information-style
+              headers split into manual + auto lanes. Everything else falls
+              through to the default single-grid render. */}
+          {schema.key === 'validity_statement' ? (() => {
+            const setValPath = (path: string, val: unknown) => {
+              const newData = writePath(data as Record<string, any>, path, val)
+              setData(newData)
+              const generatedText = generateProseText(newData)
+              onChange(newData, generatedText)
+            }
+            const decisions = VALIDITY_CRITERIA.map((c) => readPath(data, c.decisionPath))
+            const decided = decisions.filter((v) => v === true || v === false).length
+
+            // The "other factors" string field doesn't fit the criterion
+            // pattern — render it below the cards as a plain text panel.
+            const otherFactors = (data as any)?.validity_factors?.other ?? ''
+            const customNotes = (data as any)?.student_cooperation?.custom_notes ?? ''
+
+            return (
+              <div className="mb-6 space-y-4">
+                <div
+                  className="sticky top-0 z-10 -mx-6 mb-2 flex items-center justify-between border-b border-gray-200 bg-[var(--paper)]/95 px-6 py-2 text-[12.5px] backdrop-blur"
+                  aria-label="Validity decision progress"
+                >
+                  <span className="text-gray-700">
+                    {decided} of {VALIDITY_CRITERIA.length} factors decided
+                  </span>
+                  <span className="text-gray-500">
+                    Yes/No on each factor; add notes where the picture isn&rsquo;t clean.
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {VALIDITY_CRITERIA.map((c) => {
+                    const decision = readPath(data, c.decisionPath)
+                    const justification = c.justificationPath
+                      ? (readPath(data, c.justificationPath) as string | undefined)
+                      : undefined
+                    return (
+                      <CriterionCard
+                        key={c.decisionPath}
+                        number={c.num}
+                        title={c.title}
+                        required={c.required}
+                        definition={c.definition}
+                        decision={typeof decision === 'boolean' ? decision : null}
+                        onDecisionChange={(v) => setValPath(c.decisionPath, v)}
+                        justification={typeof justification === 'string' ? justification : ''}
+                        onJustificationChange={
+                          c.justificationPath
+                            ? (v) => setValPath(c.justificationPath!, v)
+                            : undefined
+                        }
+                        justificationLabel={c.justificationPath ? 'Notes' : undefined}
+                      />
+                    )
+                  })}
+                </div>
+
+                {/* Free-text trailing fields: cooperation notes + other factors. */}
+                <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+                  <div>
+                    <label className="block text-[11.5px] text-gray-500 mb-1.5">
+                      Other cooperation observations
+                    </label>
+                    <textarea
+                      value={customNotes}
+                      onChange={(e) => setValPath('student_cooperation.custom_notes', e.target.value)}
+                      placeholder="Anything else worth recording about how the session went."
+                      className="w-full min-h-[64px] rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-terracotta focus:outline-none focus:ring-0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] text-gray-500 mb-1.5">
+                      Other validity factors
+                    </label>
+                    <textarea
+                      value={otherFactors}
+                      onChange={(e) => setValPath('validity_factors.other', e.target.value)}
+                      placeholder="Environmental, fatigue, or other factors not covered above."
+                      className="w-full min-h-[64px] rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-terracotta focus:outline-none focus:ring-0"
+                    />
+                  </div>
+                </div>
+              </div>
+            )
+          })() : schema.key === 'eligibility_checklist' ? (() => {
             // Local helper mirrors the renderField updateFieldValue flow:
             // updates data, regenerates prose, hands off to onChange.
             const setEligValue = (key: string, val: unknown) => {

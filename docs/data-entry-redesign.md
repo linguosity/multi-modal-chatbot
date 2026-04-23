@@ -390,9 +390,9 @@ need to see `first_name` to configure a field.
 | §2 SingleSelect ≤5 options → segmented | ✓ | `6a1ede4` |
 | §2 YesNoDecision + CriterionCard primitives | ✓ | `<this commit>` |
 | §4.09 Eligibility Checklist → Template C | ✓ | `<this commit>` |
+| §4.08 Validity Statement → Template C (reuses primitives) | ✓ | `<this commit>` |
 | §2 MultiSelectChips primitive | not started | — |
 | §2 RepeatingGroup as compact table | not started | — |
-| §4.08 Validity Statement → Template C (reuses primitives) | not started | — |
 | §4.06 Assessment Tools → Template D | not started | — |
 | §4.11–12 Recommendations / Accommodations → Template E | not started | — |
 | §6 Edit template two-pane + live preview | not started | — |
