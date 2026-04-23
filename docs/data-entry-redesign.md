@@ -391,7 +391,8 @@ need to see `first_name` to configure a field.
 | §2 YesNoDecision + CriterionCard primitives | ✓ | `<this commit>` |
 | §4.09 Eligibility Checklist → Template C | ✓ | `<this commit>` |
 | §4.08 Validity Statement → Template C (reuses primitives) | ✓ | `<this commit>` |
-| §2 MultiSelectChips primitive | not started | — |
+| §2 MultiSelectChips primitive | ✓ | `<this commit>` |
+| §4.12 Accommodations array fields → MultiSelectChips | ✓ | `<this commit>` |
 | §2 RepeatingGroup as compact table | not started | — |
 | §4.06 Assessment Tools → Template D | not started | — |
 | §4.11–12 Recommendations / Accommodations → Template E | not started | — |

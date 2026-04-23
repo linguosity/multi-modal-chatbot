@@ -16,6 +16,44 @@ import { useUserSettings } from '@/lib/context/UserSettingsContext'
 import FieldModeBadge from '@/components/ui/field-mode-badge'
 import ProvenanceChips from '@/components/ui/provenance-chips'
 import { CriterionCard } from '@/components/primitives/CriterionCard'
+import { MultiSelectChips } from '@/components/primitives/MultiSelectChips'
+
+/**
+ * Suggested-value seeds for known list fields. Keep these in one place so
+ * adding a new suggestion list per-field is a one-liner. Free-add is still
+ * allowed alongside suggestions — clinicians can type anything that's not
+ * on the list.
+ */
+const CHIP_SUGGESTIONS: Record<string, string[]> = {
+  testing_accommodations: [
+    'Extended time',
+    'Small group setting',
+    'Frequent breaks',
+    'Oral administration',
+    'Simplified directions',
+    'Quiet environment',
+    'Visual supports',
+  ],
+  classroom_modifications: [
+    'Break down multi-step directions',
+    'Use gestures with verbal directions',
+    'Pair simplified verbal input with visual aids',
+    'Provide written checklists',
+    'Allow extra processing time',
+    'Pre-teach vocabulary',
+    'Repeat/rephrase instructions',
+  ],
+  domains_assessed: [
+    'Articulation',
+    'Phonology',
+    'Receptive language',
+    'Expressive language',
+    'Pragmatics',
+    'Voice',
+    'Fluency',
+    'Hearing',
+  ],
+}
 import type { FieldMode, SourceRef } from '@/types/field-contracts'
 
 /** Read a deep value via "a.b.c" dotted path. */
@@ -904,29 +942,22 @@ export default function DynamicStructuredBlock({
             </div>
           ))
         } else {
-          // Handle simple arrays (comma-separated strings)
+          // Simple string arrays (e.g. testing_accommodations,
+          // classroom_modifications, domains_assessed) → MultiSelectChips
+          // with optional seeded suggestions. Replaces the old "comma-
+          // separated textarea" pattern (data-entry redesign §2 + §4.12).
+          const chipValue = Array.isArray(value) ? (value as string[]) : []
+          const suggestions = CHIP_SUGGESTIONS[field.key] ?? []
           return wrapWithHighlight(fieldPath, (
-            <div key={fieldPath} className="space-y-2 h-fit">
-              <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
-              <textarea
-                value={Array.isArray(value) ? value.join(', ') : ''}
-                onChange={(e) => {
-                  const items = e.target.value.split(',').map(item => item.trim()).filter(item => item)
-                  updateFieldValue(items, false)
-                }}
-                onBlur={(e) => {
-                  const items = e.target.value.split(',').map(item => item.trim()).filter(item => item)
-                  updateFieldValue(items, true)
-                }}
-                placeholder="Enter items separated by commas..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                rows={3}
+            <div key={fieldPath} className="space-y-1.5 h-fit">
+              <LabelRow />
+              <MultiSelectChips
+                value={chipValue}
+                onChange={(next) => updateFieldValue(next, true)}
+                suggestions={suggestions}
+                placeholder={field.placeholder || 'Type and press Enter…'}
+                ariaLabel={field.label}
               />
-              {Array.isArray(value) && value.length > 0 && (
-                <div className="text-xs text-gray-500">
-                  {value.length} item{value.length !== 1 ? 's' : ''}: {value.join(', ')}
-                </div>
-              )}
               {(() => {
                 const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
                 if (!show) return null
