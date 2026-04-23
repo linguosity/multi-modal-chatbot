@@ -385,14 +385,14 @@ need to see `first_name` to configure a field.
 | §5 Workspace / Contents sidebar grouping | ✓ | `b9e92c8` |
 | §5 Horizontal workflow stepper | ✓ | `260bf30` |
 | §5 Plain-language stage names | ✓ | `260bf30` |
-| §5 Section chrome, section-level completion meter | pending | — |
-| §5 State chips → icon-only | pending | — |
-| §2 SingleSelect ≤5 options → segmented | pending | — |
+| §5 Section chrome, section-level completion meter | ✓ | `6a1ede4` |
+| §5 State chips → icon-only | ✓ | `6a1ede4` |
+| §2 SingleSelect ≤5 options → segmented | ✓ | `6a1ede4` |
+| §2 YesNoDecision + CriterionCard primitives | ✓ | `<this commit>` |
+| §4.09 Eligibility Checklist → Template C | ✓ | `<this commit>` |
 | §2 MultiSelectChips primitive | not started | — |
-| §2 YesNoDecision + CriterionCard primitives | not started | — |
 | §2 RepeatingGroup as compact table | not started | — |
-| §4.09 Eligibility Checklist → Template C | not started | — |
-| §4.08 Validity Statement → Template C | not started | — |
+| §4.08 Validity Statement → Template C (reuses primitives) | not started | — |
 | §4.06 Assessment Tools → Template D | not started | — |
 | §4.11–12 Recommendations / Accommodations → Template E | not started | — |
 | §6 Edit template two-pane + live preview | not started | — |

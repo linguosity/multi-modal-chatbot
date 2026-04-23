@@ -15,7 +15,69 @@ import type { Json } from '@/lib/types/json'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
 import FieldModeBadge from '@/components/ui/field-mode-badge'
 import ProvenanceChips from '@/components/ui/provenance-chips'
+import { CriterionCard } from '@/components/primitives/CriterionCard'
 import type { FieldMode, SourceRef } from '@/types/field-contracts'
+
+/**
+ * Per-criterion config for the Eligibility Checklist (Template C). Each
+ * row binds a YesNoDecision (decisionKey: boolean) to a justification
+ * (justificationKey: string). Definitions render as collapsible "show
+ * definition" panels in the card.
+ */
+const ELIGIBILITY_CRITERIA: Array<{
+  num: string
+  title: string
+  decisionKey: string
+  justificationKey: string
+  definition: string
+  required?: boolean
+}> = [
+  {
+    num: '1',
+    title: 'Meets criteria for speech impairment',
+    decisionKey: 'speech_criteria',
+    justificationKey: 'speech_justification',
+    required: true,
+    definition:
+      'California Ed Code §56337(a): An articulation, voice, or fluency disorder that significantly interferes with communication and adversely affects the student\u2019s educational performance.',
+  },
+  {
+    num: '2',
+    title: 'Meets criteria for language impairment',
+    decisionKey: 'language_criteria',
+    justificationKey: 'language_justification',
+    required: true,
+    definition:
+      'California Ed Code §56337(b): A receptive and/or expressive language disorder that significantly interferes with communication and adversely affects the student\u2019s educational performance.',
+  },
+  {
+    num: '3',
+    title: 'Educational impact demonstrated',
+    decisionKey: 'educational_impact',
+    justificationKey: 'educational_impact_details',
+    required: true,
+    definition:
+      'California Ed Code §56026.5: The disorder negatively impacts the student\u2019s academic achievement, classroom participation, or functional performance — not just test scores in isolation.',
+  },
+  {
+    num: '4',
+    title: 'Adverse effect on educational performance',
+    decisionKey: 'adverse_effect',
+    justificationKey: 'adverse_effect_details',
+    required: true,
+    definition:
+      'A documented, observable effect on educational performance — examples include difficulty completing classroom assignments, participating in discussions, or accessing the curriculum.',
+  },
+  {
+    num: '5',
+    title: 'Requires special education services',
+    decisionKey: 'services_required',
+    justificationKey: 'services_justification',
+    required: true,
+    definition:
+      'The student\u2019s needs cannot be met without specially designed instruction. General education accommodations alone are insufficient.',
+  },
+]
 
 interface FieldSchema {
   key: string
@@ -976,12 +1038,80 @@ export default function DynamicStructuredBlock({
             )
           })()}
           {/* Dynamic Fields.
-              For Student-Information-style headers, split into two lanes:
-                - Main: clinician-edited manual fields (the reps they care about)
-                - Auto-filled aside: computed / locked / AI-extracted fields
-              For non-header sections, keep the simple single-grid render so
-              those editors aren't destabilized. */}
-          {isHeaderSection ? (() => {
+              Eligibility Checklist gets its own Template C render: a stack
+              of CriterionCards, one per criterion pair (decision +
+              justification). Student-Information-style headers split into
+              manual + auto lanes. Everything else falls through to the
+              default single-grid render. */}
+          {schema.key === 'eligibility_checklist' ? (() => {
+            // Local helper mirrors the renderField updateFieldValue flow:
+            // updates data, regenerates prose, hands off to onChange.
+            const setEligValue = (key: string, val: unknown) => {
+              const newData = { ...data, [key]: val }
+              setData(newData)
+              const generatedText = generateProseText(newData)
+              onChange(newData, generatedText)
+            }
+            const handledKeys = new Set<string>()
+            ELIGIBILITY_CRITERIA.forEach((c) => {
+              handledKeys.add(c.decisionKey)
+              handledKeys.add(c.justificationKey)
+            })
+            const remainingFields = schema.fields.filter((f) => !handledKeys.has(f.key))
+            const decisions = ELIGIBILITY_CRITERIA.map((c) => data?.[c.decisionKey])
+            const decided = decisions.filter((v) => v === true || v === false).length
+
+            return (
+              <div className="mb-6 space-y-4">
+                <div
+                  className="sticky top-0 z-10 -mx-6 mb-2 flex items-center justify-between border-b border-gray-200 bg-[var(--paper)]/95 px-6 py-2 text-[12.5px] backdrop-blur"
+                  aria-label="Eligibility decision progress"
+                >
+                  <span className="text-gray-700">
+                    {decided} of {ELIGIBILITY_CRITERIA.length} criteria decided
+                  </span>
+                  <span className="text-gray-500">
+                    Set the overall determination once every criterion has a Yes/No answer.
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {ELIGIBILITY_CRITERIA.map((c) => {
+                    const decision = data?.[c.decisionKey]
+                    const justification = data?.[c.justificationKey]
+                    const fieldSchema = schema.fields.find((f) => f.key === c.justificationKey)
+                    return (
+                      <CriterionCard
+                        key={c.decisionKey}
+                        number={c.num}
+                        title={c.title}
+                        required={c.required}
+                        definition={c.definition}
+                        decision={typeof decision === 'boolean' ? decision : null}
+                        onDecisionChange={(v) => setEligValue(c.decisionKey, v)}
+                        justification={typeof justification === 'string' ? justification : ''}
+                        onJustificationChange={(v) => setEligValue(c.justificationKey, v)}
+                        justificationPlaceholder={fieldSchema?.placeholder}
+                      />
+                    )
+                  })}
+                </div>
+
+                {/* Remaining fields (e.g. overall_eligibility select) below */}
+                {remainingFields.length > 0 && (
+                  <div className="rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 items-start">
+                      {remainingFields.map((field) => (
+                        <React.Fragment key={field.key}>
+                          {renderField(field, data[field.key])}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })() : isHeaderSection ? (() => {
             const isAutoField = (f: FieldSchema) => !!f.mode && f.mode !== 'manual'
             const manualFields = schema.fields.filter((f) => !isAutoField(f))
             const autoFields = schema.fields.filter(isAutoField)
