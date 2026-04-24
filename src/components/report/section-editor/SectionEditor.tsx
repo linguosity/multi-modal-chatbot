@@ -42,7 +42,7 @@ import React, {
   useState,
 } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Pencil } from 'lucide-react'
+import { Link2, Pencil } from 'lucide-react'
 import { getSlotDef } from './slots'
 import {
   makeCriterion,
@@ -1062,6 +1062,10 @@ function OutlineList(props: OutlineListProps) {
         const isBeingDragged = !!subtreeIds && subtreeIds.has(n.id)
         const slottedParagraph = n.kind === 'paragraph' && n.slot
         const slotLabel = slottedParagraph ? getSlotDef(n.slot as string)?.label ?? n.slot : null
+        const sourceRef =
+          n.kind === 'paragraph' && typeof n.source === 'string' && n.source.length > 0
+            ? n.source
+            : null
         return (
           <li
             key={n.id}
@@ -1095,6 +1099,7 @@ function OutlineList(props: OutlineListProps) {
               {slotLabel && (
                 <SlotDot label={slotLabel} />
               )}
+              {sourceRef && <SourceChevron sourceRef={sourceRef} />}
             </span>
             <div style={{ position: 'relative' }}>
               {n.kind === 'paragraph' ? (
@@ -1193,6 +1198,33 @@ function DragHandle(props: { readOnly: boolean; onPointerDown: (e: React.Pointer
     >
       ⋮⋮
     </button>
+  )
+}
+
+/**
+ * Small "linked to evidence" chevron shown when a paragraph carries
+ * a `source` reference (process-intake wrote it, evidence chip
+ * supplied it, etc). Same hover-reveal pattern as the slot dot.
+ * `title` surfaces the raw source token so clinicians can at least
+ * eyeball provenance; a future PR can upgrade this to a clickable
+ * side-panel lookup that resolves the token to a source document.
+ */
+function SourceChevron({ sourceRef }: { sourceRef: string }) {
+  return (
+    <span
+      className="se-slot-dot"
+      title={`Evidence: ${sourceRef}`}
+      aria-hidden
+      style={{
+        position: 'absolute',
+        right: -2,
+        top: 25,
+        color: 'var(--se-accent)',
+        display: 'inline-flex',
+      }}
+    >
+      <Link2 size={10} />
+    </span>
   )
 }
 

@@ -41,7 +41,6 @@ import { z } from 'zod'
 import { parseWithZod } from '@/lib/ai/structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
 import { seedContentFromStructuredData } from '@/components/report/section-editor/slot-seeding'
-import { SECTION_SCHEMAS } from '@/components/report/section-editor/slots'
 import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { PIIRedactor, persistPIIMappings } from '@/lib/pii/redactor'
@@ -1063,17 +1062,22 @@ export async function POST(request: NextRequest) {
           }
 
           // Derive the slot-annotated SectionTree from the now-current
-          // structured_data and serialize it to `content`. For section
-          // types the slot registry doesn't know about this returns
-          // null — we leave `content` alone in that case, preserving
-          // whatever the client-side editor wrote last.
+          // structured_data and serialize it to `content`. Schema-backed
+          // section types (heading / family_background / etc.) go
+          // through the flat slot registry; assessment_results and
+          // assessment_tools go through specialized handlers that emit
+          // score-card blocks for nested test records. For anything
+          // else, seedContentFromStructuredData returns null and we
+          // leave `content` alone.
           const sectionType = meta?.section_type || 'unknown'
-          const generatedContent = SECTION_SCHEMAS[sectionType]
-            ? seedContentFromStructuredData(sectionType, updatedData as Record<string, unknown>, {
-                sources: sourcesBySection[cleanedUpdate.section_id],
-                topicText: meta?.title,
-              })
-            : null
+          const generatedContent = seedContentFromStructuredData(
+            sectionType,
+            updatedData as Record<string, unknown>,
+            {
+              sources: sourcesBySection[cleanedUpdate.section_id],
+              topicText: meta?.title,
+            },
+          )
 
           const upsertRow: Record<string, unknown> = {
             id: cleanedUpdate.section_id,
