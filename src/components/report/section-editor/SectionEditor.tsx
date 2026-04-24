@@ -102,6 +102,13 @@ export interface SectionEditorProps {
   /** For a11y and analytics. */
   label?: string
 
+  /** Small monospace meta line shown in the header ("Section 03 · Apr 24"). */
+  sectionMeta?: string
+  /** Large serif title shown in the header. */
+  sectionTitle?: string
+  /** Toggle the "two views, one document" hint strip below the card. */
+  showHints?: boolean
+
   /** Disable structural edits but allow text edits. Default false. */
   readOnlyStructure?: boolean
   /** Fully disable editing. Default false. */
@@ -122,6 +129,9 @@ export default function SectionEditor(props: SectionEditorProps) {
     mode: controlledMode,
     onModeChange,
     label,
+    sectionMeta,
+    sectionTitle,
+    showHints = true,
     readOnly = false,
     readOnlyStructure = false,
     idFactory = defaultIdFactory,
@@ -436,17 +446,60 @@ export default function SectionEditor(props: SectionEditorProps) {
         color: 'var(--se-ink)',
       }}
     >
-      <ModeToggle
-        mode={mode}
-        onChange={setMode}
-        disabled={readOnly}
-        tablistId={tablistId}
-        outlineTabId={outlineTabId}
-        proseTabId={proseTabId}
-        panelId={panelId}
-        reducedMotion={prefersReduced}
-        label={label}
-      />
+      {/* Header bar: meta + serif title on the left, mode toggle on the
+          right. All three sit on the paper texture so they read as one
+          bar, matching the mockup. */}
+      <header
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          gap: 20,
+          marginBottom: 22,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          {sectionMeta && (
+            <p
+              style={{
+                fontFamily: 'var(--font-se-mono, var(--font-mono))',
+                fontSize: 11,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: 'var(--se-muted)',
+                margin: '0 0 6px',
+              }}
+            >
+              {sectionMeta}
+            </p>
+          )}
+          {sectionTitle && (
+            <h2
+              style={{
+                fontFamily: 'var(--font-se-serif, var(--font-display))',
+                fontSize: 28,
+                fontWeight: 400,
+                margin: 0,
+                lineHeight: 1.1,
+                color: 'var(--se-ink)',
+              }}
+            >
+              {sectionTitle}
+            </h2>
+          )}
+        </div>
+        <ModeToggle
+          mode={mode}
+          onChange={setMode}
+          disabled={readOnly}
+          tablistId={tablistId}
+          outlineTabId={outlineTabId}
+          proseTabId={proseTabId}
+          panelId={panelId}
+          reducedMotion={prefersReduced}
+          label={label}
+        />
+      </header>
 
       <motion.div
         role="tabpanel"
@@ -457,7 +510,6 @@ export default function SectionEditor(props: SectionEditorProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: fadeDuration, ease: 'easeOut' }}
         style={{
-          marginTop: 20,
           backgroundColor: 'var(--se-card)',
           border: '1px solid var(--se-border)',
           borderRadius: 10,
@@ -497,6 +549,36 @@ export default function SectionEditor(props: SectionEditorProps) {
           />
         )}
       </motion.div>
+
+      {showHints && <HintStrip />}
+    </div>
+  )
+}
+
+// ─── Hint strip ─────────────────────────────────────────────────────────
+
+function HintStrip() {
+  return (
+    <div
+      aria-hidden
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginTop: 16,
+        gap: 14,
+        fontFamily: 'var(--font-se-mono, var(--font-mono))',
+        fontSize: 10,
+        letterSpacing: '0.14em',
+        textTransform: 'uppercase',
+        color: 'var(--se-muted)',
+        flexWrap: 'wrap',
+      }}
+    >
+      <span>
+        A point is a paragraph · Drag ⋮ to reorder · Tab nests · Enter in prose splits
+        · ⌫ on empty removes
+      </span>
+      <span>Two views, one document</span>
     </div>
   )
 }
@@ -526,10 +608,11 @@ function ModeToggle(props: ModeToggleProps) {
       style={{
         position: 'relative',
         display: 'inline-flex',
-        padding: 4,
+        padding: 3,
         borderRadius: 999,
         border: '1px solid var(--se-border)',
-        backgroundColor: 'rgba(255,255,255,0.6)',
+        backgroundColor: 'rgba(42,36,27,0.06)',
+        flex: 'none',
       }}
     >
       <motion.div
@@ -538,12 +621,12 @@ function ModeToggle(props: ModeToggleProps) {
         transition={{ duration: slideDuration, ease: [0.4, 0, 0.2, 1] }}
         style={{
           position: 'absolute',
-          top: 4,
-          left: 4,
-          width: 'calc(50% - 4px)',
-          height: 'calc(100% - 8px)',
+          top: 3,
+          left: 3,
+          width: 'calc(50% - 3px)',
+          height: 'calc(100% - 6px)',
           borderRadius: 999,
-          backgroundColor: 'var(--se-ink)',
+          backgroundColor: 'var(--se-card)',
         }}
       />
       <ToggleTab
@@ -592,16 +675,16 @@ function ToggleTab(props: ToggleTabProps) {
       onClick={onClick}
       style={{
         position: 'relative',
-        zIndex: 1,
+        zIndex: 2,
         minWidth: 84,
-        padding: '6px 18px',
+        padding: '8px 18px',
         borderRadius: 999,
         border: 'none',
         background: 'transparent',
-        color: selected ? '#fff' : 'var(--se-ink)',
+        color: selected ? 'var(--se-ink)' : 'var(--se-muted)',
         fontFamily: 'var(--font-se-mono, var(--font-mono))',
-        fontSize: 12,
-        letterSpacing: '0.08em',
+        fontSize: 10.5,
+        letterSpacing: '0.16em',
         textTransform: 'uppercase',
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: reducedMotion ? undefined : 'color 220ms ease',

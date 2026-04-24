@@ -9,6 +9,7 @@ import { motion } from 'framer-motion'
 import SectionEditor from '@/components/report/section-editor/SectionEditor'
 import {
   contentToTree,
+  interpolateTokens,
   treeToContent,
 } from '@/components/report/section-editor/content-adapter'
 import type { SectionTree } from '@/components/report/section-editor/types'
@@ -59,9 +60,28 @@ export default function SectionPage() {
   // re-init only on section.id change — subsequent content updates that
   // originate from our own editor onChange run through setSectionContent
   // only, so ids stay stable across in-session edits.
+  //
+  // Interpolation applies here, at the client-side load boundary, because
+  // the server RSC payload hands us `content: ""` and the real template
+  // string arrives via Supabase client fetch. Running substitution here
+  // ensures `{first_name}` etc. get replaced with structured_data before
+  // the tree is built. Tradeoff: once the clinician saves, the resolved
+  // values become canonical in `content` and the original {token} is
+  // lost from that row. Acceptable for intake-style reports; a future
+  // token-preserving render layer can reverse this if a section is
+  // re-generated from source data.
   useEffect(() => {
     if (!section) return
-    setProseTree(contentToTree(section.content || ''))
+    const ctx: Record<string, unknown> = {
+      ...((section.structured_data as Record<string, unknown>) || {}),
+      student_name:
+        (section.structured_data as { first_name?: string; last_name?: string } | null)?.first_name &&
+        (section.structured_data as { first_name?: string; last_name?: string } | null)?.last_name
+          ? `${(section.structured_data as { first_name: string }).first_name} ${(section.structured_data as { last_name: string }).last_name}`
+          : undefined,
+    }
+    const interpolated = interpolateTokens(section.content || '', ctx)
+    setProseTree(contentToTree(interpolated))
   }, [section?.id])
 
   // Merge in external content updates (e.g. AI processing) when the
@@ -184,31 +204,10 @@ export default function SectionPage() {
         description: f.description,
       }))
 
+  const sectionMeta = `Section ${(currentIndex + 1).toString().padStart(2, '0')} · ${report.title}`
+
   return (
     <div className="h-full w-full flex flex-col overflow-x-hidden bg-[var(--paper)]">
-      <div
-        className="bg-[var(--card-surface)]"
-        style={{ borderBottom: '1.5px solid var(--line)' }}
-      >
-        <div className="flex items-end justify-between px-6 pt-5 pb-4">
-          <div className="flex flex-col gap-1">
-            <div className="wf-label">
-              Section {(currentIndex + 1).toString().padStart(2, '0')} · {report.title}
-            </div>
-            <motion.h1
-              key={`title-${sectionId}`}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15, delay: 0.05 }}
-              className="wf-heading"
-              style={{ fontSize: 26 }}
-            >
-              {section.title}
-            </motion.h1>
-          </div>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto overflow-x-hidden w-full">
         <motion.div
           key={sectionId}
@@ -219,7 +218,7 @@ export default function SectionPage() {
           className="w-full"
         >
           <section className="relative w-full">
-            <div className="w-full px-6 py-6">
+            <div className="w-full px-6 pt-8 pb-6">
               <div className="mx-auto max-w-3xl">
                 {proseTree && (
                   <SectionEditor
@@ -227,6 +226,8 @@ export default function SectionPage() {
                     value={proseTree}
                     onChange={handleProseTreeChange}
                     label={section.title}
+                    sectionMeta={sectionMeta}
+                    sectionTitle={section.title}
                   />
                 )}
               </div>

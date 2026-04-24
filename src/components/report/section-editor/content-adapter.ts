@@ -22,6 +22,36 @@ function tmpId(prefix = 'tmp'): SectionNodeId {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
 }
 
+/**
+ * Replace {token} placeholders in `content` with values from `ctx`.
+ *
+ * Only resolved tokens get substituted — anything whose key isn't in
+ * ctx (or whose value is null / undefined / empty string) stays as
+ * `{token}` so the clinician can still see and fill the gap.
+ *
+ * One-shot substitution: once this runs and the clinician saves, the
+ * resolved values become the stored content. The original `{token}`
+ * is lost from that row. This is the documented v1 tradeoff — fine
+ * for intake reports where the template fills in once, worse for
+ * living records where upstream data (DOB, etc.) might change after.
+ * A future pass can render tokens as live decorations over a
+ * token-preserving tree; until then, ctx is authoritative at load.
+ */
+export function interpolateTokens(
+  content: string,
+  ctx: Record<string, unknown> | null | undefined,
+): string {
+  if (!content || !ctx) return content
+  return content.replace(/\{([^{}\s]+)\}/g, (match, rawKey: string) => {
+    const key = rawKey.trim()
+    const value = ctx[key]
+    if (value === undefined || value === null || value === '') return match
+    if (Array.isArray(value)) return value.join(', ')
+    if (typeof value === 'object') return JSON.stringify(value)
+    return String(value)
+  })
+}
+
 /** Strip HTML tags → plain text, preserving paragraph breaks. */
 function stripHtml(html: string): string {
   const withBreaks = html
