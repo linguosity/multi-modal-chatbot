@@ -10,6 +10,8 @@ import DynamicStructuredBlock from '@/components/DynamicStructuredBlock'
 import TiptapEditor from '@/components/TiptapEditor'
 import { useAutosave } from '@/lib/hooks/useAutosave'
 import { motion } from 'framer-motion'
+import { useSectionUIV2 } from '@/lib/hooks/useSectionUIV2'
+import SectionPageV2 from '@/components/section/SectionPageV2'
 
 import { useToast } from '@/lib/context/ToastContext'
 
@@ -238,6 +240,49 @@ export default function SectionPage() {
       ? 'bg-[var(--card-surface)] text-[var(--ink)]'
       : 'text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--paper)]',
   ].join(' ')
+
+  // ── Section UI v2 spike (split-pane). Flag-gated; default off.
+  // Active when NEXT_PUBLIC_SECTION_UI_V2=true OR ?ui=v2 in the URL.
+  // Falls back to v1 unless we have a structured schema for this section,
+  // because v2's whole story is "render the schema as typed blocks."
+  const sectionUIV2 = useSectionUIV2()
+  if (sectionUIV2 && currentSchema && hasStructuredSchema) {
+    return (
+      <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--paper)]">
+        <SectionPageV2
+          schema={currentSchema}
+          initialData={structuredData}
+          sectionTitle={section.title}
+          sectionIndex={currentIndex}
+          totalSections={report.sections.length}
+          onChange={(data) => setStructuredData(data)}
+        />
+        {/* Section nav strip — preserved across v1/v2 so prev/next work. */}
+        {(prevSection || nextSection) && (
+          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-6 py-2">
+            <button
+              type="button"
+              disabled={!prevSection}
+              onClick={() => prevSection && navigateToSection(prevSection.id)}
+              className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              <ChevronLeft className="size-4" />
+              {prevSection ? prevSection.title : 'First section'}
+            </button>
+            <button
+              type="button"
+              disabled={!nextSection}
+              onClick={() => nextSection && navigateToSection(nextSection.id)}
+              className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              {nextSection ? nextSection.title : 'Last section'}
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="h-full w-full flex flex-col overflow-x-hidden bg-[var(--paper)]">
