@@ -1,12 +1,13 @@
 // lib/render/renderDataPoints.ts
 // Supports: string OR { heading?: string, points: DataPoint[] }
 
-// Track visited objects to prevent infinite recursion
-const visitedObjects = new WeakSet();
+// Track visited objects to prevent infinite recursion. WeakSet doesn't
+// expose a `clear()` in standard lib defs — replace the reference at the
+// start of each top-level render instead.
+let visitedObjects = new WeakSet();
 
 export function renderDataPoints(points: any[]): string {
-  // Clear visited objects for each top-level call
-  visitedObjects.clear();
+  visitedObjects = new WeakSet();
   return `<ul>${points.map(node => renderNode(node, 0)).join('')}</ul>`;
 }
 

@@ -9,7 +9,7 @@ import { useUserSettings } from '@/lib/context/UserSettingsContext'
 interface FieldSchema {
   key: string
   label: string
-  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select'
+  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select' | 'paragraph' | 'enum' | 'table'
   required?: boolean
   options?: string[]
   placeholder?: string

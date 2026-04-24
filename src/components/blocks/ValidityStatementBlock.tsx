@@ -173,7 +173,7 @@ export default function ValidityStatementBlock({ initialData = DEFAULT_DATA, onC
               <label key={factor.key} className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={data.validity_factors[factor.key as keyof typeof data.validity_factors]}
+                  checked={!!data.validity_factors[factor.key as keyof typeof data.validity_factors]}
                   onChange={(e) => updateData({
                     ...data,
                     validity_factors: { ...data.validity_factors, [factor.key]: e.target.checked }

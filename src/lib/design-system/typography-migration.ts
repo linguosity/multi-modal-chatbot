@@ -151,6 +151,8 @@ export const clinicalTypographyGuide = {
   cardTitle: { size: 'base' as TypographyScale, weight: 'medium' as const },
   breadcrumbText: { size: 'xs' as TypographyScale, weight: 'normal' as const },
   tabText: { size: 'sm' as TypographyScale, weight: 'medium' as const },
+  codeText: { size: 'xs' as TypographyScale, weight: 'medium' as const },
+  progressText: { size: 'xs' as TypographyScale, weight: 'medium' as const },
 }
 
 // Helper function to get clinical typography class

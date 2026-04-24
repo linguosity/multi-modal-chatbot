@@ -73,7 +73,6 @@ export default function UploadModal({ isOpen, onClose, onDataReceived, sectionTy
         variant="primary"
         onClick={processWithAI}
         disabled={(!textInput.trim() && files.length === 0) || isProcessing}
-        loading={isProcessing}
       >
         {isProcessing ? (
           <>

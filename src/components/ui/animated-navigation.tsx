@@ -166,7 +166,7 @@ export interface AnimatedTabItem {
   disabled?: boolean
 }
 
-export interface AnimatedTabsProps extends BaseComponentProps {
+export interface AnimatedTabsProps extends Omit<BaseComponentProps, 'variant' | 'size'> {
   /** Tab items */
   items: AnimatedTabItem[]
   /** Active tab ID */

@@ -10,7 +10,7 @@ export type LoadingStateType = 'loading' | 'success' | 'error' | 'idle'
 export type LoadingSize = 'sm' | 'md' | 'lg' | 'xl'
 export type LoadingVariant = 'default' | 'clinical' | 'minimal' | 'overlay'
 
-export interface LoadingStateProps extends BaseComponentProps {
+export interface LoadingStateProps extends Omit<BaseComponentProps, 'variant'> {
   /** Current loading state */
   state: LoadingStateType
   /** Loading message */
@@ -176,7 +176,7 @@ export function LoadingState({
         className={cn(
           sizeStyles.icon,
           stateStyles.color,
-          stateStyles.animate && 'animate-spin'
+          ('animate' in stateStyles && stateStyles.animate) && 'animate-spin'
         )}
         aria-hidden="true"
       />
@@ -258,7 +258,7 @@ export function LoadingState({
 }
 
 // Skeleton loading component
-export interface SkeletonProps extends BaseComponentProps {
+export interface SkeletonProps extends Omit<BaseComponentProps, 'variant'> {
   /** Width of skeleton */
   width?: string | number
   /** Height of skeleton */
@@ -329,7 +329,7 @@ export function Skeleton({
 }
 
 // Loading wrapper component
-export interface LoadingWrapperProps extends BaseComponentProps {
+export interface LoadingWrapperProps extends Omit<BaseComponentProps, 'variant'> {
   /** Whether content is loading */
   isLoading: boolean
   /** Loading state props */

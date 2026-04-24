@@ -20,18 +20,16 @@ export interface SectionSchema {
   prose_template?: string; // Template for generating natural language
 }
 
-// Legacy interface for backward compatibility
+// Legacy interface for backward compatibility — widened to match the
+// ASSESSMENT_RESULTS_SCHEMA shape (nested children, placeholders, the
+// full type union). New code should prefer SectionSchema above.
 export interface StructuredSchema {
   sections: {
     key: string;
     title: string;
-    fields: {
-      key: string;
-      label: string;
-      type: 'string' | 'boolean' | 'number';
-      required?: boolean;
-      options?: string[]; // For dropdown/select fields
-    }[];
+    type?: FieldSchema['type'];
+    fields?: FieldSchema[];
+    children?: FieldSchema[];
   }[];
 }
 
@@ -1074,7 +1072,7 @@ export function generateProseFromStructuredData(data: any, schema: StructuredSch
     
     prose += `**${section.title}**\n\n`;
     
-    section.fields.forEach(field => {
+    section.fields?.forEach(field => {
       const value = sectionData[field.key];
       if (value !== undefined && value !== null && value !== '') {
         if (field.type === 'boolean') {

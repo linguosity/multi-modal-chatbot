@@ -8,7 +8,7 @@ import { Label } from './label'
 import { Switch } from './switch'
 import type { FormComponentProps } from '@/lib/design-system/types'
 
-interface FormFieldProps extends FormComponentProps {
+interface FormFieldProps extends Omit<FormComponentProps, 'size' | 'defaultValue'> {
   label: string
   type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'switch'
   helpText?: string
@@ -118,7 +118,7 @@ export const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
               ref={ref as any}
               id={fieldId}
               name={name}
-              value={value || ''}
+              value={typeof value === 'boolean' ? '' : value ?? ''}
               onChange={(e) => handleChange(e.target.value)}
               placeholder={placeholder}
               disabled={disabled || loading}
@@ -146,7 +146,7 @@ export const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
               ref={ref as any}
               id={fieldId}
               name={name}
-              value={value || ''}
+              value={typeof value === 'boolean' ? '' : value ?? ''}
               onChange={(e) => handleChange(e.target.value)}
               disabled={disabled || loading}
               className={getFormFieldClasses({ hasError, disabled: disabled || loading })}
@@ -257,7 +257,7 @@ export const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
               id={fieldId}
               name={name}
               type={actualType}
-              value={value || ''}
+              value={typeof value === 'boolean' ? '' : value ?? ''}
               onChange={(e) => handleChange(e.target.value)}
               placeholder={placeholder}
               disabled={disabled || loading}

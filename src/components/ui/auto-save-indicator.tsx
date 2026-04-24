@@ -8,7 +8,7 @@ import type { BaseComponentProps } from '@/lib/design-system/types'
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'pending' | 'offline'
 
-export interface AutoSaveIndicatorProps extends BaseComponentProps {
+export interface AutoSaveIndicatorProps extends Omit<BaseComponentProps, 'variant'> {
   /** Current save status */
   status: SaveStatus
   /** Last saved timestamp */
@@ -177,7 +177,7 @@ export function AutoSaveIndicator({
       <Icon 
         className={cn(
           'h-3 w-3',
-          config.animate && 'animate-spin'
+          ('animate' in config && config.animate) && 'animate-spin'
         )} 
         aria-hidden="true"
       />

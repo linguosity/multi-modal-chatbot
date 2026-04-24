@@ -413,7 +413,7 @@ export class EnhancedFileProcessor {
           type: 'image',
           source: {
             type: 'base64',
-            media_type: file.type,
+            media_type: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
             data: base64Content
           }
         }, {

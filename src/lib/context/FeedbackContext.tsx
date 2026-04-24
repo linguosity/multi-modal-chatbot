@@ -59,12 +59,12 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const { showToast } = useToast()
 
   const notifyFieldUpdate = useCallback((
-    sectionId: string, 
-    fieldPaths: string[], 
+    sectionId: string,
+    fieldPaths: string[],
     options: FeedbackOptions = {}
   ) => {
     const {
-      showToast = false,
+      showToast: withToast = false,
       toastTitle,
       toastMessage,
       toastType = 'info',
@@ -79,7 +79,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Toast notification (ephemeral confirmation)
-    if (showToast && toastMessage) {
+    if (withToast && toastMessage) {
       showToast({
         title: toastTitle,
         description: toastMessage,
@@ -120,16 +120,16 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     options: FeedbackOptions & { undoAction?: () => void } = {}
   ) => {
     const {
-      showToast = true,
+      showToast: withToast = true,
       toastType = 'success',
       undoAction
     } = options
 
-    const message = entityName 
+    const message = entityName
       ? `${entityType} "${entityName}" saved`
       : `${entityType} saved`
 
-    if (showToast) {
+    if (withToast) {
       showToast({
         description: message,
         type: toastType,
@@ -144,7 +144,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     options: FeedbackOptions & { beforeState?: any, undoAction?: () => void } = {}
   ) => {
     const {
-      showToast = true,
+      showToast: withToast = true,
       toastTitle = 'AI Update Complete',
       toastMessage = 'Content has been generated and highlighted',
       toastType = 'success',
@@ -162,7 +162,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Toast notification with undo if available
-    if (showToast) {
+    if (withToast) {
       showToast({
         title: toastTitle,
         description: toastMessage,

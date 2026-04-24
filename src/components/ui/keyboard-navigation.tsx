@@ -22,7 +22,7 @@ import {
 import type { BaseComponentProps } from '@/lib/design-system/types'
 
 // Keyboard shortcuts help modal
-export interface KeyboardShortcutsModalProps extends BaseComponentProps {
+export interface KeyboardShortcutsModalProps extends Omit<BaseComponentProps, 'variant'> {
   /** Whether modal is open */
   isOpen: boolean
   /** Close handler */

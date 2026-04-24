@@ -133,9 +133,9 @@ export function createDatabaseHelpers<T extends Record<string, any>>(
     },
     
     buildInsertQuery: (supabase: any, data: Partial<T>, userId?: string) => {
-      const insertData = { ...data }
+      const insertData = { ...data } as Record<string, unknown>
       if (config.userIdField && userId) {
-        insertData[config.userIdField] = userId
+        insertData[config.userIdField as string] = userId
       }
       
       return supabase

@@ -2,10 +2,15 @@
 
 import React from 'react'
 
+export type KeyboardModifier = 'ctrl' | 'alt' | 'shift' | 'meta'
+
 export interface KeyboardShortcut {
   id: string
   key: string
-  modifiers?: ('ctrl' | 'alt' | 'shift' | 'meta')[]
+  /** Modifier keys to match against. String-widened so literal-typed
+   *  readonly tuples and plain string arrays both flow in without cast
+   *  noise at every call site. Invalid values are no-ops at runtime. */
+  modifiers?: readonly string[]
   description: string
   category: string
   handler: () => void
@@ -19,8 +24,10 @@ export interface KeyboardShortcutGroup {
   shortcuts: KeyboardShortcut[]
 }
 
+type ShortcutDef = { key: string; modifiers: KeyboardShortcut['modifiers']; description: string }
+
 // Common keyboard shortcuts for clinical workflows
-export const CLINICAL_SHORTCUTS = {
+export const CLINICAL_SHORTCUTS: Record<string, ShortcutDef> = {
   // File operations
   SAVE: { key: 's', modifiers: ['ctrl'], description: 'Save current report' },
   SAVE_AS: { key: 's', modifiers: ['ctrl', 'shift'], description: 'Save report as...' },
@@ -99,7 +106,7 @@ export class KeyboardShortcutManager {
   }
 
   // Unregister a keyboard shortcut
-  unregister(key: string, modifiers: string[] = []): void {
+  unregister(key: string, modifiers: readonly string[] = []): void {
     const shortcutKey = this.createShortcutKey(key, modifiers)
     this.shortcuts.delete(shortcutKey)
     
@@ -141,14 +148,14 @@ export class KeyboardShortcutManager {
   }
 
   // Create a unique key for the shortcut
-  private createShortcutKey(key: string, modifiers: string[]): string {
+  private createShortcutKey(key: string, modifiers: readonly string[]): string {
     const sortedModifiers = [...modifiers].sort()
     return `${sortedModifiers.join('+')}+${key.toLowerCase()}`
   }
 
   // Check if modifiers match
-  private modifiersMatch(event: KeyboardEvent, modifiers: string[]): boolean {
-    const eventModifiers = []
+  private modifiersMatch(event: KeyboardEvent, modifiers: readonly string[]): boolean {
+    const eventModifiers: string[] = []
     if (event.ctrlKey) eventModifiers.push('ctrl')
     if (event.altKey) eventModifiers.push('alt')
     if (event.shiftKey) eventModifiers.push('shift')
@@ -223,7 +230,7 @@ export class KeyboardShortcutManager {
 export const shortcutManager = new KeyboardShortcutManager()
 
 // Utility function to format shortcut display
-export function formatShortcut(key: string, modifiers: string[] = []): string {
+export function formatShortcut(key: string, modifiers: readonly string[] = []): string {
   const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
   
   const modifierMap = {

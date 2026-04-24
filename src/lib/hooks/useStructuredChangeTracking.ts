@@ -10,7 +10,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useChangeTracking } from '../context/ChangeTrackingContext';
 import { FieldChange } from '../structured-change-tracker';
-import { resolveFieldPath, setFieldValue } from '../field-path-resolver';
+import { fieldPathResolver } from '../field-path-resolver';
+const resolveFieldPath = fieldPathResolver.getFieldValue.bind(fieldPathResolver);
+const setFieldValue = fieldPathResolver.setFieldValue.bind(fieldPathResolver);
 
 interface StructuredChangeTrackingOptions {
   sectionId: string;

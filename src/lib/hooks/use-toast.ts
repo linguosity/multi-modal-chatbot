@@ -1,6 +1,10 @@
 import * as React from "react";
-import { ToastActionElement, ToastProps } from "@radix-ui/react-toast";
+import type { ToastProps } from "@radix-ui/react-toast";
 import { useUserSettings } from "@/lib/context/UserSettingsContext";
+
+/** @radix-ui/react-toast doesn't export ToastActionElement in this version;
+ *  surface a compatible shape locally so callers that pass an action work. */
+type ToastActionElement = React.ReactElement<{ altText: string; onClick?: () => void }>;
 
 type ToasterToast = ToastProps & {
   id: string;

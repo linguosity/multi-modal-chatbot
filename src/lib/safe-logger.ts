@@ -13,7 +13,7 @@ export function safeStringify(obj: any, space?: number): string {
     if (error instanceof TypeError && error.message.includes('circular')) {
       console.warn('🔄 Circular reference detected, using flatted for safe serialization');
       try {
-        return flattedStringify(obj, null, space);
+        return flattedStringify(obj, undefined, space);
       } catch (flattedError) {
         return '[Flatted Error: ' + flattedError + ']';
       }

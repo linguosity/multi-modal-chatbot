@@ -172,7 +172,7 @@ export function InlineBulletEditor({
                 draggedItem === bullet.id ? 'opacity-50' : 'hover:bg-gray-50'
               }`}
               draggable
-              onDragStart={(e) => handleDragStart(e, bullet.id)}
+              onDragStart={(e) => handleDragStart(e as unknown as React.DragEvent, bullet.id)}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, bullet.id)}
             >

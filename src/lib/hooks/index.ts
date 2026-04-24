@@ -4,5 +4,5 @@ export { useAsyncOperation } from './useAsyncOperation'
 export { useModal } from './useModal'
 
 export type { FormState, FormActions } from './useFormState'
-export type { AsyncOperationState, AsyncOperationActions } from './useAsyncOperation'
+export type { AsyncOperationState, AsyncOperationResult as AsyncOperationActions } from './useAsyncOperation'
 export type { ModalState, ModalActions } from './useModal'

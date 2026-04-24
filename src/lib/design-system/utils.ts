@@ -34,6 +34,7 @@ export function getButtonClasses({
   const baseClasses = 'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none'
   
   const variantClasses: Record<ColorVariant, string> = {
+    default: 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300 focus:ring-primary-500',
     primary: 'bg-primary-600 hover:bg-primary-700 text-white border-primary-600 focus:ring-primary-500',
     secondary: 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300 focus:ring-primary-500',
     success: 'bg-green-600 hover:bg-green-700 text-white border-green-600 focus:ring-green-500',
@@ -247,6 +248,7 @@ export function getStatusClasses({
  */
 export function getFocusRingClasses(color: ColorVariant = 'primary'): string {
   const colorMap: Record<ColorVariant, string> = {
+    default: 'focus:ring-gray-500',
     primary: 'focus:ring-primary-500',
     secondary: 'focus:ring-gray-500',
     success: 'focus:ring-green-500',

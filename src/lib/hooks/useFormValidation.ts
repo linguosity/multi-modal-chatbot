@@ -198,13 +198,13 @@ export function useAutoValidation(
   rules: ValidationRule[] = [],
   onError?: (error: string | null) => void
 ) {
-  const [validation] = useFormValidation()
-  
+  const [, actions] = useFormValidation()
+
   const error = useMemo(() => {
-    const validationError = validation.validateField(name, value, rules)
+    const validationError = actions.validateField(name, value, rules)
     onError?.(validationError)
     return validationError
-  }, [name, value, rules, validation, onError])
+  }, [name, value, rules, actions, onError])
 
   return error
 }

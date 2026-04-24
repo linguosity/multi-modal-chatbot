@@ -82,9 +82,9 @@ export function SectionTocItem({
           {isUpdated && (
             <div className="flex-shrink-0 relative">
               {recentUpdate?.type === 'ai_update' ? (
-                <Sparkles className="h-4 w-4 text-blue-500 animate-pulse" title={`AI updated ${recentUpdate.changes.length} fields`} />
+                <Sparkles className="h-4 w-4 text-blue-500 animate-pulse" aria-label={`AI updated ${recentUpdate.changes.length} fields`} />
               ) : (
-                <Zap className="h-4 w-4 text-green-500 animate-pulse" title="Recently updated" />
+                <Zap className="h-4 w-4 text-green-500 animate-pulse" aria-label="Recently updated" />
               )}
               {/* Pulse ring animation */}
               <div className="absolute inset-0 rounded-full bg-blue-400 opacity-75 animate-ping"></div>

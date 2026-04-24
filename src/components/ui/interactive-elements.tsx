@@ -15,7 +15,7 @@ import {
 import type { BaseComponentProps } from '@/lib/design-system/types'
 
 // Enhanced Button with micro-interactions
-export interface InteractiveButtonProps extends BaseComponentProps {
+export interface InteractiveButtonProps extends Omit<BaseComponentProps, 'variant'> {
   /** Button variant */
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'clinical'
   /** Button size */
@@ -222,7 +222,7 @@ export function InteractiveButton({
 }
 
 // Enhanced Input with micro-interactions
-export interface InteractiveInputProps extends BaseComponentProps {
+export interface InteractiveInputProps extends Omit<BaseComponentProps, 'variant' | 'size'> {
   /** Input type */
   type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url'
   /** Input value */
@@ -396,7 +396,7 @@ export function InteractiveInput({
 }
 
 // Enhanced Card with hover effects
-export interface InteractiveCardProps extends BaseComponentProps {
+export interface InteractiveCardProps extends Omit<BaseComponentProps, 'variant'> {
   /** Card variant */
   variant?: 'default' | 'clinical' | 'elevated'
   /** Whether card is clickable */

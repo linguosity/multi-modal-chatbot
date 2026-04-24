@@ -10,7 +10,7 @@ import { getClinicalTypographyClass } from '@/lib/design-system/typography-migra
 import { modalVariants, transitionClasses } from '@/lib/animations/transitions'
 import type { BaseComponentProps } from '@/lib/design-system/types'
 
-export interface BaseModalProps extends BaseComponentProps {
+export interface BaseModalProps extends Omit<BaseComponentProps, 'variant' | 'size'> {
   /** Whether modal is open */
   isOpen: boolean
   /** Close handler */

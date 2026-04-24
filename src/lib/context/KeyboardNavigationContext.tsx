@@ -24,7 +24,7 @@ export interface KeyboardNavigationContextValue {
   /** Register a temporary shortcut */
   registerShortcut: (shortcut: KeyboardShortcut) => void
   /** Unregister a temporary shortcut */
-  unregisterShortcut: (key: string, modifiers?: string[]) => void
+  unregisterShortcut: (key: string, modifiers?: readonly string[]) => void
   /** Current navigation context */
   navigationContext: string | null
   /** Set navigation context */
@@ -162,7 +162,7 @@ export function KeyboardNavigationProvider({
     shortcutManager.register(shortcut)
   }, [])
 
-  const unregisterShortcut = useCallback((key: string, modifiers: string[] = []) => {
+  const unregisterShortcut = useCallback((key: string, modifiers: readonly string[] = []) => {
     shortcutManager.unregister(key, modifiers)
   }, [])
 

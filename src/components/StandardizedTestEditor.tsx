@@ -69,9 +69,9 @@ export function StandardizedTestEditor({ tests, onChange, sectionId }: Standardi
       updatedTests[index] = {
         ...updatedTests[index],
         [parent]: {
-          ...updatedTests[index][parent as keyof StandardizedTest],
-          [child]: value
-        }
+          ...(updatedTests[index][parent as keyof StandardizedTest] as object),
+          [child]: value,
+        },
       }
     } else {
       updatedTests[index] = { ...updatedTests[index], [field]: value }

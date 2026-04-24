@@ -56,7 +56,7 @@ export function RecentUpdatesProvider({ children }: { children: React.ReactNode 
 
 
 
-  const addRecentUpdate = useCallback((sectionId: string, changes: string[], type: 'ai_update' | 'user_edit' = 'ai_update', importance: Importance = 'notice', beforeState?: any) => {
+  const addRecentUpdate = useCallback((sectionId: string, changes: string[], type: 'ai_update' | 'user_edit' | 'ai_narrative_generated' = 'ai_update', importance: Importance = 'notice', beforeState?: any) => {
     console.log(`📍 Adding recent update for section ${sectionId}:`, changes)
     
     setRecentUpdates(prev => {

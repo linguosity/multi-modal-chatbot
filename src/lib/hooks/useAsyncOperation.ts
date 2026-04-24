@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 
 export type AsyncOperationState = 'idle' | 'loading' | 'success' | 'error'
 
@@ -246,7 +246,7 @@ export function useAutoSave<T>(options: UseAutoSaveOptions<T>) {
   }, [])
 
   // Cleanup on unmount
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)

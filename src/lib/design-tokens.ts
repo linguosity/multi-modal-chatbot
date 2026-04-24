@@ -244,6 +244,7 @@ export const getSpacingClass = (property: 'p' | 'px' | 'py' | 'pt' | 'pr' | 'pb'
 
 export const getColorClass = (property: 'text' | 'bg' | 'border', variant: ColorVariant, shade?: number): string => {
   const variantMap: Record<ColorVariant, string> = {
+    default: 'slate',
     primary: 'blue',
     secondary: 'slate',
     success: 'green',
@@ -275,6 +276,7 @@ export const getBorderRadiusClass = (size: keyof typeof tokens.borderRadius): st
 // Component variant utilities
 export const getButtonVariantClasses = (variant: ColorVariant, size: SizeVariant = 'md'): string => {
   const variantClasses: Record<ColorVariant, string> = {
+    default: 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300',
     primary: 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600',
     secondary: 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300',
     success: 'bg-green-600 hover:bg-green-700 text-white border-green-600',

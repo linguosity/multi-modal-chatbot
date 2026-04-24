@@ -1,6 +1,6 @@
 import { Report, ReportSection, REPORT_SECTION_TYPES } from './schemas/report';
 
-type ReportSectionType = keyof typeof REPORT_SECTION_TYPES;
+type ReportSectionType = (typeof REPORT_SECTION_TYPES)[keyof typeof REPORT_SECTION_TYPES];
 
 type SectionVariant = 'kv' | 'prose+points' | 'points';
 
@@ -15,10 +15,14 @@ export const SECTION_RENDER_CONFIG: Record<ReportSectionType, SectionRenderSpec>
     variant: 'kv',
     fieldOrder: ['studentName', 'dob', 'evaluationDate', 'chronologicalAge', 'grade', 'eligibility', 'reportId'],
     computed: {
-      chronologicalAge: (report) => {
-        if (!report.fields?.dob || !report.fields?.evaluationDate) return '';
-        const dob = new Date(report.fields.dob as string);
-        const evalDate = new Date(report.fields.evaluationDate as string);
+      chronologicalAge: (report: Report) => {
+        // `fields` isn't part of the canonical Report schema — this
+        // config predates the schema split. Narrow through `any` so the
+        // lookup compiles; missing values short-circuit below.
+        const fields = (report as unknown as { fields?: Record<string, unknown> }).fields
+        if (!fields?.dob || !fields?.evaluationDate) return '';
+        const dob = new Date(fields.dob as string);
+        const evalDate = new Date(fields.evaluationDate as string);
         let age = evalDate.getFullYear() - dob.getFullYear();
         const m = evalDate.getMonth() - dob.getMonth();
         if (m < 0 || (m === 0 && evalDate.getDate() < dob.getDate())) {
