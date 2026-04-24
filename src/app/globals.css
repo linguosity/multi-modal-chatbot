@@ -119,6 +119,15 @@
     --se-focus: rgba(42, 36, 27, 0.06);
   }
 
+  /* contentEditable placeholder. Renders the data-placeholder text in
+   * muted color when the element is empty. Scoped to the SE editor so
+   * it can't leak into other contentEditables in the app. */
+  .se-editor [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: var(--se-muted);
+    pointer-events: none;
+  }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
