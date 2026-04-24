@@ -6,19 +6,20 @@ import { useReport } from '@/lib/context/ReportContext'
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { getSectionSchemaForType } from '@/lib/structured-schemas'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
-import DynamicStructuredBlock from '@/components/DynamicStructuredBlock'
-import TiptapEditor from '@/components/TiptapEditor'
 import { useAutosave } from '@/lib/hooks/useAutosave'
 import { motion } from 'framer-motion'
-import { useSectionUIV2 } from '@/lib/hooks/useSectionUIV2'
 import SectionPageV2 from '@/components/section/SectionPageV2'
+import SectionEditor from '@/components/report/section-editor/SectionEditor'
+import {
+  contentToTree,
+  treeToContent,
+} from '@/components/report/section-editor/content-adapter'
+import type { SectionTree } from '@/components/report/section-editor/types'
 
 import { useToast } from '@/lib/context/ToastContext'
 
 import { NarrativeView } from '@/components/NarrativeView'
 import SourcesGrid from '@/components/SourcesGrid'
-import { getClinicalTypographyClass } from '@/lib/design-system/typography-migration'
-import { cn } from '@/lib/design-system/utils'
 import { useKeyboardNavigation } from '@/lib/context/NavigationContext'
 import { safeStringify } from '@/lib/utils/safeStringify'
 import type { Json } from '@/lib/types/json'
@@ -27,151 +28,118 @@ import type { SectionSchema } from '@/lib/structured-schemas'
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
   const router = useRouter()
-  const { report, handleSave, updateSectionData } = useReport()
+  const { report, updateSectionData } = useReport()
   const { settings } = useUserSettings()
-  const [mode, setMode] = useState<'data' | 'template' | 'sources'>('data')
-  const [showJsonDebug] = useState(false)
   const [sectionContent, setSectionContent] = useState('')
   const [currentSchema, setCurrentSchema] = useState<SectionSchema | null>(null)
   const [structuredData, setStructuredData] = useState<Json>({})
-  
-  
+  const [proseTree, setProseTree] = useState<SectionTree | null>(null)
+
   const [isNavigating, setIsNavigating] = useState(false)
   const { showAIUpdateToast } = useToast()
 
-  // Get section and related data
-  const section = report?.sections.find(s => s.id === sectionId)
-  const currentIndex = report?.sections.findIndex(s => s.id === sectionId) ?? -1
+  const section = report?.sections.find((s) => s.id === sectionId)
+  const currentIndex = report?.sections.findIndex((s) => s.id === sectionId) ?? -1
   const prevSection = currentIndex > 0 ? report?.sections[currentIndex - 1] : null
-  const nextSection = currentIndex < (report?.sections.length ?? 0) - 1 ? report?.sections[currentIndex + 1] : null
+  const nextSection =
+    currentIndex < (report?.sections.length ?? 0) - 1
+      ? report?.sections[currentIndex + 1]
+      : null
 
-  const sectionSchema = section ? getSectionSchemaForType(section.sectionType, settings.preferredState) : null
+  const sectionSchema = section
+    ? getSectionSchemaForType(section.sectionType, settings.preferredState)
+    : null
   const hasStructuredSchema = !!sectionSchema
-  
-  console.log('🔧 Section schema debug:', {
-    sectionId,
-    sectionTitle: section?.title,
-    sectionType: section?.sectionType,
-    hasSchema: !!sectionSchema,
-    hasCurrentSchema: !!currentSchema,
-    mode,
-    preferredState: settings.preferredState
-  });
 
-  // Setup keyboard navigation
   useKeyboardNavigation(
-    report?.sections.map(s => ({
+    report?.sections.map((s) => ({
       id: s.id,
       title: s.title,
       status: s.isCompleted ? 'completed' : 'not-started',
-      isRequired: s.isRequired
+      isRequired: s.isRequired,
     })) || [],
-    sectionId
+    sectionId,
   )
 
-  // Initialize schema state
+  // Schema state init (structured sections only).
   useEffect(() => {
-    if (sectionSchema && !currentSchema) {
-      console.log('🔧 Setting currentSchema:', sectionSchema);
-      setCurrentSchema(sectionSchema)
-    }
+    if (sectionSchema && !currentSchema) setCurrentSchema(sectionSchema)
   }, [sectionSchema, currentSchema])
 
-  // Memoize initial data to prevent unnecessary re-renders
+  // Memoize initial structured data so SectionPageV2 doesn't remount on every parent render.
   const memoizedInitialData = useMemo(() => {
     if (!section) return {}
-    // Always use fresh data from the section
-    const baseData = section.structured_data || {}
-    console.log('🔄 SectionPage memoizedInitialData updated:', {
-      sectionId: section.id,
-      sectionTitle: section.title,
-      dataKeys: Object.keys(baseData),
-      timestamp: new Date().toISOString()
-    });
-    return baseData
+    return section.structured_data || {}
   }, [section?.structured_data, section?.id, section?.title])
 
-  // Initialize section content and structured data from report
+  // Bootstrap local state from the report-context section record.
   useEffect(() => {
-    if (section) {
-      setSectionContent(section.content || '')
-      setStructuredData(section.structured_data || {})
-    }
+    if (!section) return
+    setSectionContent(section.content || '')
+    setStructuredData(section.structured_data || {})
   }, [section])
 
-  // Update section content when report data changes (after AI processing)
+  // Rebuild the prose tree whenever we switch to a different section. We
+  // re-init only on section.id change — subsequent content updates that
+  // originate from our own editor onChange run through setSectionContent
+  // only, so ids stay stable across in-session edits.
   useEffect(() => {
-    if (report && section) {
-      const updatedSection = report.sections.find(s => s.id === sectionId)
-      if (updatedSection) {
-        // Only update if content actually changed
-        if (updatedSection.content !== section.content) {
-          console.log('📝 Updating section content from refreshed report data')
-          setSectionContent(updatedSection.content || '')
-        }
-        // Only update structured data if it's different (avoid circular refs)
-        if (updatedSection.structured_data !== section.structured_data) {
-          console.log('📝 Updating structured data from refreshed report data')
-          setStructuredData(updatedSection.structured_data || {})
-        }
-      }
+    if (!section) return
+    if (hasStructuredSchema) return
+    setProseTree(contentToTree(section.content || ''))
+  }, [section?.id, hasStructuredSchema])
+
+  // Merge in external content updates (e.g. AI processing) when the
+  // section changes under us.
+  useEffect(() => {
+    if (!report || !section) return
+    const updated = report.sections.find((s) => s.id === sectionId)
+    if (!updated) return
+    if (updated.content !== section.content) {
+      setSectionContent(updated.content || '')
+    }
+    if (updated.structured_data !== section.structured_data) {
+      setStructuredData(updated.structured_data || {})
     }
   }, [report, sectionId, section])
 
-  // Handle content changes
   const handleContentChange = useCallback((newContent: string) => {
-    console.log('🔄 SectionPage handleContentChange:', {
-      sectionId,
-      sectionTitle: section?.title,
-      contentLength: newContent.length,
-      contentPreview: newContent.substring(0, 100) + (newContent.length > 100 ? '...' : ''),
-      timestamp: new Date().toISOString()
-    });
     setSectionContent(newContent)
-  }, [sectionId, section?.title])
+  }, [])
 
-  // Save function for autosave — saves directly to report_sections (single source of truth)
-  const saveSection = useCallback(async (showToast = false) => {
-    if (!report) return
+  const handleProseTreeChange = useCallback(
+    (next: SectionTree) => {
+      setProseTree(next)
+      handleContentChange(treeToContent(next))
+    },
+    [handleContentChange],
+  )
 
-    console.log('💾 SectionPage saveSection called:', {
-      sectionId,
-      sectionTitle: section?.title,
-      contentLength: sectionContent.length,
-      hasStructuredData: Object.keys((structuredData ?? {}) as object).length > 0,
-      structuredDataKeys: Object.keys((structuredData ?? {}) as object),
-      showToast,
-      timestamp: new Date().toISOString()
-    });
+  const saveSection = useCallback(
+    async (showToast = false) => {
+      if (!report) return
+      updateSectionData(sectionId, structuredData, sectionContent)
+      if (showToast) {
+        showAIUpdateToast([], [], 'Section saved successfully')
+      }
+    },
+    [report, sectionId, sectionContent, structuredData, updateSectionData, showAIUpdateToast],
+  )
 
-    // Save directly to report_sections via context (updates in-memory + persists to DB)
-    updateSectionData(sectionId, structuredData, sectionContent)
-
-    // Show toast notification for manual saves
-    if (showToast) {
-      showAIUpdateToast([], [], 'Section saved successfully')
-    }
-  }, [report, sectionId, sectionContent, structuredData, updateSectionData, showAIUpdateToast])
-
-  // Setup autosave with better UX timing - much more responsive
   const { hasUnsavedChanges } = useAutosave({
     data: { content: sectionContent, structuredData },
-    onSave: async () => await saveSection(false), // No toast for auto-saves
-    debounceMs: 3000, // 3 seconds - much more responsive
-    enabled: !!section
+    onSave: async () => await saveSection(false),
+    debounceMs: 3000,
+    enabled: !!section,
   })
 
-  // Save on page unload/navigation - synchronous for reliability
+  // Save on navigation / tab-hide.
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (hasUnsavedChanges) {
-        // Synchronous save before leaving
-        saveSection(false)
-      }
+      if (hasUnsavedChanges) saveSection(false)
     }
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && hasUnsavedChanges) {
-        // Synchronous save when tab becomes hidden
         saveSection(false)
       }
     }
@@ -183,33 +151,25 @@ export default function SectionPage() {
     }
   }, [hasUnsavedChanges, saveSection])
 
-  // Keyboard shortcuts for saving
+  // Cmd/Ctrl+S.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+S or Cmd+S to save
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        if (hasUnsavedChanges) {
-          saveSection(true) // Show toast for keyboard saves
-        }
+        if (hasUnsavedChanges) saveSection(true)
       }
     }
-
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [saveSection, hasUnsavedChanges])
 
   const navigateToSection = (targetSectionId: string) => {
     setIsNavigating(true)
-    // Small delay to show the transition effect
     setTimeout(() => {
       router.push(`/dashboard/reports/${reportId}/${targetSectionId}`)
     }, 50)
   }
 
-  
-
-  // Early returns after all hooks
   if (!report) {
     return (
       <div className="flex items-center justify-center h-full bg-[var(--paper)]">
@@ -234,66 +194,51 @@ export default function SectionPage() {
     )
   }
 
-  const tabButtonCls = (isActive: boolean) => [
-    'px-4 py-2.5 border-r',
-    isActive
-      ? 'bg-[var(--card-surface)] text-[var(--ink)]'
-      : 'text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--paper)]',
-  ].join(' ')
-
-  // ── Section UI v2 spike (split-pane). Flag-gated; default off.
-  // Active when NEXT_PUBLIC_SECTION_UI_V2=true OR ?ui=v2 in the URL.
-  // Falls back to v1 unless we have a structured schema for this section,
-  // because v2's whole story is "render the schema as typed blocks."
-  const sectionUIV2 = useSectionUIV2()
-  if (sectionUIV2 && currentSchema && hasStructuredSchema) {
+  // ── Structured section: split-pane editor (Sources live in the inspector). ──
+  if (hasStructuredSchema && currentSchema) {
     return (
       <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--paper)]">
         <SectionPageV2
           schema={currentSchema}
-          initialData={structuredData}
+          initialData={memoizedInitialData}
           sectionTitle={section.title}
           sectionIndex={currentIndex}
           totalSections={report.sections.length}
           onChange={(data) => setStructuredData(data)}
         />
-        {/* Section nav strip — preserved across v1/v2 so prev/next work. */}
-        {(prevSection || nextSection) && (
-          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-6 py-2">
-            <button
-              type="button"
-              disabled={!prevSection}
-              onClick={() => prevSection && navigateToSection(prevSection.id)}
-              className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-            >
-              <ChevronLeft className="size-4" />
-              {prevSection ? prevSection.title : 'First section'}
-            </button>
-            <button
-              type="button"
-              disabled={!nextSection}
-              onClick={() => nextSection && navigateToSection(nextSection.id)}
-              className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-            >
-              {nextSection ? nextSection.title : 'Last section'}
-              <ChevronRight className="size-4" />
-            </button>
-          </div>
-        )}
+        <SectionNavStrip
+          prevSection={prevSection ?? null}
+          nextSection={nextSection ?? null}
+          onNavigate={navigateToSection}
+          disabled={isNavigating}
+        />
       </div>
     )
   }
 
+  // ── Prose section: outline ⇄ prose editor + Sources panel. ──
+  const uploadedFiles =
+    ((report.metadata as { uploadedFiles?: UploadedFile[] })?.uploadedFiles ?? [])
+      .map((f) => ({
+        id: f.id,
+        type: f.type as 'text' | 'pdf' | 'image' | 'audio',
+        fileName: f.name,
+        uploadDate: f.uploadDate,
+        size: f.size,
+        description: f.description,
+      }))
+
   return (
     <div className="h-full w-full flex flex-col overflow-x-hidden bg-[var(--paper)]">
-      {/* Header */}
       <div
         className="bg-[var(--card-surface)]"
         style={{ borderBottom: '1.5px solid var(--line)' }}
       >
         <div className="flex items-end justify-between px-6 pt-5 pb-4">
           <div className="flex flex-col gap-1">
-            <div className="wf-label">Section {(currentIndex + 1).toString().padStart(2, '0')} · {report.title}</div>
+            <div className="wf-label">
+              Section {(currentIndex + 1).toString().padStart(2, '0')} · {report.title}
+            </div>
             <motion.h1
               key={`title-${sectionId}`}
               initial={{ opacity: 0, y: -10 }}
@@ -306,207 +251,91 @@ export default function SectionPage() {
             </motion.h1>
           </div>
         </div>
-
-        {/* Tab Navigation */}
-        <div
-          className="flex bg-[var(--paper-2)]"
-          style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: '1px solid var(--line-2)', borderColor: 'var(--line-2)' }}
-        >
-          <button
-            onClick={() => setMode('data')}
-            className={tabButtonCls(mode === 'data')}
-            style={{ borderRightColor: 'var(--line-2)', borderBottom: mode === 'data' ? '2px solid var(--terracotta)' : '2px solid transparent' }}
-          >
-            Data entry
-          </button>
-          {hasStructuredSchema && (
-            <button
-              onClick={() => setMode('template')}
-              className={tabButtonCls(mode === 'template')}
-              style={{ borderRightColor: 'var(--line-2)', borderBottom: mode === 'template' ? '2px solid var(--terracotta)' : '2px solid transparent' }}
-            >
-              Edit template
-            </button>
-          )}
-          <button
-            onClick={() => setMode('sources')}
-            className={tabButtonCls(mode === 'sources')}
-            style={{ borderBottom: mode === 'sources' ? '2px solid var(--terracotta)' : '2px solid transparent' }}
-          >
-            Sources
-          </button>
-        </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden w-full">
-        <motion.div 
+        <motion.div
           key={sectionId}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          transition={{ 
-            duration: 0.2, 
-            ease: [0.4, 0.0, 0.2, 1] // Custom easing for smooth feel
-          }}
+          transition={{ duration: 0.2, ease: [0.4, 0.0, 0.2, 1] }}
           className="w-full"
         >
-          {/* Main Content Section */}
-          <section className={`relative w-full ${hasStructuredSchema ? 'z-10 -translate-y-px' : ''}`}>
-            {/* Content Area */}
-            <div className="bg-white rounded-t-lg w-full" data-section-content>
-              {mode === 'sources' ? (
-                <SourcesGrid 
-                  sources={(report.metadata as { uploadedFiles?: Array<{
-                    id: string;
-                    type: string;
-                    name: string;
-                    uploadDate: string;
-                    size: number;
-                    description?: string;
-                  }> })?.uploadedFiles?.map((file) => ({
-                    id: file.id,
-                    type: file.type as 'text' | 'pdf' | 'image' | 'audio',
-                    fileName: file.name,
-                    uploadDate: file.uploadDate,
-                    size: file.size,
-                    description: file.description
-                  })) || []}
-                  reportId={reportId}
-                  sectionId={sectionId}
-                />
-              ) : (
-                <div className="w-full overflow-x-hidden">
-                  {hasStructuredSchema && currentSchema && mode === 'template' ? (
-                    <DynamicStructuredBlock
-                      key={`template-${section.id}`}
-                      schema={currentSchema}
-                      initialData={memoizedInitialData}
-                      mode={mode}
-                      sectionId={section.id}
-                      onChange={(newStructuredData, generatedText) => {
-                        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
-                          console.log('🔧 SectionPage DynamicStructuredBlock onChange (template mode):', {
-                            sectionId,
-                            sectionTitle: section?.title,
-                            newStructuredDataKeys: Object.keys(newStructuredData || {}),
-                            newStructuredData: safeStringify(newStructuredData, 2),
-                            generatedTextLength: generatedText.length,
-                            timestamp: new Date().toISOString()
-                          });
-                        }
-                        setStructuredData(newStructuredData)
-                        handleContentChange(generatedText)
-                      }}
-                      onSchemaChange={(newSchema) => {
-                        console.log('Schema changed:', newSchema)
-                        setCurrentSchema(newSchema) // Actually update the schema state!
-                      }}
-                      onSaveAsTemplate={(schema) => {
-                        console.log('Save as template:', schema)
-                        // TODO: Implement save as template
-                      }}
-                    />
-                  ) : hasStructuredSchema && currentSchema && mode === 'data' ? (
-                    <DynamicStructuredBlock
-                      key={`data-${section.id}`}
-                      schema={currentSchema}
-                      initialData={memoizedInitialData}
-                      mode={mode}
-                      sectionId={section.id}
-                      onChange={(newStructuredData, generatedText) => {
-                        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
-                          console.log('🔧 SectionPage DynamicStructuredBlock onChange (data mode):', {
-                            sectionId,
-                            sectionTitle: section?.title,
-                            newStructuredDataKeys: Object.keys(newStructuredData || {}),
-                            newStructuredData: safeStringify(newStructuredData, 2),
-                            generatedTextLength: generatedText.length,
-                            timestamp: new Date().toISOString()
-                          });
-                        }
-                        setStructuredData(newStructuredData)
-                        handleContentChange(generatedText)
-                      }}
-                      onSchemaChange={(newSchema) => {
-                        console.log('Schema changed:', newSchema)
-                        setCurrentSchema(newSchema) // Actually update the schema state!
-                      }}
-                      onSaveAsTemplate={(schema) => {
-                        console.log('Save as template:', schema)
-                        // TODO: Implement save as template
-                      }}
-                    />
-                  ) : (
-                    <div className="prose max-w-none">
-                      <TiptapEditor
-                        content={sectionContent}
-                        onChange={handleContentChange}
-                        onBlur={() => saveSection(false)} // Save on blur, no toast
-                        editable={true}
-                        withBorder={false}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
+          <section className="relative w-full">
+            <div className="w-full px-6 py-6">
+              <div className="mx-auto max-w-3xl">
+                {proseTree && (
+                  <SectionEditor
+                    key={section.id}
+                    value={proseTree}
+                    onChange={handleProseTreeChange}
+                    label={section.title}
+                  />
+                )}
+              </div>
             </div>
           </section>
         </motion.div>
 
-        {/* Narrative view */}
-        {hasStructuredSchema && currentSchema && mode === 'data' && (
-          <>
-            <div className="py-6 flex items-center gap-3 px-6 bg-[var(--paper)]">
-              <div className="h-px flex-1" style={{ background: 'var(--line-2)' }} />
-              <div className="flex items-center gap-2">
-                <FileText className="h-3.5 w-3.5" style={{ color: 'var(--terracotta)' }} />
-                <span className="wf-label bold" style={{ color: 'var(--terracotta-ink)' }}>
-                  AI-generated narrative
-                </span>
-              </div>
-              <div className="h-px flex-1" style={{ background: 'var(--line-2)' }} />
-            </div>
-
-            <div className="bg-[var(--paper)] w-full pb-6">
-              <div className="w-full overflow-x-hidden px-6">
-                <NarrativeView
-                  reportId={report.id}
-                  sectionId={section.id}
-                  sectionTitle={section.title}
-                  structuredData={section.structured_data || {}}
-                  onRegenerateNarrative={async () => {
-                    console.log('Regenerating narrative for section:', section.id)
-                  }}
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* JSON Debug View */}
-        {showJsonDebug && (
-          <div className="mt-6">
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 font-mono text-sm">
-                Section JSON Data
-              </div>
-              <pre className="p-4 overflow-auto bg-gray-50 text-xs max-h-96">
-                {JSON.stringify({
-                  id: section.id,
-                  title: section.title,
-                  sectionType: section.sectionType,
-                  content: sectionContent,
-                  lastUpdated: new Date().toISOString(),
-                  schema: sectionSchema
-                }, null, 2)}
-              </pre>
-            </div>
+        {/* Sources panel — always visible below the editor on prose sections. */}
+        <div className="py-6 flex items-center gap-3 px-6 bg-[var(--paper)]">
+          <div className="h-px flex-1" style={{ background: 'var(--line-2)' }} />
+          <div className="flex items-center gap-2">
+            <FileText className="h-3.5 w-3.5" style={{ color: 'var(--terracotta)' }} />
+            <span className="wf-label bold" style={{ color: 'var(--terracotta-ink)' }}>
+              Sources
+            </span>
           </div>
-        )}
+          <div className="h-px flex-1" style={{ background: 'var(--line-2)' }} />
+        </div>
+        <div className="bg-[var(--paper)] w-full pb-6">
+          <div className="w-full overflow-x-hidden px-6">
+            <SourcesGrid sources={uploadedFiles} reportId={reportId} sectionId={sectionId} />
+          </div>
+        </div>
       </div>
 
-      {/* Footer Navigation */}
+      <SectionNavStrip
+        prevSection={prevSection ?? null}
+        nextSection={nextSection ?? null}
+        onNavigate={navigateToSection}
+        disabled={isNavigating}
+        variant="rich"
+        currentIndex={currentIndex}
+        totalSections={report.sections.length}
+      />
+    </div>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+interface UploadedFile {
+  id: string
+  type: string
+  name: string
+  uploadDate: string
+  size: number
+  description?: string
+}
+
+interface NavStripProps {
+  prevSection: { id: string; title: string } | null
+  nextSection: { id: string; title: string } | null
+  onNavigate: (id: string) => void
+  disabled: boolean
+  variant?: 'compact' | 'rich'
+  currentIndex?: number
+  totalSections?: number
+}
+
+function SectionNavStrip(props: NavStripProps) {
+  const { prevSection, nextSection, onNavigate, disabled, variant = 'compact' } = props
+  if (!prevSection && !nextSection) return null
+
+  if (variant === 'rich') {
+    return (
       <div
         className="bg-[var(--paper-2)] px-5 py-2"
         style={{ borderTop: '1px solid var(--line-2)' }}
@@ -514,22 +343,22 @@ export default function SectionPage() {
         <div className="flex justify-between items-center">
           <button
             type="button"
-            onClick={() => prevSection && navigateToSection(prevSection.id)}
-            disabled={!prevSection || isNavigating}
+            onClick={() => prevSection && onNavigate(prevSection.id)}
+            disabled={!prevSection || disabled}
             className="wf-btn sm ghost"
           >
             <ChevronLeft className="h-3 w-3" />
             <span className="truncate max-w-[220px]">{prevSection?.title || 'Previous'}</span>
           </button>
-
-          <div className="wf-ticker">
-            Section {currentIndex + 1} / {report?.sections.length || 0}
-          </div>
-
+          {typeof props.currentIndex === 'number' && typeof props.totalSections === 'number' && (
+            <div className="wf-ticker">
+              Section {props.currentIndex + 1} / {props.totalSections}
+            </div>
+          )}
           <button
             type="button"
-            onClick={() => nextSection && navigateToSection(nextSection.id)}
-            disabled={!nextSection || isNavigating}
+            onClick={() => nextSection && onNavigate(nextSection.id)}
+            disabled={!nextSection || disabled}
             className="wf-btn sm ghost"
           >
             <span className="truncate max-w-[220px]">{nextSection?.title || 'Next'}</span>
@@ -537,26 +366,29 @@ export default function SectionPage() {
           </button>
         </div>
       </div>
+    )
+  }
 
-      {/* Debug Section - only show in development */}
-      {process.env.NODE_ENV === 'development' && showJsonDebug && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Debug Information</h3>
-          <pre className="p-4 bg-white rounded border text-xs overflow-auto max-h-96">
-            {safeStringify({
-              id: section?.id,
-              title: section?.title,
-              sectionType: section?.sectionType,
-              hasStructuredSchema,
-              currentSchemaKeys: currentSchema ? Object.keys(currentSchema) : [],
-              structuredDataKeys: Object.keys((structuredData ?? {}) as object),
-              contentLength: sectionContent.length,
-              mode,
-              hasUnsavedChanges
-            }, 2)}
-          </pre>
-        </div>
-      )}
+  return (
+    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-6 py-2">
+      <button
+        type="button"
+        disabled={!prevSection || disabled}
+        onClick={() => prevSection && onNavigate(prevSection.id)}
+        className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+      >
+        <ChevronLeft className="size-4" />
+        {prevSection ? prevSection.title : 'First section'}
+      </button>
+      <button
+        type="button"
+        disabled={!nextSection || disabled}
+        onClick={() => nextSection && onNavigate(nextSection.id)}
+        className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+      >
+        {nextSection ? nextSection.title : 'Last section'}
+        <ChevronRight className="size-4" />
+      </button>
     </div>
   )
 }
