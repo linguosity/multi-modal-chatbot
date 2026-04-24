@@ -3,10 +3,10 @@ import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createRouteSupabase();
-  const { id } = params;
+  const { id } = await params;
 
   const { data: { user } } = await supabase.auth.getUser();
 

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
 import Anthropic from '@/lib/ai/anthropic-compat'
+import { z } from 'zod'
+import { parseWithZod } from '@/lib/ai/structured'
 
 const anthropic = new Anthropic({})
 
@@ -26,15 +28,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract content from sections for AI analysis
-    const sectionContents = report.sections?.map((section: any) => ({
+    interface SectionSummary { title: string; content: string; lastUpdated?: string }
+    const sectionContents: SectionSummary[] = report.sections?.map((section: any) => ({
       title: section.title,
       content: section.content || '',
-      lastUpdated: section.lastUpdated
+      lastUpdated: section.lastUpdated,
     })) || []
 
     // Sort by last updated to focus on recent work
     const recentSections = sectionContents
-      .filter(section => section.lastUpdated)
+      .filter((section): section is SectionSummary & { lastUpdated: string } => Boolean(section.lastUpdated))
       .sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
       .slice(0, 5) // Focus on 5 most recent sections
 
@@ -66,20 +69,33 @@ Examples of good summaries:
 
 Your summary:`
 
-    const response = await anthropic.messages.create({
-      model: 'gpt-5',
-      max_tokens: 100,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    })
+    // Try Structured Outputs first for a strict, predictable shape
+    const SummarySchema = z.object({ summary: z.string() })
+    const structured = await parseWithZod(
+      SummarySchema,
+      'report_activity_summary',
+      [
+        { role: 'system', content: 'Return only JSON with { summary: string }. Summary should be a single concise sentence (<= 15 words).' },
+        { role: 'user', content: prompt },
+      ],
+    )
 
-    const summary = response.content[0].type === 'text' 
-      ? response.content[0].text.trim()
-      : 'Recent work on evaluation sections'
+    let summary: string
+    if (structured.ok) {
+      summary = structured.data.summary.trim()
+    } else {
+      // Fallback to existing Anthropic-compatible path
+      const response = await anthropic.messages.create({
+        model: 'gpt-5',
+        max_tokens: 100,
+        messages: [
+          { role: 'user', content: prompt }
+        ]
+      })
+      summary = response.content[0].type === 'text'
+        ? response.content[0].text.trim()
+        : 'Recent work on evaluation sections'
+    }
 
     return NextResponse.json({ summary })
 

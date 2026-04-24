@@ -15,7 +15,7 @@ interface SourceItem {
 interface SourcesGridProps {
   sources: SourceItem[]
   reportId: string
-  sectionId: string
+  sectionId?: string
 }
 
 function getFileIcon(type: string) {

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
-// import { extractPdfTextFromArrayBuffer } from '@/lib/pdf'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { getGeminiClient, resolveModel } from '@/lib/ai/gemini-client'
+import { FunctionCallingConfigMode } from '@google/genai'
+import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,139 +13,144 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File and reportId are required' }, { status: 400 })
     }
 
-    const supabase = await createRouteSupabase();
+    const supabase = await createRouteSupabase()
     const { data: report, error: fetchError } = await supabase
       .from('reports')
       .select('*')
       .eq('id', reportId)
-      .single();
+      .single()
 
     if (fetchError || !report) {
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Report not found' }, { status: 404 })
     }
 
-    const sections = report.sections || [];
+    const sections = report.sections || []
 
     // Fetch section types to get their AI directives
-    const { data: sectionTypesData, error: sectionTypesError } = await supabase
+    const { data: sectionTypesData } = await supabase
       .from('report_section_types')
-      .select('id, ai_directive');
+      .select('id, ai_directive')
 
-    if (sectionTypesError) {
-      console.error('Error fetching section types for AI directive:', sectionTypesError);
-      // Continue without AI directives if there's an error
-    }
-
-    const sectionDirectivesMap = new Map();
+    const sectionDirectivesMap = new Map()
     if (sectionTypesData) {
-      sectionTypesData.forEach(st => {
-        sectionDirectivesMap.set(st.id, st.ai_directive);
-      });
+      sectionTypesData.forEach((st: any) => {
+        sectionDirectivesMap.set(st.id, st.ai_directive)
+      })
     }
 
     const systemPrompt = `You are an expert Speech-Language Pathologist. Extract key information from the provided PDF and map it to the appropriate sections of the report. The available sections are:\n\n${sections.map((s: any) => {
-      const directive = sectionDirectivesMap.get(s.id);
-      return `- ${s.id}: ${s.title}${directive ? ` (AI Directive: ${directive})` : ''}`;
-    }).join('\n')}`;
+      const directive = sectionDirectivesMap.get(s.id)
+      return `- ${s.id}: ${s.title}${directive ? ` (AI Directive: ${directive})` : ''}`
+    }).join('\n')}`
 
     // Validate file type and size
     if (file.type !== 'application/pdf') {
       return NextResponse.json({ error: 'Only PDF files are supported' }, { status: 400 })
     }
 
-    if (file.size > 32 * 1024 * 1024) { // 32MB limit
-      return NextResponse.json({ error: 'File size exceeds 32MB limit' }, { status: 400 })
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit for Gemini
+      return NextResponse.json({ error: 'File size exceeds 50MB limit' }, { status: 400 })
     }
 
-    // Upload PDF to Anthropic Files API (beta) and let Claude handle extraction
-    console.log(`📄 Processing PDF via Claude: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`)
-    const uploaded = await anthropic.beta.files.upload({ file })
+    // Convert PDF to base64 for inline Gemini processing
+    console.log(`📄 Processing PDF via Gemini: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`)
+    const arrayBuffer = await file.arrayBuffer()
+    const base64Data = Buffer.from(arrayBuffer).toString('base64')
 
-    // Define tool for structured updates
+    // Define tool for structured updates (Gemini function declaration format)
     const reportSchemaTool = {
-      name: "save_assessment_data",
-      description: "Extracts and saves structured data from a speech-language assessment report.",
-      input_schema: {
-        type: "object" as const,
+      name: 'save_assessment_data',
+      description: 'Extracts and saves structured data from a speech-language assessment report.',
+      parametersJsonSchema: {
+        type: 'object',
         properties: {
           updates: {
-            type: "array",
-            description: "Array of field updates to apply to the report sections",
+            type: 'array',
+            description: 'Array of field updates to apply to the report sections',
             items: {
-              type: "object",
+              type: 'object',
               properties: {
-                section_id: { 
-                  type: "string", 
-                  description: "ID of the section to update" 
+                section_id: {
+                  type: 'string',
+                  description: 'ID of the section to update',
                 },
-                field_path: { 
-                  type: "string", 
-                  description: "Dot notation path to the field (e.g., 'assessment_results.wisc_scores.verbal_iq' or 'simple_array.0')" 
+                field_path: {
+                  type: 'string',
+                  description: "Dot notation path to the field (e.g., 'assessment_results.wisc_scores.verbal_iq')",
                 },
-                value: { 
-                  description: "New value for the field - can be string, number, boolean, array, or object"
+                value: {
+                  description: 'New value for the field - can be string, number, boolean, array, or object',
                 },
-                merge_strategy: { 
-                  type: "string",
-                  enum: ["replace", "append", "merge"], 
-                  description: "How to handle existing data: replace (overwrite), append (add to arrays/strings), merge (combine objects)" 
+                merge_strategy: {
+                  type: 'string',
+                  enum: ['replace', 'append', 'merge'],
+                  description: 'How to handle existing data',
                 },
               },
-              required: ["section_id", "field_path", "value", "merge_strategy"]
-            }
+              required: ['section_id', 'field_path', 'value', 'merge_strategy'],
+            },
           },
         },
-        required: ["updates"]
-      }
-    };
+        required: ['updates'],
+      },
+    }
 
-    const response = await anthropic.beta.messages.create({
-      model: process.env.CLAUDE_MODEL || 'claude-opus-4-1-20250805',
-      max_tokens: 4000,
-      temperature: 0.1,
-      system: systemPrompt,
-      messages: [
+    const ai = getGeminiClient()
+    const model = resolveModel()
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
         {
           role: 'user',
-          content: [
+          parts: [
             {
-              type: 'document',
-              title: file.name,
-              source: { type: 'file', file_id: uploaded.id },
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: base64Data,
+              },
             },
             {
-              type: 'text',
-              text: 'Please extract key information and return updates via save_assessment_data only.'
-            }
-          ]
-        }
+              text: 'Please extract key information and return updates via save_assessment_data only.',
+            },
+          ],
+        },
       ],
-      tools: [reportSchemaTool],
-      tool_choice: { type: 'tool', name: 'save_assessment_data' }
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.1,
+        maxOutputTokens: 4000,
+        tools: [{ functionDeclarations: [reportSchemaTool] }],
+        toolConfig: {
+          functionCallingConfig: {
+            mode: FunctionCallingConfigMode.ANY,
+            allowedFunctionNames: ['save_assessment_data'],
+          },
+        },
+      },
     })
 
-    const toolCall = response.content.find(
-      (block): block is { type: 'tool_use'; id: string; name: string; input: any } =>
-        (block as any).type === 'tool_use'
-    )
+    // Extract function call from response
+    const candidate = (response as any).candidates?.[0]
+    const parts = candidate?.content?.parts || []
+    const fcPart = parts.find((p: any) => p.functionCall)
 
-    if (!toolCall) {
-      throw new Error('No tool use found in response from model');
+    if (!fcPart?.functionCall?.args) {
+      throw new Error('No tool use found in response from model')
     }
 
     return NextResponse.json({
       success: true,
-      analysis: toolCall.input,
+      analysis: fcPart.functionCall.args,
       fileName: file.name,
       fileSize: file.size,
-    });
-
+    })
   } catch (error) {
     console.error('PDF processing error:', error)
     return NextResponse.json(
       {
         error: 'Failed to process PDF',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     )

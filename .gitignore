@@ -29,3 +29,20 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Claude Code workspace (local settings + worktrees)
+.claude/
+
+# Supabase CLI state
+supabase/.temp/
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+
+# Wireframe reference bundle (design source, not runtime)
+wireframes/
+
+# Local test fixtures (not runtime)
+test-case-study/
+test_input/
+scripts/out/

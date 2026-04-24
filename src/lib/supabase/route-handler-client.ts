@@ -9,19 +9,16 @@ export async function createRouteSupabase() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get: (name) => cookieStore.get(name)?.value ?? null,
-        set: (name, value, opts) => {
-          try {
-            cookieStore.set({ name, value, ...opts })
-          } catch (error) {
-            console.warn({ error }, 'Error setting cookie in Route Handler')
-          }
+        getAll() {
+          return cookieStore.getAll()
         },
-        remove: (name, opts) => {
+        setAll(cookiesToSet) {
           try {
-            cookieStore.delete({ name, ...opts })
-          } catch (error) {
-            console.warn({ error }, 'Error removing cookie in Route Handler')
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // setAll called from Server Component — safe to ignore
           }
         },
       },

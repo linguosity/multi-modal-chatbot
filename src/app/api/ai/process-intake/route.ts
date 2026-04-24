@@ -1,25 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-// Claude SDK for PDF document analysis
-import Anthropic from '@anthropic-ai/sdk'
-// OpenAI for GPT-5 + vision + tools
-import OpenAI from 'openai'
-import { processMultipleFiles, transcribeAudio, fileToBase64 } from '@/lib/file-processing'
+// Primary AI: Claude Opus 4.7 via anthropic-compat. Gemini is kept only for
+// audio transcription (Claude has no native audio support yet).
+import Anthropic from '@/lib/ai/anthropic-compat'
+
+/**
+ * Consume a Claude response's content array and build a single string with
+ * citation pages inlined after their cited text (as [p.N] or [p.N-M]).
+ *
+ * Requires citations to have been enabled on the source document block with
+ * `citations: { enabled: true }`. Each text block may carry its own citations
+ * array — we surface them as suffixes so downstream steps (the main tool-use
+ * analyzer) can copy the page ref into source_reference.
+ */
+function inlinePageRefs(content: any[]): string {
+  const parts: string[] = []
+  for (const b of Array.isArray(content) ? content : []) {
+    if (b?.type !== 'text') continue
+    const citations = Array.isArray(b.citations) ? b.citations : []
+    const pages = new Set<string>()
+    for (const c of citations) {
+      if (c?.type === 'page_location' && typeof c.start_page_number === 'number') {
+        const s = c.start_page_number
+        const e = c.end_page_number
+        pages.add(s && e && s !== e ? `p.${s}-${e}` : `p.${s}`)
+      }
+    }
+    const ref = pages.size > 0 ? ` [${Array.from(pages).join(', ')}]` : ''
+    parts.push((b.text || '') + ref)
+  }
+  return parts.join('\n')
+}
+import { processMultipleFiles, transcribeAudio, fileToBase64 } from '@/lib/ai/gemini-file-processor'
 import { validateAndCleanFieldUpdate, dataIntegrityGuard } from '@/lib/data-integrity-guard'
 import { reportContextBuilder } from '@/lib/report-context-builder'
 // PDF text extraction disabled to avoid native 'canvas' dependency
 import { validatePathAgainstSchema, coerceValueToSchema } from '@/lib/value-normalizer'
 import { SectionSchema, ASSESSMENT_RESULTS_SECTION, ASSESSMENT_TOOLS_SECTION, VALIDITY_STATEMENT_SECTION, REASON_FOR_REFERRAL_SECTION, LANGUAGE_SAMPLE_SECTION, CONCLUSION_SECTION, RECOMMENDATIONS_SECTION, ACCOMMODATIONS_SECTION } from '@/lib/structured-schemas'
+import { z } from 'zod'
+import { parseWithZod } from '@/lib/ai/structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
+import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { PIIRedactor, persistPIIMappings } from '@/lib/pii/redactor'
 
-const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  project: process.env.OPENAI_PROJECT || process.env.OPENAI_PROJECT_ID,
-})
+// Claude client is instantiated per-request via `new Anthropic()`
 
 export async function POST(request: NextRequest) {
   console.log('🚀 === AI INTAKE API ROUTE START ===')
+
+  // Hoisted so the catch block at the bottom can tear down the SSE stream +
+  // Supabase realtime channel even when the try body throws early.
+  let operationId: string | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let broadcastChannel: any = null
 
   try {
     console.log('✅ Step 1: API route handler called successfully')
@@ -32,6 +66,7 @@ export async function POST(request: NextRequest) {
     console.log('✅ Step 4: reportId extracted:', reportId)
 
     const sectionIdsRaw = formData.get('sectionIds') as string || '[]'
+    operationId = (formData.get('operationId') as string | null) || null
     const sectionInfoRaw = formData.get('sectionInfo') as string | null
     const sectionSchemasRaw = formData.get('sectionSchemas') as string | null
     console.log('✅ Step 5: sectionIds raw:', sectionIdsRaw)
@@ -43,13 +78,23 @@ export async function POST(request: NextRequest) {
 
     const replace = formData.get('replace') === 'true'
     const dryRun = formData.get('dryRun') === 'true'
-    const text = formData.get('text') as string
+    const rawText = formData.get('text') as string
+
+    // ── PII guard (design review §10) ─────────────────────────────────────
+    // Redact PII from the user-provided context text BEFORE it reaches the
+    // Claude / Gemini prompts. File-extracted text (PDF/audio) gets the same
+    // treatment below as it enters the content pipeline.
+    const piiRedactor = new PIIRedactor()
+    const textRedaction = piiRedactor.redact(rawText || '')
+    const text = textRedaction.redactedText
+    try { emitProgress(operationId, `🛡 De-identifying source text: ${textRedaction.entitiesFound.length} entities found`) } catch {}
 
     console.log('📝 Request data summary:', {
       reportId,
       sectionCount: sectionIds.length,
       replace,
-      textLength: text?.length
+      textLength: text?.length,
+      piiEntitiesRedacted: textRedaction.entitiesFound.length,
     })
 
     console.log('✅ Step 7: Validating required fields...')
@@ -64,6 +109,45 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Step 8: Creating Supabase client...')
     const supabase = await createSupabaseServerClient()
+    const LOG_PROGRESS = process.env.SUPABASE_PROGRESS_LOG_ENABLED === 'true'
+    const dbLog = async (evt: { stage?: string; message?: string; section_id?: string | null; event_type?: string; data?: any }) => {
+      if (!LOG_PROGRESS) return
+      try {
+        await supabase.from('progress_events').insert({
+          report_id: reportId,
+          section_id: evt.section_id || null,
+          operation_id: operationId || null,
+          event_type: evt.event_type || 'progress',
+          stage: evt.stage || null,
+          message: evt.message || null,
+          data: evt.data || null,
+        })
+      } catch (e) {
+        console.warn('⚠️ progress_events insert failed (non-fatal):', e instanceof Error ? e.message : String(e))
+      }
+    }
+
+    // Optional Supabase Realtime broadcast (production-friendly alternative to postgres_changes)
+    // Default broadcast to ON unless explicitly disabled
+    const BROADCAST = process.env.SUPABASE_BROADCAST_ENABLED !== 'false'
+    // broadcastChannel declared at function scope above
+    let broadcastPublish: (event: string, payload: any) => void = () => {}
+    if (BROADCAST && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const rt = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+        broadcastChannel = rt.channel(`report:${reportId}`)
+        await new Promise<void>((resolve) => {
+          broadcastChannel.subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') resolve()
+          })
+        })
+        broadcastPublish = (event: string, payload: any) => {
+          try { broadcastChannel.send({ type: 'broadcast', event, payload }) } catch {}
+        }
+      } catch (e) {
+        console.warn('⚠️ Realtime broadcast setup failed (non-fatal):', e instanceof Error ? e.message : String(e))
+      }
+    }
     console.log('✅ Step 8: Supabase client created')
 
     console.log('✅ Step 9: Building comprehensive report context...')
@@ -96,6 +180,7 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Step 10: Processing uploaded files (Claude for PDFs, OpenAI for audio transcription)...')
     const files: File[] = []
+    const uploadedFilesMeta: Array<{ id: string; name: string; type: string; size?: number; uploadDate: string; description?: string }>=[]
     let fileIndex = 0
     while (formData.get(`file_${fileIndex}`)) {
       files.push(formData.get(`file_${fileIndex}`) as File)
@@ -103,10 +188,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ Step 10: Found ${files.length} files`)
+    // SSE milestone (upload complete)
+    try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.uploading_files`) } catch {}
+    try { broadcastPublish('progress', { stage: 'uploading_files_complete' }) } catch {}
+    dbLog({ stage: 'uploading_files_complete', message: 'All files parsed', event_type: 'stage' }).catch(() => {})
 
-    let processingErrors: string[] = []
+    const processingErrors: string[] = []
 
     console.log('✅ Step 11: Getting target sections with full context...')
+    try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text ... replace`) } catch {}
+    try { broadcastPublish('progress', { stage: 'extracting_text_start' }) } catch {}
+    dbLog({ stage: 'extracting_text_start', message: 'Text extraction started', event_type: 'stage' }).catch(() => {})
     let targetSectionsWithContext = reportContextBuilder.getTargetSectionsWithContext(reportContext)
     // Fallback to client-provided sectionInfo if DB returned no sections
     const hasFallbackSections = targetSectionsWithContext.length === 0 && providedSectionInfo.length > 0
@@ -125,6 +217,7 @@ export async function POST(request: NextRequest) {
     }
     const sectionSchemaById = new Map<string, SectionSchema | undefined>()
     const sectionMetaById = new Map<string, { title: string; section_type: string }>()
+    let toolsSectionId: string | null = null
     for (const s of targetSectionsWithContext) {
       // prefer provided schema if present
       let schema: SectionSchema | undefined = providedSectionSchemas[s.id] || (s.schema as SectionSchema | undefined)
@@ -142,6 +235,9 @@ export async function POST(request: NextRequest) {
       }
       sectionSchemaById.set(s.id, schema)
       sectionMetaById.set(s.id, { title: s.title || s.id, section_type: (s as any).section_type || 'unknown' })
+      if (((s as any).section_type || '').toLowerCase() === 'assessment_tools' || (s.title || '').toLowerCase().includes('assessment tools')) {
+        toolsSectionId = s.id
+      }
     }
 
     console.log(`✅ Step 11: Found ${targetSectionsWithContext.length} target sections (including fallbacks if any)`) 
@@ -204,53 +300,108 @@ export async function POST(request: NextRequest) {
       console.log('✅ Step 14a: Added text content')
     }
 
+    const VERBOSE = (process.env.NEXT_PUBLIC_PROGRESS_VERBOSE === 'true') || (process.env.NEXT_PUBLIC_SSE_VERBOSE === 'true')
     for (const f of files) {
+      console.log(`📎 File: name="${f.name}" type="${f.type}" size=${(f.size / 1024 / 1024).toFixed(2)}MB`)
       try {
+        // collect source metadata for report metadata.uploadedFiles
+        const metaType = f.type.startsWith('application/pdf') ? 'pdf' : (f.type.startsWith('image/') ? 'image' : (f.type.startsWith('audio/') ? 'audio' : (f.type.startsWith('text/') ? 'text' : 'document')))
+        uploadedFilesMeta.push({ id: crypto.randomUUID(), name: f.name, type: metaType, size: (f as any).size, uploadDate: new Date().toISOString() })
+        // Verbose per-file progress
+        if (VERBOSE) {
+          try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()} ... replace`) } catch {}
+        }
         if (f.type === 'application/pdf') {
-          // Send PDF to Claude to extract a concise, report-ready "Main Points" summary for SLP
-          const uploaded = await claude.beta.files.upload({ file: f })
-          const pdfExtract = await claude.beta.messages.create({
-            model: process.env.CLAUDE_MODEL || 'claude-opus-4-1-20250805',
-            max_tokens: 2000,
-            temperature: 0.1,
+          // Send PDF to Claude to extract a concise, report-ready "Main Points"
+          // summary for SLP. Pre-extraction keeps token cost down for the main
+          // analysis call AND gives PII redaction text to work on.
+          const arrayBuffer = await f.arrayBuffer()
+          const base64Data = Buffer.from(arrayBuffer).toString('base64')
+
+          const pdfAnthropic = new Anthropic()
+          const pdfExtractResponse = await pdfAnthropic.messages.create({
+            model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
+            max_tokens: 8192,
+            // Note: Claude Opus 4.7 doesn't accept `temperature`.
+            //
+            // System is passed as an array so we can mark the stable prompt
+            // as cache-eligible. Prompt caching cuts repeat-call input cost
+            // to ~10% and latency to ~15% — first call warms the cache, every
+            // subsequent PDF in the same session (5-min TTL) is a cache hit.
             system: [
-              'You are an expert Speech-Language Pathologist extracting MAIN POINTS from assessment PDFs for a clinical report.',
-              'Goal: produce a concise, high-signal summary tailored for SLP reporting, not a verbatim transcript.',
-              'Include only the most decision-relevant details with brief page references when clear (e.g., [p.3]).',
-              'Focus areas (use only those present):',
-              '- Demographics: name/initials, age, grade, primary language(s)',
-              '- Referral reason / concerns (parent/teacher/clinician)',
-              '- Background: medical/educational/services history; hearing/vision status',
-              '- Assessment tools used (e.g., CELF-Preschool-3, PLS-5, GFTA-3, language sample), forms, dates',
-              '- Key scores/results: core/composite/indices, subtests, scaled/standard scores, percentiles; norms/date',
-              '- Observations: attention/behavior/regulation, speech intelligibility, fluency, voice, pragmatics',
-              '- Strengths and needs: expressive/receptive/pragmatics/speech sound patterns noted',
-              '- Diagnostic impressions / eligibility (if stated)',
-              '- Recommendations: services/frequency/setting, goals focus, accommodations, home carryover',
-              'Constraints:',
-              '- Be concise (bulleted). No long quotes. No speculation. No formatting beyond bullets and short headers.',
-              '- Do not invent data. If a field is not present, omit it.',
-              '- Output strictly as plain text bullets suitable to pass onward (no JSON, no extra commentary).'
-            ].join('\n'),
+              {
+                type: 'text',
+                cache_control: { type: 'ephemeral' },
+                text: [
+                  'You are an expert Speech-Language Pathologist extracting the FULL CONTENT of an assessment PDF for downstream structured processing.',
+                  'Goal: preserve clinically-relevant detail faithfully. Another AI step will reduce this into structured fields — your job is NOT to summarize; it is to surface every fact.',
+                  'Preserve verbatim:',
+                  '- All proper nouns (student, parent, teacher, school, district, evaluator, test names)',
+                  '- All numeric values: standard scores, percentiles, confidence intervals, raw scores, standard-deviation statements, ages (e.g. "2;11"), dates',
+                  '- Eligibility language (e.g. "DOES NOT SUPPORT", "Ed Code 56333", specific criteria statements)',
+                  '- Direct quotes from parent / teacher / student, especially the ones that anchor clinical judgment',
+                  '- Language-sample utterances when present (they are evidence, not filler)',
+                  '- Recommendations with the exact phrasing the report uses',
+                  'Structure the output with short section headers that mirror the report (Reason for Referral, Background, Tools, Findings by Domain, Eligibility, Summary, Recommendations). Use bullets within each.',
+                  'If a field is empty in the source, mark it as [not provided]. Aim for completeness over brevity.',
+                  'Do not invent data. Do not speculate. Preserve clinical caveats and any "DOES NOT SUPPORT" / "does support" statements verbatim.',
+                  'Output plain text with section headers + bullets. No JSON, no commentary outside the extraction.',
+                  'Citations are enabled on the source document — when you quote or paraphrase a specific passage, ground it so page references can be attached automatically.',
+                ].join('\n'),
+              },
+            ],
             messages: [{
               role: 'user',
-              content: [{ type: 'document', title: f.name, source: { type: 'file', file_id: uploaded.id } }]
-            }]
+              content: [
+                {
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data: base64Data },
+                  // Enabling citations makes Claude's response blocks carry
+                  // { type: 'page_location', start_page_number, end_page_number, cited_text }
+                  // markers that inlinePageRefs() weaves into the output text as [p.N].
+                  citations: { enabled: true },
+                } as any,
+                {
+                  type: 'text',
+                  text: 'Extract the content of this assessment PDF faithfully per the system instructions.',
+                },
+              ],
+            }],
           })
-          const extractedText = pdfExtract.content
-            .filter((b: any) => b.type === 'text')
-            .map((b: any) => b.text)
-            .join('\n')
+
+          const extractedTextRaw = inlinePageRefs(pdfExtractResponse.content as any[])
+          try {
+            const u: any = (pdfExtractResponse as any).usage || {}
+            console.log(`  💰 PDF extract usage — in:${u.input_tokens} out:${u.output_tokens} cache_write:${u.cache_creation_input_tokens || 0} cache_hit:${u.cache_read_input_tokens || 0}`)
+          } catch {}
+          // PII guard: redact before the text reaches the Claude/Gemini prompt.
+          const { redactedText: extractedText, entitiesFound: pdfEnts } = piiRedactor.redact(extractedTextRaw)
+          if (pdfEnts.length > 0) {
+            try { emitProgress(operationId, `🛡 De-identified ${pdfEnts.length} entities in ${f.name}`) } catch {}
+          }
           const textBlock2 = { type: 'text', text: `Main Points from PDF (${f.name}):\n${extractedText}` }
           content.push(textBlock2)
           openaiContent.push(textBlock2)
         } else if (f.type.startsWith('audio/')) {
-          const transcript = await transcribeAudio(f)
+          const transcriptRaw = await transcribeAudio(f)
+          const { redactedText: transcript, entitiesFound: audioEnts } = piiRedactor.redact(transcriptRaw)
+          if (audioEnts.length > 0) {
+            try { emitProgress(operationId, `🛡 De-identified ${audioEnts.length} entities in ${f.name}`) } catch {}
+          }
           const audioBlock = { type: 'text', text: `Audio transcript from ${f.name}:\n${transcript}` }
           content.push(audioBlock)
           openaiContent.push(audioBlock)
-        } else if (f.type.startsWith('text/')) {
-          const t = await f.text()
+        } else if (
+          f.type.startsWith('text/') ||
+          f.type === 'application/rtf' ||
+          /\.(txt|md|csv|html|rtf)$/i.test(f.name)
+        ) {
+          // Read as text. RTF markup goes through verbatim; Claude handles it.
+          const tRaw = await f.text()
+          const { redactedText: t, entitiesFound: textEnts } = piiRedactor.redact(tRaw)
+          if (textEnts.length > 0) {
+            try { emitProgress(operationId, `🛡 De-identified ${textEnts.length} entities in ${f.name}`) } catch {}
+          }
           const textFileBlock = { type: 'text', text: `Text content from ${f.name}:\n${t}` }
           content.push(textFileBlock)
           openaiContent.push(textFileBlock)
@@ -276,8 +427,17 @@ export async function POST(request: NextRequest) {
             }
           })
         }
+        if (VERBOSE) {
+          try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
+        }
       } catch (e) {
-        processingErrors.push(`${f.name}: ${(e as Error).message}`)
+        const err = e as Error
+        processingErrors.push(`${f.name}: ${err.message}`)
+        console.error(`❌ File processing failed for ${f.name}:`, err.message)
+        if (err.stack) console.error(err.stack.split('\n').slice(0, 5).join('\n'))
+        if (VERBOSE) {
+          try { emitProgress(operationId, `❌ Failed to update ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
+        }
       }
     }
 
@@ -296,14 +456,54 @@ export async function POST(request: NextRequest) {
     openaiContent.push(instruction)
 
     console.log(`✅ Step 14: Content array built with ${content.length} items`)
+    try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text`) } catch {}
+    try { broadcastPublish('progress', { stage: 'extracting_text_complete' }) } catch {}
+    dbLog({ stage: 'extracting_text_complete', message: 'Text extraction complete', event_type: 'stage' }).catch(() => {})
+
+    // ── Persist PII mappings (design review §10) ─────────────────────────
+    // Runs fire-and-forget; the redactor has already rewritten the prompts
+    // so the LLM request proceeds regardless of whether persistence succeeds.
+    const allRedactedEntities = piiRedactor.listAllMappings().map((m) => ({
+      type: m.type,
+      detectedValue: m.detectedValue,
+      token: m.token,
+      action: (m.type === 'DOB' || m.type === 'DATE') ? 'semantic' as const
+            : (m.type === 'ADDRESS' || m.type === 'PHONE' || m.type === 'EMAIL' || m.type === 'MRN' || m.type === 'SSN') ? 'remove' as const
+            : 'replace' as const,
+      confidence: 0.9,
+      needsReview: false,
+    }))
+    if (allRedactedEntities.length > 0) {
+      persistPIIMappings(supabase, reportId, allRedactedEntities).then((res) => {
+        if (res.ok) console.log(`✅ PII: persisted ${res.persisted} mappings`)
+        else if (res.error === 'table_missing') {
+          console.warn('⚠️ PII: pii_mappings table missing — apply migration 004_pii_mappings.sql')
+        }
+      }).catch(() => {})
+    }
 
     console.log('✅ Step 15: Defining tool schema...')
     const reportSchemaTool = {
       name: "save_assessment_data",
-      description: "Extracts and saves structured data from assessment information with progress summaries and provenance.",
+      description: "Extracts and saves structured data with a domain-first summary (can_do/support_needed), clear tool categorization, and provenance.",
       input_schema: {
         type: "object" as const,
         properties: {
+          domain_summary: {
+            type: "array",
+            description: "Domain-first summary for Assessment Results (preferred)",
+            items: {
+              type: "object",
+              properties: {
+                domain: { type: "string" },
+                can_do: { type: "array", items: { type: "string" } },
+                support_needed: { type: "array", items: { type: "string" } },
+                contexts: { type: "array", items: { type: "string" } },
+                sources: { type: "array", items: { type: "string" } }
+              },
+              required: ["domain"]
+            }
+          },
           updates: {
             type: "array",
             description: "Array of field updates to apply to the report sections",
@@ -351,6 +551,7 @@ export async function POST(request: NextRequest) {
 
     // Step 16/17: Either use client-provided updates or call model
     let updates: any[] = []
+    let domainSummary: any[] | undefined
     const applyUpdatesRaw = formData.get('applyUpdates') as string | null
     if (applyUpdatesRaw) {
       try {
@@ -360,26 +561,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid applyUpdates JSON' }, { status: 400 })
       }
     } else {
-      console.log('🤖 Step 16: Calling GPT-5 (Responses API) with required tool...')
-
-      // Define tools for Responses API
-      const tools: any[] = [{
-        type: 'function',
-        name: reportSchemaTool.name,
-        description: reportSchemaTool.description,
-        parameters: reportSchemaTool.input_schema,
-      }]
-
-      // Convert content to Responses API parts
-      const toResponsePart = (part: any) => {
-        if (part?.type === 'text' || part?.type === 'input_text') {
-          return { type: 'input_text', text: part.text }
-        }
-        if (part?.type === 'image_url') {
-          return { type: 'image_url', image_url: { url: part.image_url?.url || part.image_url } }
-        }
-        return { type: 'input_text', text: typeof part === 'string' ? part : JSON.stringify(part) }
-      }
+      console.log('🤖 Step 16: Calling Claude Opus 4.7 with forced tool...')
+      try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai ... replace`) } catch {}
+      try { broadcastPublish('progress', { stage: 'analyzing_with_ai_start' }) } catch {}
 
       // Compose Report Schema JSON (selected sections only) to provide full structural context
       const schemaPayload: any = []
@@ -407,80 +591,152 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const input: any[] = [
-        { role: 'system', content: [{ type: 'input_text', text: systemPrompt }] },
-        { role: 'system', content: [{ type: 'input_text', text: `REPORT SCHEMA (JSON, selected sections):\n${JSON.stringify(schemaPayload).slice(0, 120000)}` }] },
-        { role: 'system', content: [{ type: 'input_text', text: allowedPathsText }] },
-        { role: 'user', content: (openaiContent as any[]).map(toResponsePart) }
+      // Split the system instruction so we can cache the stable piece.
+      // `systemPrompt` is the deployment-wide SLP role/constraints — same on
+      // every call, so it's a cache-hit candidate. The report schema payload
+      // and allowed-paths block are per-report and stay uncached. Cache reads
+      // are ~10% of cold-call cost; the 5-min TTL is enough to span a typical
+      // SLP session where multiple sources get analyzed back-to-back.
+      const systemBlocks: any[] = [
+        {
+          type: 'text',
+          cache_control: { type: 'ephemeral' },
+          text: systemPrompt
+            + '\n\nWhen you emit a field update, set `source_reference` to the page marker from the '
+            + 'pre-extracted content (e.g. "p.4" or "p.2-3"). Those brackets in the input are provenance '
+            + 'anchors — copy them verbatim so clinicians can click through to the source.',
+        },
+        {
+          type: 'text',
+          text: `REPORT SCHEMA (JSON, selected sections):\n${JSON.stringify(schemaPayload).slice(0, 120000)}`,
+        },
+        {
+          type: 'text',
+          text: allowedPathsText,
+        },
       ]
 
-      const response = await openai.responses.create({
-        model: process.env.OPENAI_MODEL || 'gpt-5-2025-08-07',
-        input,
-        tools,
-        tool_choice: {
-          type: 'allowed_tools',
-          mode: 'required',
-          tools: [{ type: 'function', name: 'save_assessment_data' }]
-        } as any,
-      } as any)
+      // Convert our internal content array → Anthropic content blocks.
+      // Text and image_url blocks are normalized; already-Anthropic blocks pass through.
+      const toClaudePart = (part: any) => {
+        if (part?.type === 'text' || part?.type === 'input_text') {
+          return { type: 'text', text: part.text }
+        }
+        if (part?.type === 'image_url') {
+          const url = typeof part.image_url === 'string' ? part.image_url : (part.image_url?.url || '')
+          const m = typeof url === 'string' ? url.match(/^data:([^;]+);base64,(.+)$/) : null
+          if (m) return { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }
+          return { type: 'text', text: `[Image URL: ${url}]` }
+        }
+        if (part?.type === 'image' || part?.type === 'document') return part
+        return { type: 'text', text: typeof part === 'string' ? part : JSON.stringify(part) }
+      }
+      const claudeUserContent = (openaiContent as any[]).map(toClaudePart)
 
-      console.log('✅ Step 16: GPT-5 Responses API call returned')
-      console.log('✅ Step 17: Extracting tool call from response...')
+      const anthropic = new Anthropic()
+      const response = await anthropic.messages.create({
+        model: process.env.CLAUDE_MODEL || 'claude-opus-4-7',
+        // Opus 4.7 supports up to 32k output tokens. A full SLP report
+        // extraction emits 40+ structured updates; each has 5-7 JSON fields
+        // plus prose values. 8192 truncated mid-tool-use on a real 12-section
+        // report — switching to 16384 leaves ~2x headroom.
+        max_tokens: 16384,
+        system: systemBlocks,
+        messages: [{ role: 'user', content: claudeUserContent as any }],
+        // cache_control on the tool marks the entire tools array as cacheable.
+        // Cache key also includes the tool_choice, so forced-tool calls cache
+        // separately from auto calls.
+        tools: [{ ...reportSchemaTool, cache_control: { type: 'ephemeral' } }],
+        tool_choice: { type: 'tool', name: 'save_assessment_data' },
+      })
 
-      const out: any[] = (response as any).output || []
-      let fn = out.find((o: any) => o?.type === 'function_call' && o?.name === 'save_assessment_data')
+      console.log('✅ Step 16: Claude API call returned')
+      try {
+        const u: any = (response as any).usage || {}
+        const sr: any = (response as any).stop_reason
+        console.log(`  💰 Main call usage — in:${u.input_tokens} out:${u.output_tokens} cache_write:${u.cache_creation_input_tokens || 0} cache_hit:${u.cache_read_input_tokens || 0} stop:${sr}`)
+        if (sr === 'max_tokens') {
+          console.warn('  ⚠️ stop_reason=max_tokens — response was truncated; bump max_tokens if this recurs')
+        }
+      } catch {}
+      try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai`) } catch {}
+      try { broadcastPublish('progress', { stage: 'analyzing_with_ai_complete' }) } catch {}
+      console.log('✅ Step 17: Extracting tool_use block from response...')
 
-      if (!fn) {
-        console.warn('⚠️ Step 16: No function_call found. Attempting strict retry and JSON fallback...')
+      // Claude returns a content array; find the forced tool_use block.
+      const toolBlock: any = (response.content as any[]).find(
+        (b: any) => b?.type === 'tool_use' && b?.name === 'save_assessment_data'
+      )
 
-        const strictInput: any[] = [
-          { role: 'system', content: [{ type: 'input_text', text: `${systemPrompt}\n\nSTRICT_TOOL_MODE: You MUST call the save_assessment_data tool and return no prose.` }] },
-          { role: 'user', content: (openaiContent as any[]).map(toResponsePart) }
-        ]
-        const strict = await openai.responses.create({
-          model: process.env.OPENAI_MODEL || 'gpt-5-2025-08-07',
-          input: strictInput,
-          tools,
-          tool_choice: {
-            type: 'allowed_tools',
-            mode: 'required',
-            tools: [{ type: 'function', name: 'save_assessment_data' }]
-          } as any,
-        } as any)
+      if (!toolBlock) {
+        console.warn('⚠️ Step 16: No tool_use block found. Attempting Structured Outputs fallback...')
 
-        const strictOut: any[] = (strict as any).output || []
-        fn = strictOut.find((o: any) => o?.type === 'function_call' && o?.name === 'save_assessment_data')
-        if (!fn) {
-          const textBlocks: string[] = []
-          for (const o of strictOut.length ? strictOut : out) {
-            if (o?.type === 'output_text' && o?.text) textBlocks.push(o.text)
-          }
-          const combined = textBlocks.join('\n')
+        // Structured Outputs fallback via parseWithZod (also Claude-backed)
+        const UpdateSchema = z.object({
+          section_id: z.string(),
+          field_path: z.string(),
+          value: z.any(),
+          merge_strategy: z.enum(['replace', 'append', 'merge']).default('replace'),
+          confidence: z.number().min(0).max(1).optional(),
+          source_reference: z.string().optional(),
+        })
+        const UpdatesEnvelope = z.object({ updates: z.array(UpdateSchema) })
+
+        // parseWithZod is text-only — flatten content blocks to text.
+        const fallbackUserText = (openaiContent as any[])
+          .map((p: any) =>
+            p?.type === 'text' || p?.type === 'input_text'
+              ? p.text
+              : p?.type === 'image_url'
+                ? `[Image: ${p.image_url?.url || p.image_url}]`
+                : ''
+          )
+          .filter(Boolean)
+          .join('\n\n')
+
+        const so = await parseWithZod(
+          UpdatesEnvelope,
+          'assessment_updates',
+          [
+            { role: 'system', content: `${systemPrompt}\n\nReturn only JSON with { updates: [...] } strictly matching the schema.` },
+            { role: 'user', content: fallbackUserText },
+          ]
+        )
+
+        if (so.ok) {
+          updates = so.data.updates
+          console.log(`✅ Step 17: Parsed ${updates.length} updates via Structured Outputs fallback`)
+        } else {
+          // Last resort: look for JSON in any text block of the primary response
+          const responseText = (response.content as any[])
+            .filter((b: any) => b.type === 'text')
+            .map((b: any) => b.text)
+            .join('\n')
           let parsed: any = null
-          try { parsed = JSON.parse(combined) } catch {
-            const fence = combined.match(/```(?:json)?\n([\s\S]*?)\n```/i)
+          try { parsed = JSON.parse(responseText) } catch {
+            const fence = responseText.match(/```(?:json)?\n([\s\S]*?)\n```/i)
             if (fence?.[1]) { try { parsed = JSON.parse(fence[1]) } catch {} }
             if (!parsed) {
-              const s = combined.indexOf('{'); const e = combined.lastIndexOf('}')
-              if (s !== -1 && e !== -1 && e > s) { try { parsed = JSON.parse(combined.slice(s, e + 1)) } catch {} }
+              const s = responseText.indexOf('{'); const e = responseText.lastIndexOf('}')
+              if (s !== -1 && e !== -1 && e > s) { try { parsed = JSON.parse(responseText.slice(s, e + 1)) } catch {} }
             }
           }
           if (parsed && Array.isArray(parsed.updates)) {
             updates = parsed.updates
-            console.log(`✅ Step 17: Parsed ${updates.length} updates from assistant JSON fallback`)
+            console.log(`✅ Step 17: Parsed ${updates.length} updates from text JSON fallback`)
           } else {
-            console.error('❌ Step 16: No function_call and JSON fallback failed.')
+            console.error('❌ Step 16: No tool_use and JSON fallback failed.')
             throw new Error('No tool call found in response from model')
           }
         }
       }
 
-      if (fn && fn.arguments) {
-        let args: any = {}
-        try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments } catch { args = fn.arguments }
-        updates = (args as any).updates || []
-        console.log(`✅ Step 17: Extracted ${updates.length} updates from model`)
+      if (toolBlock && toolBlock.input) {
+        updates = toolBlock.input.updates || []
+        if (Array.isArray(toolBlock.input.domain_summary)) {
+          domainSummary = toolBlock.input.domain_summary
+        }
+        console.log(`✅ Step 17: Extracted ${updates.length} updates from Claude`)
       }
     }
 
@@ -488,6 +744,39 @@ export async function POST(request: NextRequest) {
     const results = []
     const processSummaries = []
     const resolver = new StructuredFieldPathResolver()
+
+    // If domain_summary provided, upsert into Assessment Results section before granular updates
+    // Respect dryRun: do not write to DB during preview-only runs
+    if (!dryRun && domainSummary && domainSummary.length > 0) {
+      try {
+        const resultsSection = targetSectionsWithContext.find(s => (s as any).section_type === 'assessment_results' || ((s.title || '').toLowerCase().includes('assessment results')))
+        if (resultsSection) {
+          const { data: current } = await supabase
+            .from('report_sections')
+            .select('structured_data')
+            .eq('id', (resultsSection as any).id || resultsSection.id)
+            .single()
+          const currentSd = (current?.structured_data && typeof current.structured_data === 'object') ? current.structured_data : {}
+          const nextSd = { ...currentSd, domain_summary: domainSummary }
+          const { error: dsErr } = await supabase
+            .from('report_sections')
+            .upsert({
+              id: (resultsSection as any).id || resultsSection.id,
+              report_id: reportId,
+              title: resultsSection.title,
+              section_type: (resultsSection as any).section_type || 'assessment_results',
+              structured_data: nextSd
+            }, { onConflict: 'id' })
+          if (dsErr) {
+            console.warn('⚠️ Failed to upsert domain_summary:', dsErr.message)
+          } else {
+            console.log('✅ Upserted domain_summary into Assessment Results')
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Error handling domain_summary:', e instanceof Error ? e.message : String(e))
+      }
+    }
 
     // Helper: normalize field path by stripping section key prefixes
     function normalizeFieldPath(rawPath: string, sectionSchema?: SectionSchema): string {
@@ -551,6 +840,8 @@ export async function POST(request: NextRequest) {
 
       // Validate field path against section schema (if available)
       const sectionSchema = sectionSchemaById.get(cleanedUpdate.section_id)
+      // SSE: emit per-field start
+      try { emitProgress(operationId, `📝 Processing update: ${cleanedUpdate.section_id}.${cleanedUpdate.field_path} ... ${cleanedUpdate.merge_strategy || 'replace'}`) } catch {}
       // Normalize field path to be relative to section root (model often prefixes with section key)
       cleanedUpdate.field_path = normalizeFieldPath(cleanedUpdate.field_path, sectionSchema)
       const pathCheck = validatePathAgainstSchema(sectionSchema, cleanedUpdate.field_path)
@@ -594,7 +885,8 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        let updatedData = currentSection?.structured_data || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let updatedData: any = currentSection?.structured_data || {}
 
         // Clean existing data to prevent circular references
         const cleanupResult = dataIntegrityGuard.cleanCorruptedData(updatedData)
@@ -614,14 +906,50 @@ export async function POST(request: NextRequest) {
           pathCheck.fieldSchema
         )
 
-        // Persist provenance if provided
+        // If we updated assessment_tools.tools, normalize tool entries to preferred fields
+        try {
+          const meta = sectionMetaById.get(cleanedUpdate.section_id)
+          const sectionType = meta?.section_type || sectionSchema?.key
+          if (sectionType === 'assessment_tools' && cleanedUpdate.field_path.startsWith('tools')) {
+            const toolsVal = resolver.getFieldValue(updatedData, 'tools')
+            if (Array.isArray(toolsVal)) {
+              const normalized = toolsVal.map((t: any) => {
+                if (!t || typeof t !== 'object') return t
+                const measure_type = t.measure_type || t.tool_type || ''
+                const purpose = t.purpose || t.description || t.qualitative_description || ''
+                const date = t.administered_date || t.date || ''
+                const title = t.title || t.tool_name || t.context_label || 'Observation'
+                const target_population = t.target_population || ''
+                return { ...t, title, administered_date: date, measure_type, purpose, target_population }
+              })
+              updatedData = resolver.setFieldValue(updatedData, 'tools', normalized)
+            }
+          }
+        } catch {}
+
+        // Persist provenance if provided.
+        //
+        // Parse page references out of the source_reference string so the
+        // UI chip can show "{file} p.4" instead of a raw "p.4" doubled
+        // with the artifactId. If source_reference was just a page marker
+        // (no filename, common when only one file was uploaded), fall back
+        // to the first uploaded file's name.
         try {
           if (update.source_reference || typeof update.confidence === 'number') {
-            const prov = {
+            const refStr = String(update.source_reference || '').trim()
+            const pageMatch = refStr.match(/p\.\s?(\d+)(?:\s?-\s?\d+)?/i)
+            const pageNum = pageMatch ? parseInt(pageMatch[1], 10) : undefined
+            let artifactId = refStr
+              .replace(/\s*\[?p\.\s?\d+(?:-\d+)?\]?\s*/gi, '')
+              .replace(/^[\s,;:\-·]+|[\s,;:\-·]+$/g, '')
+              .trim()
+            if (!artifactId) artifactId = files[0]?.name || 'source'
+            const prov: Record<string, unknown> = {
               field_path: cleanedUpdate.field_path,
-              artifactId: update.source_reference as string,
-              confidence: typeof update.confidence === 'number' ? update.confidence : undefined
+              artifactId,
+              confidence: typeof update.confidence === 'number' ? update.confidence : undefined,
             }
+            if (pageNum) prov.page = pageNum
             const provKey = '__provenance'
             const currentProv = (updatedData && typeof updatedData === 'object') ? (updatedData[provKey] || []) : []
             const nextProv = Array.isArray(currentProv) ? [...currentProv, prov] : [prov]
@@ -645,6 +973,67 @@ export async function POST(request: NextRequest) {
           delete updatedData.structured_data
         }
 
+        // If this update is a domain notes field in Assessment Results, propagate a copy into the Tools section under matching context
+        try {
+          const domainKeyMap: Record<string, string> = {
+            'expressive_language_notes': 'Expressive',
+            'receptive_language_notes': 'Receptive',
+            'pragmatic_language_notes': 'Pragmatics',
+            'articulation_notes': 'Articulation',
+            'voice_notes': 'Voice',
+            'fluency_notes': 'Fluency'
+          }
+          const domainKey = Object.keys(domainKeyMap).find(k => cleanedUpdate.field_path === k)
+          const meta = sectionMetaById.get(cleanedUpdate.section_id)
+          if (domainKey && meta && meta.section_type === 'assessment_results' && toolsSectionId && update.source_reference) {
+            const { data: toolsRow } = await supabase
+              .from('report_sections')
+              .select('structured_data')
+              .eq('id', toolsSectionId)
+              .single()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const toolsData: any = (toolsRow?.structured_data && typeof toolsRow.structured_data === 'object') ? toolsRow.structured_data : {}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const list: any[] = Array.isArray(toolsData.tools) ? toolsData.tools : []
+            // crude context title from source_reference
+            const ref = (update.source_reference as string).toLowerCase()
+            const ctxMap: Record<string, string> = {
+              'lunch': 'Lunch',
+              'reading circle': 'Classroom Reading Circle',
+              'recess': 'Recess',
+              'math': 'Math Small Group',
+              'art': 'Art Class',
+              'hallway': 'Hallway',
+              'transition': 'Transition to Speech Room',
+              'speech': 'Speech Task',
+              'retell': 'Frog Story Retell'
+            }
+            let contextTitle = 'Observation'
+            for (const k of Object.keys(ctxMap)) { if (ref.includes(k)) { contextTitle = ctxMap[k]; break } }
+            let target = list.find((t: any) => (t.title || t.tool_name || '').toString().toLowerCase() === contextTitle.toLowerCase())
+            if (!target) {
+              target = { title: contextTitle, completed: true, tool_type: 'Observation' }
+              list.push(target)
+            }
+            target.domain_notes = target.domain_notes || {}
+            const dLabel = domainKeyMap[domainKey]
+            const noteText = typeof cleanedUpdate.value === 'string' ? cleanedUpdate.value : JSON.stringify(cleanedUpdate.value)
+            // append or set
+            if (target.domain_notes[dLabel]) {
+              const existing = target.domain_notes[dLabel]
+              target.domain_notes[dLabel] = existing.includes(noteText) ? existing : `${existing} ${noteText}`.trim()
+            } else {
+              target.domain_notes[dLabel] = noteText
+            }
+            toolsData.tools = list
+            await supabase
+              .from('report_sections')
+              .upsert({ id: toolsSectionId, report_id: reportId, title: 'Assessment Tools', section_type: 'assessment_tools', structured_data: toolsData }, { onConflict: 'id' })
+          }
+        } catch (e) {
+          console.warn('⚠️ Propagation to tools failed:', e instanceof Error ? e.message : String(e))
+        }
+
         if (dryRun) {
           console.log(`🟡 Step 18.${i + 1}: Dry run — skipping DB write for section ${update.section_id}`)
           results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: true, dryRun: true })
@@ -665,15 +1054,24 @@ export async function POST(request: NextRequest) {
           if (error) {
             console.error(`❌ Step 18.${i + 1} FAILED: Failed to update section ${update.section_id}:`, error)
             results.push({ sectionId: update.section_id, success: false, error })
+            try { emitProgress(operationId, `❌ Failed to update ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+            try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: false }) } catch {}
+            dbLog({ event_type: 'section_update', stage: 'error', section_id: cleanedUpdate.section_id, message: `Failed to update ${cleanedUpdate.field_path}`, data: { error } }).catch(() => {})
           } else {
             console.log(`✅ Step 18.${i + 1}: Updated section ${update.section_id}`)
             results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: true })
             processSummaries.push(update.process_summary)
+            try { emitProgress(operationId, `✅ Updated ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+            try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: true }) } catch {}
+            dbLog({ event_type: 'section_update', stage: 'success', section_id: cleanedUpdate.section_id, message: `Updated ${cleanedUpdate.field_path}` }).catch(() => {})
           }
         }
       } catch (error) {
         console.error(`❌ Step 18.${i + 1} FAILED: Error processing update for section ${update.section_id}:`, error)
         results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: false, error: error instanceof Error ? error.message : String(error) })
+        try { emitProgress(operationId, `❌ Failed to update ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+        try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: false }) } catch {}
+        dbLog({ event_type: 'section_update', stage: 'error', section_id: cleanedUpdate.section_id, message: `Exception updating ${cleanedUpdate.field_path}`, data: { error: error instanceof Error ? error.message : String(error) } }).catch(() => {})
       }
     }
 
@@ -683,26 +1081,103 @@ export async function POST(request: NextRequest) {
     console.log(`🎉 Step 19: Processing complete: ${successful} successful, ${failed} failed`)
     console.log(`📋 Process summaries:`, processSummaries)
 
-    return NextResponse.json({
+    // Persist uploaded files and activity timeline to report metadata (best-effort)
+    try {
+      const { data: reportRow } = await supabase
+        .from('reports')
+        .select('id, metadata')
+        .eq('id', reportId)
+        .single()
+      const prevMeta = (reportRow?.metadata && typeof reportRow.metadata === 'object') ? reportRow.metadata as any : {}
+      const prevFiles = Array.isArray(prevMeta.uploadedFiles) ? prevMeta.uploadedFiles : []
+      const mergedFiles = [...prevFiles, ...uploadedFilesMeta]
+      const activity = Array.isArray(prevMeta.activity) ? prevMeta.activity : []
+
+      // Only record activity when we have meaningful process summaries and not in dry-run mode
+      const nonEmptySummaries = (processSummaries || []).filter((s: any) => typeof s === 'string' && s.trim().length > 0)
+      if (!dryRun && nonEmptySummaries.length > 0) {
+        // Build section titles for successful updates
+        try {
+          const idToTitle = new Map<string, string>()
+          for (const s of targetSectionsWithContext) {
+            const sid = (s as any).id || (s as any).section_id || s.id
+            const title = (s as any).title || 'Untitled'
+            if (sid) idToTitle.set(String(sid), String(title))
+          }
+          const successfulIds = results.filter((r: any) => r?.success && r.sectionId).map((r: any) => r.sectionId)
+          const sectionTitles = Array.from(new Set(successfulIds.map((sid: string) => idToTitle.get(sid) || sid)))
+          activity.push({ id: crypto.randomUUID(), type: 'ai_intake', timestamp: new Date().toISOString(), sectionTitles, summaries: nonEmptySummaries })
+        } catch {
+          // Fallback: still push minimal with summaries only
+          activity.push({ id: crypto.randomUUID(), type: 'ai_intake', timestamp: new Date().toISOString(), summaries: nonEmptySummaries })
+        }
+      }
+      await supabase
+        .from('reports')
+        .update({ metadata: { ...prevMeta, uploadedFiles: mergedFiles, activity } })
+        .eq('id', reportId)
+      dbLog({ stage: 'metadata_persisted', message: 'uploadedFiles/activity persisted', event_type: 'stage' }).catch(() => {})
+    } catch (e) {
+      console.warn('⚠️ Failed to persist metadata (uploadedFiles/activity):', e instanceof Error ? e.message : String(e))
+      dbLog({ stage: 'metadata_persist_error', message: (e as Error)?.message || 'persist failed', event_type: 'stage' }).catch(() => {})
+    }
+
+    // Build a concise processing summary for UI
+    let processingSummary: { summary: string; confidence: number; issues: string[] } | null = null
+    try {
+      const ProcessingSummary = z.object({
+        summary: z.string(),
+        confidence: z.number().min(0).max(1),
+        issues: z.array(z.string()),
+      })
+
+      const successfulIds = results.filter((r: any) => r?.success && r.sectionId).map((r: any) => r.sectionId)
+      const uniqueSections = Array.from(new Set(successfulIds))
+      const exampleChanges = (updates || []).slice(0, 5).map((u: any) => `${u.section_id}.${u.field_path}`)
+
+      const so = await parseWithZod(
+        ProcessingSummary,
+        'processing_summary',
+        [
+          { role: 'system', content: 'Summarize changes for a clinical report intake. Return only JSON: { summary, confidence, issues }.' },
+          { role: 'user', content: `Applied ${successful} updates (${failed} failed). Sections affected: ${uniqueSections.join(', ') || 'none'}\nExample changes: ${exampleChanges.join(', ') || 'n/a'}\nNotes: ${(processSummaries || []).slice(0, 5).join(' | ')}` },
+        ]
+      )
+
+      if (so.ok) processingSummary = so.data
+      else processingSummary = { summary: (dryRun ? `Previewed ${successful} updates` : `Processed ${successful} updates`), confidence: 0.8, issues: [] }
+    } catch {
+      processingSummary = { summary: (dryRun ? `Previewed ${successful} updates` : `Processed ${successful} updates`), confidence: 0.8, issues: [] }
+    }
+
+    const response = NextResponse.json({
       success: true,
       message: dryRun ? `Preview: ${successful} updates proposed` : `Processed ${successful} updates successfully`,
       results: {
         successful,
         failed,
         processSummaries,
+        processingSummary,
         updateResults: results,
         proposedUpdates: updates,
         mode: dryRun ? 'dryRun' : 'write'
       }
     })
+    try { completeProgress(operationId) } catch {}
+    dbLog({ stage: 'complete', message: `Processed ${successful} updates, ${failed} failed`, event_type: 'complete' }).catch(() => {})
+    try { if (broadcastChannel) await broadcastChannel.unsubscribe() } catch {}
+    return response
 
   } catch (error) {
     console.error('❌ CRITICAL ERROR: Processing intake data failed:', error)
     console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace')
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
+    try { completeProgress(operationId) } catch {}
+    try { if (broadcastChannel) await broadcastChannel.unsubscribe() } catch {}
+    return errorResponse
   }
 }
 

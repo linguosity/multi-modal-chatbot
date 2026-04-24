@@ -3,6 +3,25 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
+
+export async function signInWithGoogle() {
+  const supabase = await createSupabaseServerClient();
+  const origin = (await headers()).get('origin') || 'http://localhost:3000';
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+    },
+  });
+
+  if (error) {
+    return redirect('/auth?error=' + encodeURIComponent(error.message));
+  }
+
+  return redirect(data.url);
+}
 
 export async function signOut() {
   try {

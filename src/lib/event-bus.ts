@@ -73,6 +73,17 @@ export function parseProcessingUpdateLog(logLine: string): ProcessingUpdateEvent
   if (!match?.groups) return null;
   
   const { section, field, action } = match.groups;
+
+  // Ignore synthetic stage markers that are used for UX only
+  // These do not represent actual field updates and were causing coalesced
+  // toasts like "Updating Section (4 fields)" to appear regardless of input.
+  const stageMarkers = new Set([
+    'uploading_files',
+    'extracting_text',
+    'analyzing_with_ai',
+    'applying_updates',
+  ])
+  if (stageMarkers.has(field)) return null;
   const fieldLabel = formatFieldLabel(field);
   const verb = getActionVerb(action as any);
   

@@ -34,21 +34,21 @@ const DialogContent = React.forwardRef<
   <DialogPortal>
     <DialogOverlay />
     <div
-      className={cn(
-        "fixed inset-0 z-50 grid place-content-center p-4",
-        className
-      )}
+      className="fixed inset-0 z-50 grid place-content-center p-4"
       role="dialog"
       aria-modal="true"
     >
       <DialogPrimitive.Content
         ref={ref}
-        className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg"
+        className={cn(
+          "w-full max-w-md rounded-lg bg-white p-6 shadow-lg",
+          className
+        )}
         {...props}
       >
         {children}
         <DialogPrimitive.Close
-          className="-me-4 -mt-4 rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 focus:outline-none"
+          className="absolute right-4 top-4 rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 focus:outline-none"
           aria-label="Close"
         >
           <X className="h-5 w-5" />

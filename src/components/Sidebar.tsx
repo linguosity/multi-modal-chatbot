@@ -1,144 +1,137 @@
 'use client'
 
-import { Home, Plus, FileText, Pen, Book, Eye, Sparkles, ChevronDown } from "lucide-react";
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname, useParams } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { useReport } from "@/lib/context/ReportContext";
-import { useState } from "react";
+import { Home, Plus, Library } from 'lucide-react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { usePathname, useParams } from 'next/navigation'
+import { cn } from '@/lib/utils'
+import { useReport } from '@/lib/context/ReportContext'
 
-export default function Sidebar() {
-  const pathname = usePathname();
-  const params = useParams<{ id?: string }>();
-  const id = params?.id;
-  const inReport = pathname.startsWith("/dashboard/reports/") && id;
+/** Derive a simple status from section data for TOC status dots. */
+function sectionStatus(section: { content: string | null; structured_data: unknown }): 'complete' | 'partial' | 'empty' {
+  const hasContent = typeof section.content === 'string' && section.content.trim().length > 0
+  const hasData = section.structured_data != null && Object.keys(section.structured_data as object).length > 0
+  if (hasContent && hasData) return 'complete'
+  if (hasContent || hasData) return 'partial'
+  return 'empty'
+}
 
-  const { report } = useReport();
-  const [isTocOpen, setIsTocOpen] = useState(true);
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-4 pt-5 pb-2 text-[11px] font-medium text-[#9a9a9a] tracking-wide">
+      {children}
+    </div>
+  )
+}
 
-  const NavLink = ({ href, icon: Icon, children, isActive }: any) => (
+type NavLinkProps = {
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  children: React.ReactNode
+  isActive?: boolean
+}
+
+function NavLink({ href, icon: Icon, children, isActive }: NavLinkProps) {
+  return (
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-50",
-        isActive ? "bg-gray-100 font-semibold text-gray-900" : "text-gray-600"
+        'mx-2 flex items-center gap-2.5 rounded px-3 py-1.5 text-[13px] transition-colors',
+        isActive
+          ? 'bg-[#f7f5f0] border-l-2 border-terracotta font-medium text-[#111]'
+          : 'text-[#3a3a3a] hover:bg-[#ede9dc] font-normal',
       )}
-      aria-current={isActive ? "page" : undefined}
+      aria-current={isActive ? 'page' : undefined}
     >
-      <Icon className="size-4" />
+      <Icon className="size-4 shrink-0 opacity-80" />
       {children}
     </Link>
-  );
+  )
+}
+
+export default function Sidebar() {
+  const pathname = usePathname()
+  const params = useParams<{ id?: string }>()
+  const id = params?.id
+  const inReport = pathname.startsWith('/dashboard/reports/') && !!id
+  const { report } = useReport()
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r bg-white text-sm">
-      <div className="inline-flex h-16 w-full items-center justify-center">
-        <div className="h-8 w-8 relative">
+    <aside className="flex h-screen w-60 flex-col border-r border-[#1a1a1a] bg-[#efece4]">
+      {/* Brand */}
+      <div className="flex h-16 items-center gap-2.5 px-4 border-b border-[#d0cec6]">
+        <div className="h-7 w-7 relative shrink-0">
           <Image
             src="/images/logo-animation.gif"
             alt="Linguosity logo"
             fill
-            sizes="32px"
-            className="object-contain text-teal-600"
+            sizes="28px"
+            className="object-contain"
             unoptimized
           />
         </div>
-      </div>
-      <div className="p-2">
-        <NavLink 
-          href="/dashboard" 
-          icon={Home}
-          isActive={pathname === '/dashboard'}
+        <span
+          style={{ fontFamily: 'var(--font-display)' }}
+          className="text-[20px] leading-tight tracking-tight"
         >
-          Dashboard
+          Linguosity<span className="text-terracotta">.</span>
+        </span>
+      </div>
+
+      {/* Workspace — top-level app areas */}
+      <GroupLabel>Workspace</GroupLabel>
+      <div>
+        <NavLink href="/dashboard" icon={Home} isActive={pathname === '/dashboard'}>
+          Home
         </NavLink>
-        <NavLink 
-          href="/dashboard/reports/new" 
+        <NavLink
+          href="/dashboard/reports/new"
           icon={Plus}
           isActive={pathname === '/dashboard/reports/new'}
         >
-          New Report
+          New report
+        </NavLink>
+        <NavLink href="/dashboard/tools" icon={Library} isActive={pathname === '/dashboard/tools'}>
+          Tool library
         </NavLink>
       </div>
 
-      <hr className="my-2" />
-
-      {inReport && (
-        <div className="flex-1 flex flex-col overflow-y-auto">
-          <div className="px-2">
-            <NavLink 
-              href={`/dashboard/reports/${id}/data`} 
-              icon={FileText}
-              isActive={pathname.endsWith('/data')}
-            >
-              Data Entry
-            </NavLink>
-            <NavLink 
-              href={`/dashboard/reports/${id}/template`} 
-              icon={Pen}
-              isActive={pathname.endsWith('/template')}
-            >
-              Edit Template
-            </NavLink>
-            <NavLink 
-              href={`/dashboard/reports/${id}/sources`} 
-              icon={Book}
-              isActive={pathname.endsWith('/sources')}
-            >
-              Sources
-            </NavLink>
-
-            <hr className="my-2" />
-
-            <NavLink 
-              href={`/dashboard/reports/${id}/view`} 
-              icon={Eye}
-              isActive={pathname.endsWith('/view')}
-            >
-              View Report
-            </NavLink>
-            <button
-              onClick={() => window.dispatchEvent(new Event("open-ai"))}
-              className="flex w-full items-center gap-2 px-3 py-2 rounded text-gray-600 hover:bg-gray-50"
-            >
-              <Sparkles className="size-4" />
-              AI Assistant
-            </button>
-          </div>
-
-          {report && report.sections && report.sections.length > 0 && (
-            <>
-              <hr className="my-2" />
-              <div className="px-2">
-                <button
-                  onClick={() => setIsTocOpen(!isTocOpen)}
-                  className="flex w-full items-center justify-between px-3 py-2 rounded text-gray-800 font-semibold hover:bg-gray-50"
+      {/* Contents — table of contents, derived from report.sections.
+          Progress bar moved out to the Header so it lives next to the
+          report title rather than buried in the sidebar. */}
+      {inReport && report && report.sections && report.sections.length > 0 && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <GroupLabel>Contents</GroupLabel>
+          <div className="flex-1 overflow-y-auto pb-3">
+            {report.sections.map((section) => {
+              const status = sectionStatus(section)
+              const isActive = pathname.endsWith(`/${section.id}`)
+              return (
+                <Link
+                  key={section.id}
+                  href={`/dashboard/reports/${id}/${section.id}`}
+                  className={cn(
+                    'mx-2 flex items-center gap-2 rounded px-3 py-1.5 text-[13px] transition-colors',
+                    isActive
+                      ? 'bg-[#f7f5f0] font-medium text-[#111]'
+                      : 'text-[#3a3a3a] hover:bg-[#ede9dc]',
+                  )}
                 >
-                  <span>Table of Contents</span>
-                  <ChevronDown className={cn("size-4 transition-transform", isTocOpen && "rotate-180")} />
-                </button>
-                {isTocOpen && (
-                  <div className="mt-1 space-y-1 pl-4">
-                    {report.sections.map((section) => (
-                      <Link
-                        key={section.id}
-                        href={`/dashboard/reports/${id}/${section.id}`}
-                        className={cn(
-                          "block px-3 py-1.5 rounded text-sm text-gray-600 hover:bg-gray-100",
-                          pathname.endsWith(`/${section.id}`) && "font-semibold text-gray-900 bg-gray-100"
-                        )}
-                      >
-                        {section.title}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+                  <span
+                    className={cn(
+                      'inline-block size-2 shrink-0 rounded-full',
+                      status === 'complete' && 'bg-[#111]',
+                      status === 'partial' && 'bg-[#C9BA94]',
+                      status === 'empty' && 'border border-[#d0d0d0] bg-white',
+                    )}
+                  />
+                  <span className="truncate">{section.title}</span>
+                </Link>
+              )
+            })}
+          </div>
         </div>
       )}
     </aside>
-  );
+  )
 }

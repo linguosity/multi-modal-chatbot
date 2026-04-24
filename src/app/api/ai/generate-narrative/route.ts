@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client'
 import Anthropic from '@/lib/ai/anthropic-compat'
+import { z } from 'zod'
+import { parseWithZod } from '@/lib/ai/structured'
 
 const anthropic = new Anthropic({})
 
@@ -46,6 +48,7 @@ export async function POST(request: NextRequest) {
     console.log('📖 Fetching report context...')
 
     // First try with sections join
+    // eslint-disable-next-line prefer-const
     let { data: report, error: reportError } = await supabase
       .from('reports')
       .select(`
@@ -206,6 +209,52 @@ Example response format:
 ` : ''}
 
 Write a comprehensive, professional narrative that would be appropriate for an official SLP evaluation report.`
+
+    // If source mapping is requested, try Structured Outputs first for strict schema adherence
+    if (includeSourceMapping) {
+      const Source = z.object({
+        sectionId: z.string(),
+        sectionTitle: z.string(),
+        fieldPath: z.string(),
+        fieldLabel: z.string(),
+        value: z.any(),
+        confidence: z.number().min(0).max(1).optional(),
+      })
+      const SourceMapping = z.object({
+        id: z.string(),
+        text: z.string(),
+        sources: z.array(Source),
+        startIndex: z.number().int().nonnegative(),
+        endIndex: z.number().int().nonnegative(),
+      })
+      const NarrativeWithMappings = z.object({
+        narrative: z.string(),
+        sourceMappings: z.array(SourceMapping),
+      })
+
+      const structured = await parseWithZod(
+        NarrativeWithMappings,
+        'narrative_with_mappings',
+        [
+          {
+            role: 'system',
+            content:
+              'You are an expert SLP. Return only JSON matching the provided schema strictly. Do not include prose outside JSON.',
+          },
+          { role: 'user', content: narrativePrompt },
+        ]
+      )
+
+      if (structured.ok) {
+        const result = structured.data
+        if (!result.narrative || result.narrative.trim().length === 0) {
+          throw new Error('Generated narrative is empty')
+        }
+        return NextResponse.json(result)
+      } else {
+        console.warn('Structured Outputs parse failed; falling back to Claude-like flow:', structured.error)
+      }
+    }
 
     console.log('🤖 Calling Anthropic API...')
     const response = await anthropic.messages.create({

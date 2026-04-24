@@ -1,26 +1,28 @@
 import { cookies as getCookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import type { CookieOptions } from '@supabase/ssr';
 import type { Database } from '@/types/supabase';
 
 export async function createSupabaseServerClient() {
-  const store = await getCookies();          // ✅ await here
+  const store = await getCookies();
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,   // 1
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, // 2
-    {                                        // 3: options object opens
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
       cookies: {
-        get(name: string) {
-          return store.get(name)?.value ?? null;
+        getAll() {
+          return store.getAll();
         },
-        set(name: string, value: string, options?: CookieOptions) {
-          try { store.set({ name, value, ...options }); } catch {}
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              store.set(name, value, options)
+            );
+          } catch {
+            // setAll called from Server Component — safe to ignore
+          }
         },
-        remove(name: string, options?: CookieOptions) {
-          try { store.delete({ name, ...options }); } catch {}
-        }
-      }
-    }                                        // ← options object closes
-  );                                         // ← createServerClient call closes
-}                                            // ← function closes (file ends)
+      },
+    }
+  );
+}

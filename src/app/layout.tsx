@@ -1,5 +1,10 @@
 import type { Metadata } from "next"
+import { Inconsolata, Gloock, Caveat } from 'next/font/google'
 import "./globals.css"
+
+const inconsolata = Inconsolata({ subsets: ['latin'], variable: '--font-mono' })
+const gloock = Gloock({ weight: '400', subsets: ['latin'], variable: '--font-display' })
+const caveat = Caveat({ weight: ['500', '700'], subsets: ['latin'], variable: '--font-hand' })
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import React from 'react';
 import { UserSettingsProvider } from '@/lib/context/UserSettingsContext';
@@ -22,7 +27,7 @@ export default async function RootLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <html lang="en" className="h-full scroll-smooth">
+    <html lang="en" className={`${inconsolata.variable} ${gloock.variable} ${caveat.variable} h-full scroll-smooth`}>
       <body className="h-full m-0 flex flex-col bg-background text-foreground">
         
         <UserSettingsProvider>

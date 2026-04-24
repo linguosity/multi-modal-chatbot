@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createRouteSupabase } from '@/lib/supabase/route-handler-client';
-import { ReportSchema, DEFAULT_SECTIONS, ReportSection } from '@/lib/schemas/report'
+import { DEFAULT_SECTIONS, ReportSection } from '@/lib/schemas/report'
 import { v4 as uuidv4 } from 'uuid'
 import { safeJsonResponse } from '@/lib/api/safe-json'
 
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     return safeJsonResponse({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  let sections;
+  let sections: any[];
 
   if (providedSections) {
     // Use provided sections (from default template)
@@ -80,7 +80,6 @@ export async function POST(request: Request) {
       sections = Object.values(DEFAULT_SECTIONS);
     } else {
       console.log('✅ Found template:', templateData.name);
-      console.log('📋 Template structure:', templateData.template_structure);
 
       // Convert template structure (groups) to flat sections array
       sections = [];
@@ -129,70 +128,71 @@ export async function POST(request: Request) {
     sections = Object.values(DEFAULT_SECTIONS);
   }
 
-  const newReportData = {
-    id: uuidv4(),
-    studentId: studentId,
-    title,
-    type,
-    templateId: template_id || 'default',
-    status: 'draft',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    sections: sections.map((section: ReportSection) => ({
-      ...section,
-      id: uuidv4(), // Give each section a unique ID
-      content: section.content || '', // Initialize with empty content for new reports
-      lastUpdated: new Date().toISOString(),
-    })),
-  };
+  // Generate report ID and section IDs
+  const reportId = uuidv4();
+  const now = new Date().toISOString();
 
-  // Validate with Zod schema (optional but good practice)
-  const validation = ReportSchema.safeParse(newReportData)
-  if (!validation.success) {
-    console.error({ validationError: validation.error }, 'Invalid report data during creation.');
-    return safeJsonResponse({ error: 'Invalid report data', details: validation.error.flatten() }, { status: 400 })
-  }
-
-  const { data, error } = await supabase
+  // Step 1: Insert report metadata (NO sections column)
+  const { data: reportData, error: reportError } = await supabase
     .from('reports')
     .insert({
-      id: validation.data.id,
+      id: reportId,
       user_id: user.id,
-      template_id: validation.data.templateId === 'default' ? null : validation.data.templateId,
-      title: validation.data.title,
-      type: validation.data.type,
-      status: validation.data.status,
-      student_id: validation.data.studentId,
-      evaluator_id: validation.data.evaluatorId,
-      created_at: validation.data.createdAt,
-      updated_at: validation.data.updatedAt,
-      sections: validation.data.sections,
-      tags: validation.data.tags,
-      finalized_date: validation.data.finalizedDate,
-      print_version: validation.data.printVersion,
-      related_assessment_ids: validation.data.relatedAssessmentIds,
-      related_eligibility_ids: validation.data.relatedEligibilityIds,
+      template_id: template_id || null,
+      title,
+      type,
+      status: 'draft',
+      student_id: studentId,
+      created_at: now,
+      updated_at: now,
     })
     .select()
     .single()
 
-  if (error) {
-    console.error({ error }, 'Error creating report in Supabase.');
+  if (reportError) {
+    console.error({ error: reportError }, 'Error creating report in Supabase.');
     return safeJsonResponse({ error: 'Failed to create report' }, { status: 500 })
   }
 
-  console.log({ reportId: data.id }, 'Successfully created report.');
+  // Step 2: Batch INSERT sections into report_sections table
+  const sectionRows = sections.map((section: any, idx: number) => ({
+    id: uuidv4(),
+    report_id: reportId,
+    section_type: section.sectionType || section.section_type || 'other',
+    title: section.title || 'Untitled Section',
+    order: section.order ?? idx,
+    content: section.content || '',
+    structured_data: section.structured_data || null,
+    is_completed: false,
+    is_required: section.isRequired ?? true,
+    is_generated: section.isGenerated ?? false,
+    created_at: now,
+    updated_at: now,
+  }));
 
-  // Return clean data without potential circular references
+  const { error: sectionsError } = await supabase
+    .from('report_sections')
+    .insert(sectionRows);
+
+  if (sectionsError) {
+    console.error({ error: sectionsError }, 'Error creating report sections in Supabase.');
+    // Report was created but sections failed — clean up the report
+    await supabase.from('reports').delete().eq('id', reportId);
+    return safeJsonResponse({ error: 'Failed to create report sections' }, { status: 500 })
+  }
+
+  console.log({ reportId: reportData.id, sectionCount: sectionRows.length }, 'Successfully created report with sections.');
+
+  // Return clean data
   const cleanData = {
-    id: data.id,
-    title: data.title,
-    type: data.type,
-    status: data.status,
-    studentId: data.student_id,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
-    templateId: data.template_id
+    id: reportData.id,
+    title: reportData.title,
+    type: reportData.type,
+    status: reportData.status,
+    studentId: reportData.student_id,
+    createdAt: reportData.created_at,
+    updatedAt: reportData.updated_at,
+    templateId: reportData.template_id
   }
 
   return safeJsonResponse(cleanData)

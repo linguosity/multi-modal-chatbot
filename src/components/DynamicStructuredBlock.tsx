@@ -15,12 +15,204 @@ import type { Json } from '@/lib/types/json'
 import { useUserSettings } from '@/lib/context/UserSettingsContext'
 import FieldModeBadge from '@/components/ui/field-mode-badge'
 import ProvenanceChips from '@/components/ui/provenance-chips'
+import { CriterionCard } from '@/components/primitives/CriterionCard'
+import { MultiSelectChips } from '@/components/primitives/MultiSelectChips'
+
+/**
+ * Suggested-value seeds for known list fields. Keep these in one place so
+ * adding a new suggestion list per-field is a one-liner. Free-add is still
+ * allowed alongside suggestions — clinicians can type anything that's not
+ * on the list.
+ */
+const CHIP_SUGGESTIONS: Record<string, string[]> = {
+  testing_accommodations: [
+    'Extended time',
+    'Small group setting',
+    'Frequent breaks',
+    'Oral administration',
+    'Simplified directions',
+    'Quiet environment',
+    'Visual supports',
+  ],
+  classroom_modifications: [
+    'Break down multi-step directions',
+    'Use gestures with verbal directions',
+    'Pair simplified verbal input with visual aids',
+    'Provide written checklists',
+    'Allow extra processing time',
+    'Pre-teach vocabulary',
+    'Repeat/rephrase instructions',
+  ],
+  domains_assessed: [
+    'Articulation',
+    'Phonology',
+    'Receptive language',
+    'Expressive language',
+    'Pragmatics',
+    'Voice',
+    'Fluency',
+    'Hearing',
+  ],
+}
 import type { FieldMode, SourceRef } from '@/types/field-contracts'
+
+/** Read a deep value via "a.b.c" dotted path. */
+function readPath(obj: unknown, path: string): unknown {
+  return path.split('.').reduce<any>((acc, k) => (acc == null ? acc : acc[k]), obj as any)
+}
+
+/** Write a deep value via dotted path, returning a structurally-shared copy. */
+function writePath<T extends Record<string, any>>(obj: T, path: string, val: unknown): T {
+  const [head, ...rest] = path.split('.')
+  if (rest.length === 0) {
+    return { ...obj, [head]: val } as T
+  }
+  const next = obj && typeof obj === 'object' && obj[head] && typeof obj[head] === 'object'
+    ? obj[head]
+    : {}
+  return { ...obj, [head]: writePath(next as Record<string, any>, rest.join('.'), val) } as T
+}
+
+/**
+ * Per-criterion config for the Eligibility Checklist (Template C). Each
+ * row binds a YesNoDecision (decisionKey: boolean) to a justification
+ * (justificationKey: string). Definitions render as collapsible "show
+ * definition" panels in the card.
+ */
+const ELIGIBILITY_CRITERIA: Array<{
+  num: string
+  title: string
+  decisionKey: string
+  justificationKey: string
+  definition: string
+  required?: boolean
+}> = [
+  {
+    num: '1',
+    title: 'Meets criteria for speech impairment',
+    decisionKey: 'speech_criteria',
+    justificationKey: 'speech_justification',
+    required: true,
+    definition:
+      'California Ed Code §56337(a): An articulation, voice, or fluency disorder that significantly interferes with communication and adversely affects the student\u2019s educational performance.',
+  },
+  {
+    num: '2',
+    title: 'Meets criteria for language impairment',
+    decisionKey: 'language_criteria',
+    justificationKey: 'language_justification',
+    required: true,
+    definition:
+      'California Ed Code §56337(b): A receptive and/or expressive language disorder that significantly interferes with communication and adversely affects the student\u2019s educational performance.',
+  },
+  {
+    num: '3',
+    title: 'Educational impact demonstrated',
+    decisionKey: 'educational_impact',
+    justificationKey: 'educational_impact_details',
+    required: true,
+    definition:
+      'California Ed Code §56026.5: The disorder negatively impacts the student\u2019s academic achievement, classroom participation, or functional performance — not just test scores in isolation.',
+  },
+  {
+    num: '4',
+    title: 'Adverse effect on educational performance',
+    decisionKey: 'adverse_effect',
+    justificationKey: 'adverse_effect_details',
+    required: true,
+    definition:
+      'A documented, observable effect on educational performance — examples include difficulty completing classroom assignments, participating in discussions, or accessing the curriculum.',
+  },
+  {
+    num: '5',
+    title: 'Requires special education services',
+    decisionKey: 'services_required',
+    justificationKey: 'services_justification',
+    required: true,
+    definition:
+      'The student\u2019s needs cannot be met without specially designed instruction. General education accommodations alone are insufficient.',
+  },
+]
+
+/**
+ * Per-criterion config for the Validity Statement (Template C). Validity
+ * uses dotted paths because the schema groups cooperation and factors
+ * into nested objects. Most factor cards are decision-only — no separate
+ * justification — and lean on `hide justification when no handler` from
+ * CriterionCard.
+ */
+const VALIDITY_CRITERIA: Array<{
+  num: string
+  title: string
+  decisionPath: string
+  justificationPath?: string
+  definition: string
+  required?: boolean
+  yesLabel?: string
+  noLabel?: string
+}> = [
+  {
+    num: '1',
+    title: 'Results provide a valid representation',
+    decisionPath: 'is_valid',
+    definition:
+      'Whether the assessment results are considered an accurate representation of the student\u2019s current speech and language skills.',
+    required: true,
+  },
+  {
+    num: '2',
+    title: 'Student was cooperative throughout',
+    decisionPath: 'student_cooperation.cooperative',
+    justificationPath: 'student_cooperation.understanding',
+    definition:
+      'Did the student engage appropriately with testing tasks throughout the session?',
+    required: true,
+  },
+  {
+    num: '3',
+    title: 'Attention factors affected validity',
+    decisionPath: 'validity_factors.attention_issues',
+    definition:
+      'Difficulty sustaining attention during testing that may have impacted results.',
+    yesLabel: 'Affected',
+    noLabel: 'Did not affect',
+  },
+  {
+    num: '4',
+    title: 'Motivation factors affected validity',
+    decisionPath: 'validity_factors.motivation_problems',
+    definition:
+      'Reduced engagement or task refusal that may have impacted results.',
+    yesLabel: 'Affected',
+    noLabel: 'Did not affect',
+  },
+  {
+    num: '5',
+    title: 'Cultural / linguistic factors affected validity',
+    decisionPath: 'validity_factors.cultural_considerations',
+    definition:
+      'Cultural or linguistic mismatch with normed populations that may have impacted score interpretation.',
+    yesLabel: 'Affected',
+    noLabel: 'Did not affect',
+  },
+]
 
 interface FieldSchema {
   key: string
   label: string
-  type: 'string' | 'boolean' | 'number' | 'array' | 'object' | 'date' | 'checkbox' | 'select'
+  // Keep in sync with canonical union in src/lib/structured-schemas.ts
+  type:
+    | 'string'
+    | 'boolean'
+    | 'number'
+    | 'array'
+    | 'object'
+    | 'date'
+    | 'checkbox'
+    | 'select'
+    | 'paragraph'
+    | 'enum'
+    | 'table'
   required?: boolean
   options?: string[] // For select/dropdown fields
   placeholder?: string
@@ -45,7 +237,7 @@ interface DynamicStructuredBlockProps {
   onSaveAsTemplate?: (schema: SectionSchema) => void;
   mode?: 'data' | 'template'; // Accept mode as prop instead of managing internally
   sectionId?: string; // Add sectionId for field highlighting
-  updateSectionData?: (sectionId: string, data: Json) => void;
+  updateSectionData?: (sectionId: string, data: Json, content?: string) => void;
 }
 
 // Helper function to get nested values
@@ -63,13 +255,15 @@ export default function DynamicStructuredBlock({
   sectionId,
   updateSectionData
 }: DynamicStructuredBlockProps) {
-  const [data, setData] = useState<Json>(initialData)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [data, setData] = useState<Record<string, any>>((initialData as Record<string, any>) ?? {})
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [previewRef, setPreviewRef] = useState<SourceRef | null>(null);
   const { settings } = useUserSettings()
+  const isHeaderSection = (schema?.key === 'header') || (schema?.title?.toLowerCase() === 'student information')
 
   // Map locked header fields to user settings keys
   const LOCKED_FIELD_SETTINGS_MAP: Record<string, keyof typeof settings> = {
@@ -272,13 +466,16 @@ export default function DynamicStructuredBlock({
 
     const LabelRow = ({ children }: { children?: React.ReactNode }) => (
       <div className="flex items-center gap-2">
-        <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
+        <label className={`block ${isHeaderSection ? 'text-xs' : 'text-sm'} font-medium text-gray-700`}>{field.label}:</label>
         {SHOW_PROVENANCE && field.mode && (
           <FieldModeBadge mode={field.mode} />
         )}
         {children}
       </div>
     )
+
+    const inputBaseClass = `w-full h-10 px-3 py-0.5 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500`
+    const smallInputClass = `w-full h-10 px-2 py-0.5 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500`
 
     const updateFieldValue = (newValue: any, shouldTriggerSave = false) => {
       // Only log when actually saving, not on every keystroke
@@ -320,6 +517,29 @@ export default function DynamicStructuredBlock({
     }
 
     const isLocked = (field as any).mode === 'locked'
+    const widthClass = (() => {
+      if (!isHeaderSection) return ''
+      switch (field.key) {
+        case 'first_name':
+        case 'last_name':
+          return 'max-w-[20rem]'
+        case 'student_id':
+          return 'max-w-[18rem]'
+        case 'date_of_birth':
+        case 'report_date':
+          return 'max-w-[14rem]'
+        case 'age':
+          return 'max-w-[8rem]'
+        case 'grade':
+          return 'max-w-[10rem]'
+        case 'primary_languages':
+          return 'max-w-[22rem]'
+        case 'evaluation_dates':
+          return 'max-w-[24rem]'
+        default:
+          return ''
+      }
+    })()
     switch (field.type) {
       case 'boolean':
         return wrapWithHighlight(fieldPath, (
@@ -382,14 +602,14 @@ export default function DynamicStructuredBlock({
 
       case 'date':
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-1">
+          <div key={fieldPath} className={`space-y-0.5 ${widthClass}`}>
             <LabelRow />
             <input
               type="date"
               value={value || ''}
               onChange={(e) => updateFieldValue(e.target.value, false)}
               onBlur={(e) => updateFieldValue(e.target.value, true)}
-              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className={isHeaderSection ? inputBaseClass : smallInputClass}
               disabled={isLocked}
               title={isLocked ? 'Locked by user settings' : undefined}
             />
@@ -403,37 +623,72 @@ export default function DynamicStructuredBlock({
           </div>
         ))
 
-      case 'select':
+      case 'select': {
+        // §2 primitive upgrade: when the option set is short (≤5), render
+        // as a segmented control so the full answer space is visible without
+        // a dropdown interaction. Dropdown still used for longer lists.
+        const options = field.options || []
+        const useSegmented = options.length > 0 && options.length <= 5 && !isLocked
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-1">
+          <div key={fieldPath} className={`space-y-0.5 ${widthClass}`}>
             <LabelRow />
-            <select
-              value={value || ''}
-              onChange={(e) => updateFieldValue(e.target.value, true)}
-              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-              disabled={isLocked}
-              title={isLocked ? 'Locked by user settings' : undefined}
-            >
-              <option value="">Select an option...</option>
-              {(field.options || []).map((option, index) => (
-                <option key={index} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            {useSegmented ? (
+              <div
+                role="radiogroup"
+                aria-label={field.label}
+                className="inline-flex rounded-md border border-gray-300 bg-white overflow-hidden"
+              >
+                {options.map((option) => {
+                  const isSelected = value === option
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => updateFieldValue(option, true)}
+                      className={
+                        'px-3 py-1.5 text-[13px] transition-colors border-l first:border-l-0 border-gray-200 ' +
+                        (isSelected
+                          ? 'bg-terracotta text-white font-medium'
+                          : 'bg-white text-gray-700 hover:bg-gray-50')
+                      }
+                    >
+                      {option}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <select
+                value={value || ''}
+                onChange={(e) => updateFieldValue(e.target.value, true)}
+                className={isHeaderSection ? inputBaseClass : smallInputClass}
+                disabled={isLocked}
+                title={isLocked ? 'Locked by user settings' : undefined}
+              >
+                <option value="">Select an option...</option>
+                {options.map((option, index) => (
+                  <option key={index} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            )}
             {SHOW_PROVENANCE && field.source_refs?.length ? (
-              <ProvenanceChips 
-                sources={field.source_refs} 
+              <ProvenanceChips
+                sources={field.source_refs}
                 className="mt-1"
                 onOpenPreview={(ref) => setPreviewRef(ref)}
               />
             ) : null}
           </div>
         ))
+      }
 
       case 'number':
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-1">
+          <div key={fieldPath} className={`space-y-0.5 ${widthClass}`}>
             <LabelRow />
             <input
               type="number"
@@ -441,7 +696,7 @@ export default function DynamicStructuredBlock({
               onChange={(e) => updateFieldValue(parseFloat(e.target.value) || 0, false)}
               onBlur={(e) => updateFieldValue(parseFloat(e.target.value) || 0, true)}
               placeholder={field.placeholder}
-              className="w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className={isHeaderSection ? inputBaseClass : smallInputClass}
               disabled={isLocked}
               title={isLocked ? 'Locked by user settings' : undefined}
             />
@@ -467,63 +722,42 @@ export default function DynamicStructuredBlock({
                   )}
                 </div>
                 
-                {/* Assessment Items List */}
-                {(Array.isArray(value) ? value : []).map((item: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="group flex items-center justify-between py-2 px-3 border-l-2 border-slate-200 hover:border-[var(--clr-accent)] hover:bg-slate-50 transition-all cursor-pointer"
-                    onClick={() => {
-                      setEditingItem(item);
-                      setEditingItemIndex(idx);
-                      setIsModalOpen(true);
-                    }}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {/* Tool name and type */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[var(--text-base)] font-medium text-gray-900 truncate">
-                          {item.title || 'Unnamed Tool'}
-                        </div>
-                        {item.type && (
-                          <div className="text-[var(--text-label)] text-slate-500">
-                            {item.type}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Scores (if available) */}
-                      <div className="flex items-center gap-2 text-[var(--text-label)] text-slate-600">
-                        {item.standard_score && (
-                          <span className="font-medium">SS: {item.standard_score}</span>
-                        )}
-                        {item.percentile && (
-                          <span className="font-medium">%: {item.percentile}</span>
-                        )}
-                        {item.qualitative_description && (
-                          <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <title>Has qualitative notes</title>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Remove button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const newArray = (Array.isArray(value) ? value : []).filter((_: any, i: number) => i !== idx);
-                        updateFieldValue(newArray);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
-                      title="Remove assessment tool"
+                {/* Assessment Items List (minimalist format) */}
+                {(Array.isArray(value) ? value : []).map((item: any, idx: number) => {
+                  const parts: string[] = []
+                  if (item.title) parts.push(String(item.title))
+                  if (item.acronym) parts.push(String(item.acronym).toUpperCase())
+                  const authorYear = [item.author, item.year_published].filter(Boolean).join(', ')
+                  if (authorYear) parts.push(authorYear)
+                  const blurb = item.purpose || item.target_population || (Array.isArray(item.domains_assessed) ? item.domains_assessed.join(', ') : '')
+                  if (blurb) parts.push(String(blurb))
+                  const line = parts.join(' | ')
+                  return (
+                    <div
+                      key={idx}
+                      className="group flex items-center justify-between py-2 px-3 rounded hover:bg-slate-50 transition cursor-pointer"
+                      onClick={() => { setEditingItem(item); setEditingItemIndex(idx); setIsModalOpen(true) }}
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-900 truncate">{line || 'Unnamed Tool'}</div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newArray = (Array.isArray(value) ? value : []).filter((_: any, i: number) => i !== idx)
+                          updateFieldValue(newArray)
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition"
+                        title="Remove assessment tool"
+                        aria-label="Remove assessment tool"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )
+                })}
 
                 {/* Add button */}
                 <button
@@ -554,7 +788,7 @@ export default function DynamicStructuredBlock({
 
                 {/* Empty state */}
                 {(Array.isArray(value) ? value : []).length === 0 && (
-                  <div className="text-[var(--text-base)] text-slate-400 text-center py-6 border-l-2 border-slate-200">
+                  <div className="text-sm text-slate-400 text-center py-6">
                     No assessment tools added yet
                   </div>
                 )}
@@ -657,7 +891,7 @@ export default function DynamicStructuredBlock({
                 const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
                 const runtimeRefs: SourceRef[] = runtime
                   .filter((r: any) => r && r.field_path === fieldPath)
-                  .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                  .map((r: any) => ({ artifactId: r.artifactId, page: r.page, confidence: r.confidence }))
                 return runtimeRefs.length ? (
                   <ProvenanceChips
                     sources={runtimeRefs}
@@ -708,36 +942,29 @@ export default function DynamicStructuredBlock({
             </div>
           ))
         } else {
-          // Handle simple arrays (comma-separated strings)
+          // Simple string arrays (e.g. testing_accommodations,
+          // classroom_modifications, domains_assessed) → MultiSelectChips
+          // with optional seeded suggestions. Replaces the old "comma-
+          // separated textarea" pattern (data-entry redesign §2 + §4.12).
+          const chipValue = Array.isArray(value) ? (value as string[]) : []
+          const suggestions = CHIP_SUGGESTIONS[field.key] ?? []
           return wrapWithHighlight(fieldPath, (
-            <div key={fieldPath} className="space-y-2 h-fit">
-              <label className="block text-sm font-medium text-gray-700">{field.label}:</label>
-              <textarea
-                value={Array.isArray(value) ? value.join(', ') : ''}
-                onChange={(e) => {
-                  const items = e.target.value.split(',').map(item => item.trim()).filter(item => item)
-                  updateFieldValue(items, false)
-                }}
-                onBlur={(e) => {
-                  const items = e.target.value.split(',').map(item => item.trim()).filter(item => item)
-                  updateFieldValue(items, true)
-                }}
-                placeholder="Enter items separated by commas..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                rows={3}
+            <div key={fieldPath} className="space-y-1.5 h-fit">
+              <LabelRow />
+              <MultiSelectChips
+                value={chipValue}
+                onChange={(next) => updateFieldValue(next, true)}
+                suggestions={suggestions}
+                placeholder={field.placeholder || 'Type and press Enter…'}
+                ariaLabel={field.label}
               />
-              {Array.isArray(value) && value.length > 0 && (
-                <div className="text-xs text-gray-500">
-                  {value.length} item{value.length !== 1 ? 's' : ''}: {value.join(', ')}
-                </div>
-              )}
               {(() => {
                 const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
                 if (!show) return null
                 const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
                 const runtimeRefs: SourceRef[] = runtime
                   .filter((r: any) => r && r.field_path === fieldPath)
-                  .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                  .map((r: any) => ({ artifactId: r.artifactId, page: r.page, confidence: r.confidence }))
                 return runtimeRefs.length ? (
                   <ProvenanceChips
                     sources={runtimeRefs}
@@ -770,18 +997,31 @@ export default function DynamicStructuredBlock({
 
       default: // string
         return wrapWithHighlight(fieldPath, (
-          <div key={fieldPath} className="space-y-2 h-fit">
+          <div key={fieldPath} className={`space-y-1 h-fit ${widthClass}`}>
             <LabelRow />
-            <textarea
-              value={value || ''}
-              onChange={(e) => updateFieldValue(e.target.value, false)}
-              onBlur={(e) => updateFieldValue(e.target.value, true)}
-              placeholder={field.placeholder}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              rows={3}
-              disabled={isLocked}
-              title={isLocked ? 'Locked by user settings' : undefined}
-            />
+            {isHeaderSection && ['first_name','last_name','student_id','primary_languages','evaluator_name','evaluator_credentials','evaluation_dates','school_name'].includes(field.key) ? (
+              <input
+                type="text"
+                value={value || ''}
+                onChange={(e) => updateFieldValue(e.target.value, false)}
+                onBlur={(e) => updateFieldValue(e.target.value, true)}
+                placeholder={field.placeholder}
+                className={inputBaseClass}
+                disabled={isLocked}
+                title={isLocked ? 'Locked by user settings' : undefined}
+              />
+            ) : (
+              <textarea
+                value={value || ''}
+                onChange={(e) => updateFieldValue(e.target.value, false)}
+                onBlur={(e) => updateFieldValue(e.target.value, true)}
+                placeholder={field.placeholder}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows={3}
+                disabled={isLocked}
+                title={isLocked ? 'Locked by user settings' : undefined}
+              />
+            )}
             {(() => {
               const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
               if (!show) return null
@@ -789,7 +1029,7 @@ export default function DynamicStructuredBlock({
               const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
               const runtimeRefs: SourceRef[] = runtime
                 .filter((r: any) => r && r.field_path === fieldPath)
-                .map((r: any) => ({ artifactId: r.artifactId, confidence: r.confidence }))
+                .map((r: any) => ({ artifactId: r.artifactId, page: r.page, confidence: r.confidence }))
               const combined = [...schemaRefs, ...runtimeRefs]
               return combined.length ? (
                 <ProvenanceChips
@@ -824,21 +1064,79 @@ export default function DynamicStructuredBlock({
       {/* Content */}
       {mode === 'template' ? (
         <DynamicSchemaEditor
-          schema={schema}
-          onSchemaChange={onSchemaChange!}
-          onSaveAsTemplate={onSaveAsTemplate!}
+          // DynamicSchemaEditor defines its own SectionSchema shape; cast
+          // through unknown to bridge the duplicate-name drift.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          schema={schema as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onSchemaChange={onSchemaChange as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onSaveAsTemplate={onSaveAsTemplate as any}
         />
       ) : (
         <div className="p-6">
+          {/* §5 per-section completion meter.
+              Sections that already render a more meaningful progress unit
+              (eligibility "criteria decided", validity "factors decided")
+              opt out — otherwise the page would show two contradictory
+              progress meters (LING-103). */}
+          {!['eligibility_checklist', 'validity_statement'].includes(schema.key) && (() => {
+            const isFilled = (v: unknown): boolean => {
+              if (v === null || v === undefined) return false
+              if (typeof v === 'string') return v.trim().length > 0
+              if (typeof v === 'boolean') return true
+              if (typeof v === 'number') return Number.isFinite(v)
+              if (Array.isArray(v)) return v.length > 0
+              if (typeof v === 'object') return Object.keys(v as object).length > 0
+              return !!v
+            }
+            let filled = 0
+            let total = 0
+            for (const f of schema.fields) {
+              if (f.type === 'object' && f.children?.length) {
+                const obj = (data as Record<string, unknown>)?.[f.key]
+                for (const child of f.children) {
+                  total++
+                  if (isFilled((obj as Record<string, unknown> | undefined)?.[child.key])) filled++
+                }
+              } else {
+                total++
+                if (isFilled((data as Record<string, unknown>)?.[f.key])) filled++
+              }
+            }
+            if (total === 0) return null
+            const pct = Math.round((filled / total) * 100)
+            return (
+              <div
+                className="mb-4 flex items-center gap-3"
+                aria-label={`${filled} of ${total} fields filled`}
+              >
+                <div className="h-1 flex-1 rounded-full bg-gray-200 overflow-hidden">
+                  <div
+                    className="h-full bg-terracotta transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="whitespace-nowrap text-[11.5px] text-gray-500">
+                  {filled} of {total} fields · {pct}%
+                </span>
+              </div>
+            )
+          })()}
           {(() => {
             const show = (process.env.NEXT_PUBLIC_SHOW_PROVENANCE ? process.env.NEXT_PUBLIC_SHOW_PROVENANCE === 'true' : process.env.NODE_ENV !== 'production')
             if (!show) return null
             const runtime = Array.isArray((data as any)?.__provenance) ? (data as any).__provenance : []
+            // Deduplicate by artifactId + page so "Hernandez.pdf p.4" and
+            // "Hernandez.pdf p.7" appear as separate chips in the section header.
             const sectionRefs: SourceRef[] = Array.from(new Map(
               runtime
                 .filter((r: any) => r && r.artifactId)
-                .map((r: any) => [r.artifactId, { artifactId: r.artifactId, confidence: r.confidence } as SourceRef])
-            ).values())
+                .map((r: any) => {
+                  const key = `${r.artifactId}::${r.page ?? ''}`
+                  return [key, { artifactId: r.artifactId, page: r.page, confidence: r.confidence } as SourceRef]
+                })
+            ).values()) as SourceRef[]
             if (sectionRefs.length === 0) return null
             return (
               <div className="mb-4">
@@ -852,14 +1150,210 @@ export default function DynamicStructuredBlock({
               </div>
             )
           })()}
-          {/* Dynamic Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 items-start">
-            {schema.fields.map(field => (
-              <React.Fragment key={field.key}>
-                {renderField(field, data[field.key])}
-              </React.Fragment>
-            ))}
-          </div>
+          {/* Dynamic Fields.
+              Eligibility Checklist + Validity Statement get Template C
+              renders (stacks of CriterionCards). Student-Information-style
+              headers split into manual + auto lanes. Everything else falls
+              through to the default single-grid render. */}
+          {schema.key === 'validity_statement' ? (() => {
+            const setValPath = (path: string, val: unknown) => {
+              const newData = writePath(data as Record<string, any>, path, val)
+              setData(newData)
+              const generatedText = generateProseText(newData)
+              onChange(newData, generatedText)
+            }
+            const decisions = VALIDITY_CRITERIA.map((c) => readPath(data, c.decisionPath))
+            const decided = decisions.filter((v) => v === true || v === false).length
+
+            // The "other factors" string field doesn't fit the criterion
+            // pattern — render it below the cards as a plain text panel.
+            const otherFactors = (data as any)?.validity_factors?.other ?? ''
+            const customNotes = (data as any)?.student_cooperation?.custom_notes ?? ''
+
+            return (
+              <div className="mb-6 space-y-4">
+                <div
+                  className="sticky top-0 z-10 -mx-6 mb-2 flex items-center justify-between border-b border-gray-200 bg-[var(--paper)]/95 px-6 py-2 text-[12.5px] backdrop-blur"
+                  aria-label="Validity decision progress"
+                >
+                  <span className="text-gray-700">
+                    {decided} of {VALIDITY_CRITERIA.length} factors decided
+                  </span>
+                  <span className="text-gray-500">
+                    Yes/No on each factor; add notes where the picture isn&rsquo;t clean.
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {VALIDITY_CRITERIA.map((c) => {
+                    const decision = readPath(data, c.decisionPath)
+                    const justification = c.justificationPath
+                      ? (readPath(data, c.justificationPath) as string | undefined)
+                      : undefined
+                    return (
+                      <CriterionCard
+                        key={c.decisionPath}
+                        number={c.num}
+                        title={c.title}
+                        required={c.required}
+                        definition={c.definition}
+                        decision={typeof decision === 'boolean' ? decision : null}
+                        onDecisionChange={(v) => setValPath(c.decisionPath, v)}
+                        justification={typeof justification === 'string' ? justification : ''}
+                        onJustificationChange={
+                          c.justificationPath
+                            ? (v) => setValPath(c.justificationPath!, v)
+                            : undefined
+                        }
+                        justificationLabel={c.justificationPath ? 'Notes' : undefined}
+                      />
+                    )
+                  })}
+                </div>
+
+                {/* Free-text trailing fields: cooperation notes + other factors. */}
+                <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+                  <div>
+                    <label className="block text-[11.5px] text-gray-500 mb-1.5">
+                      Other cooperation observations
+                    </label>
+                    <textarea
+                      value={customNotes}
+                      onChange={(e) => setValPath('student_cooperation.custom_notes', e.target.value)}
+                      placeholder="Anything else worth recording about how the session went."
+                      className="w-full min-h-[64px] rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-terracotta focus:outline-none focus:ring-0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] text-gray-500 mb-1.5">
+                      Other validity factors
+                    </label>
+                    <textarea
+                      value={otherFactors}
+                      onChange={(e) => setValPath('validity_factors.other', e.target.value)}
+                      placeholder="Environmental, fatigue, or other factors not covered above."
+                      className="w-full min-h-[64px] rounded border border-gray-200 bg-white px-3 py-2 text-[13px] focus:border-terracotta focus:outline-none focus:ring-0"
+                    />
+                  </div>
+                </div>
+              </div>
+            )
+          })() : schema.key === 'eligibility_checklist' ? (() => {
+            // Local helper mirrors the renderField updateFieldValue flow:
+            // updates data, regenerates prose, hands off to onChange.
+            const setEligValue = (key: string, val: unknown) => {
+              const newData = { ...data, [key]: val }
+              setData(newData)
+              const generatedText = generateProseText(newData)
+              onChange(newData, generatedText)
+            }
+            const handledKeys = new Set<string>()
+            ELIGIBILITY_CRITERIA.forEach((c) => {
+              handledKeys.add(c.decisionKey)
+              handledKeys.add(c.justificationKey)
+            })
+            const remainingFields = schema.fields.filter((f) => !handledKeys.has(f.key))
+            const decisions = ELIGIBILITY_CRITERIA.map((c) => data?.[c.decisionKey])
+            const decided = decisions.filter((v) => v === true || v === false).length
+
+            return (
+              <div className="mb-6 space-y-4">
+                <div
+                  className="sticky top-0 z-10 -mx-6 mb-2 flex items-center justify-between border-b border-gray-200 bg-[var(--paper)]/95 px-6 py-2 text-[12.5px] backdrop-blur"
+                  aria-label="Eligibility decision progress"
+                >
+                  <span className="text-gray-700">
+                    {decided} of {ELIGIBILITY_CRITERIA.length} criteria decided
+                  </span>
+                  <span className="text-gray-500">
+                    Set the overall determination once every criterion has a Yes/No answer.
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {ELIGIBILITY_CRITERIA.map((c) => {
+                    const decision = data?.[c.decisionKey]
+                    const justification = data?.[c.justificationKey]
+                    const fieldSchema = schema.fields.find((f) => f.key === c.justificationKey)
+                    return (
+                      <CriterionCard
+                        key={c.decisionKey}
+                        number={c.num}
+                        title={c.title}
+                        required={c.required}
+                        definition={c.definition}
+                        decision={typeof decision === 'boolean' ? decision : null}
+                        onDecisionChange={(v) => setEligValue(c.decisionKey, v)}
+                        justification={typeof justification === 'string' ? justification : ''}
+                        onJustificationChange={(v) => setEligValue(c.justificationKey, v)}
+                        justificationPlaceholder={fieldSchema?.placeholder}
+                      />
+                    )
+                  })}
+                </div>
+
+                {/* Remaining fields (e.g. overall_eligibility select) below */}
+                {remainingFields.length > 0 && (
+                  <div className="rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 items-start">
+                      {remainingFields.map((field) => (
+                        <React.Fragment key={field.key}>
+                          {renderField(field, data[field.key])}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })() : isHeaderSection ? (() => {
+            const isAutoField = (f: FieldSchema) => !!f.mode && f.mode !== 'manual'
+            const manualFields = schema.fields.filter((f) => !isAutoField(f))
+            const autoFields = schema.fields.filter(isAutoField)
+            return (
+              <div className={`mb-6 ${autoFields.length > 0 ? 'grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5 items-start' : ''}`}>
+                <div className="rounded-md border border-gray-200 bg-gray-50/60 p-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 items-start">
+                    {manualFields.map((field) => (
+                      <React.Fragment key={field.key}>
+                        {renderField(field, data[field.key])}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+                {autoFields.length > 0 && (
+                  <aside
+                    className="rounded-md border border-gray-200 bg-[#faf9f5] p-3 lg:sticky lg:top-4"
+                    aria-label="Auto-filled fields"
+                  >
+                    <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
+                      <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 12l2 2 4-4" />
+                        <path d="M12 2L4 7v6c0 5 3.8 8.5 8 9 4.2-.5 8-4 8-9V7l-8-5z" />
+                      </svg>
+                      <span>Auto-filled</span>
+                      <span className="ml-1 opacity-60">· {autoFields.length}</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      {autoFields.map((field) => (
+                        <React.Fragment key={field.key}>
+                          {renderField(field, data[field.key])}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </aside>
+                )}
+              </div>
+            )
+          })() : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 items-start">
+              {schema.fields.map((field) => (
+                <React.Fragment key={field.key}>
+                  {renderField(field, data[field.key])}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -884,7 +1378,7 @@ export default function DynamicStructuredBlock({
           isOpen={!!previewRef}
           title="Source Preview"
           onClose={() => setPreviewRef(null)}
-          actions={<></>}
+          footer={<></>}
         >
           <div className="p-4 space-y-2 text-sm">
             <div className="text-slate-700"><span className="font-medium">Artifact:</span> {previewRef.artifactId}</div>

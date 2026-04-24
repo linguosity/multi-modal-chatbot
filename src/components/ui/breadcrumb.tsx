@@ -159,7 +159,7 @@ export function useBreadcrumbs(
     // Determine label and icon based on segment
     let label = customLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1)
     let iconKey: IconKey | string | undefined
-    let metadata: BreadcrumbItem['metadata'] = {}
+    const metadata: BreadcrumbItem['metadata'] = {}
     
     switch (segment) {
       case 'dashboard':

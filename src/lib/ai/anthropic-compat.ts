@@ -1,147 +1,205 @@
-// Anthropic compatibility layer backed by OpenAI function calling
-// Supports: text messages, tool/function calling, tool results loop
-// Note: Does not support Anthropic image/document content blocks; callers should pre-extract text.
+/**
+ * Anthropic SDK wrapper exposing the message-shaped interface the rest of the
+ * codebase expects (`anthropic.messages.create(params)` → `{ content, stop_reason }`).
+ *
+ * Historically this was an OpenAI-backed shim; now it's backed by the real
+ * Anthropic SDK (`@anthropic-ai/sdk`). Keep the class API stable so routes
+ * that import this continue working.
+ */
 
-import OpenAI from 'openai'
+import AnthropicSDK from '@anthropic-ai/sdk'
+
+export const CLAUDE_MODELS = {
+  OPUS:   'claude-opus-4-7',
+  SONNET: 'claude-sonnet-4-6',
+  HAIKU:  'claude-haiku-4-5-20251001',
+} as const
+
+export type ClaudeModelId = (typeof CLAUDE_MODELS)[keyof typeof CLAUDE_MODELS]
 
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  | { type: 'tool_result'; tool_use_id: string; content: string | AnthropicContentBlock[]; is_error?: boolean }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string }; title?: string }
 
 type AnthropicMessageParam = {
   role: 'user' | 'assistant' | 'system'
-  content: AnthropicContentBlock[]
+  // Accept raw string OR structured content blocks — Anthropic SDK allows both.
+  content: string | AnthropicContentBlock[]
 }
+
+type AnthropicCacheControl = { type: 'ephemeral'; ttl?: '5m' | '1h' }
 
 type AnthropicTool = {
   name: string
   description?: string
   input_schema: any
+  cache_control?: AnthropicCacheControl
 }
 
+type AnthropicSystemBlock = { type: 'text'; text: string; cache_control?: AnthropicCacheControl }
+
 type CreateParams = {
-  model: string
+  model?: string
   max_tokens?: number
   temperature?: number
-  system?: string
+  /**
+   * String for simple cases; array of text blocks (each with optional
+   * `cache_control: { type: "ephemeral" }`) when you want to mark stable
+   * sections as cache-eligible. Prompt caching cuts cache-hit input cost to
+   * ~10% and latency to ~15% of a cold call.
+   */
+  system?: string | AnthropicSystemBlock[]
   messages: AnthropicMessageParam[]
   tools?: AnthropicTool[]
   tool_choice?: { type: 'tool'; name: string } | 'auto' | undefined
 }
 
-export default class Anthropic {
-  private openai: OpenAI
-  private model: string
+let _client: AnthropicSDK | null = null
 
-  constructor(opts: { apiKey?: string, project?: string } = {}) {
-    this.openai = new OpenAI({
-      apiKey: opts.apiKey || process.env.OPENAI_API_KEY,
-      // Support project-scoped API keys if provided
-      project: opts.project || process.env.OPENAI_PROJECT || process.env.OPENAI_PROJECT_ID,
-    })
-    // Prefer Claude model if provided; otherwise allow override via OPENAI_MODEL
-    this.model = process.env.CLAUDE_MODEL || process.env.OPENAI_MODEL || 'claude-opus-4-1-20250805'
+function getClient(apiKey?: string): AnthropicSDK {
+  if (_client) return _client
+  _client = new AnthropicSDK({
+    apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
+  })
+  return _client
+}
+
+function resolveModel(explicit?: string): string {
+  return explicit || process.env.CLAUDE_MODEL || CLAUDE_MODELS.SONNET
+}
+
+/**
+ * Class + namespace declared locally first, then default-exported together.
+ * This lets callers do `import Anthropic from '...'` followed by
+ * `Anthropic.ToolUseBlock` — the namespace declaration merges with the class
+ * declaration into a single binding that the default export carries over.
+ */
+class Anthropic {
+  private defaultModel: string
+  private apiKey?: string
+
+  constructor(opts: { apiKey?: string; project?: string } = {}) {
+    this.apiKey = opts.apiKey
+    this.defaultModel = process.env.CLAUDE_MODEL || CLAUDE_MODELS.SONNET
   }
 
   public messages = {
     create: async (params: CreateParams) => {
-      const system = params.system
-      const tools = params.tools || []
+      const client = getClient(this.apiKey)
+      const model = resolveModel(params.model || this.defaultModel)
 
-      // Map Anthropic tool schemas to OpenAI function tools
-      const oaTools = tools.map(t => ({
-        type: 'function' as const,
-        function: {
-          name: t.name,
-          description: t.description || undefined,
-          parameters: t.input_schema || { type: 'object', properties: {} }
-        }
-      }))
-
-      // Build chat messages
-      const chatMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = []
-      if (system) {
-        chatMessages.push({ role: 'system', content: system })
-      }
-
+      // Collect role:'system' messages + explicit params.system. When the
+      // caller passes system as an array (for cache_control markers), pass it
+      // straight through and append any role:'system' message text as a
+      // trailing uncached block. When system is a plain string, concatenate.
+      let systemParam: any = params.system ?? ''
+      const conversation: any[] = []
       for (const m of params.messages) {
-        // Collapse text blocks into a single string
-        const toolResultBlocks = m.content.filter(b => b.type === 'tool_result') as Extract<AnthropicContentBlock, { type: 'tool_result' }>[]
-        const textBlocks = m.content.filter(b => b.type === 'text') as Extract<AnthropicContentBlock, { type: 'text' }>[]
-
-        if (toolResultBlocks.length > 0) {
-          // Forward tool results as tool role messages
-          for (const tr of toolResultBlocks) {
-            chatMessages.push({
-              role: 'tool',
-              tool_call_id: tr.tool_use_id,
-              content: tr.content || ''
-            })
+        if (m.role === 'system') {
+          const extra =
+            typeof m.content === 'string'
+              ? m.content
+              : m.content
+                  .filter((b): b is Extract<AnthropicContentBlock, { type: 'text' }> => b.type === 'text')
+                  .map((b) => b.text)
+                  .join('\n')
+          if (Array.isArray(systemParam)) {
+            if (extra) systemParam = [...systemParam, { type: 'text', text: extra }]
+          } else {
+            systemParam = systemParam ? `${systemParam}\n${extra}` : extra
           }
           continue
         }
-
-        const combined = textBlocks.map(t => t.text).join('\n')
-        const role = m.role === 'system' ? 'user' : m.role // treat stray system as user for safety
-        chatMessages.push({ role, content: combined || '' })
+        conversation.push({ role: m.role, content: m.content })
       }
 
-      // Tool choice mapping
-      let tool_choice: any = undefined
-      if (params.tool_choice && typeof params.tool_choice === 'object' && params.tool_choice.type === 'tool') {
-        tool_choice = { type: 'function', function: { name: params.tool_choice.name } }
+      const requestBody: any = {
+        model,
+        max_tokens: params.max_tokens ?? 4096,
+        messages: conversation,
+      }
+      if (Array.isArray(systemParam) ? systemParam.length > 0 : systemParam) {
+        requestBody.system = systemParam
+      }
+      if (params.temperature !== undefined) requestBody.temperature = params.temperature
+      if (params.tools && params.tools.length > 0) {
+        // Pass tools through as-is — allows cache_control markers to survive.
+        requestBody.tools = params.tools.map((t) => {
+          const out: any = { name: t.name, description: t.description, input_schema: t.input_schema }
+          if (t.cache_control) out.cache_control = t.cache_control
+          return out
+        })
+      }
+      if (
+        params.tool_choice &&
+        typeof params.tool_choice === 'object' &&
+        params.tool_choice.type === 'tool'
+      ) {
+        requestBody.tool_choice = { type: 'tool', name: params.tool_choice.name }
       }
 
-      const opts: any = {
-        model: params.model || this.model,
-        max_completion_tokens: params.max_tokens,
-        messages: chatMessages,
-        tools: oaTools.length ? oaTools : undefined,
-        tool_choice: tool_choice as any,
-      }
-      // GPT-5 models only support default temperature; omit to avoid 400s
-      const modelName = (params.model || this.model || '').toString()
-      if (!modelName.startsWith('gpt-5') && params.temperature !== undefined) {
-        opts.temperature = params.temperature
-      }
-
-      const completion = await this.openai.chat.completions.create(opts)
-
-      const choice = completion.choices[0]
-      const toolCalls = choice.message.tool_calls || []
-      const content: AnthropicContentBlock[] = []
-
-      const text = choice.message.content || ''
-      if (text && text.trim().length > 0) {
-        content.push({ type: 'text', text })
-      }
-
-      for (const tc of toolCalls) {
-        let args: any = {}
-        try {
-          args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {}
-        } catch {
-          args = tc.function.arguments
-        }
-        content.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input: args })
-      }
-
-      const stop_reason = toolCalls.length > 0 ? 'tool_use' : (choice.finish_reason || 'stop')
+      const response = await client.messages.create(requestBody)
 
       return {
-        content,
-        stop_reason
+        content: response.content as unknown as AnthropicContentBlock[],
+        stop_reason: response.stop_reason ?? 'stop',
+        // Expose usage so callers can log cache behavior.
+        // `cache_creation_input_tokens` > 0 → cache write (cold call).
+        // `cache_read_input_tokens` > 0    → cache hit (warm call).
+        usage: (response as any).usage ?? undefined,
       }
-    }
+    },
   }
 }
 
-// Type namespace compatibility to satisfy existing type references like Anthropic.ToolUseBlock
-export namespace Anthropic {
+// Namespace merges with the class above so `Anthropic.ToolUseBlock` /
+// `Anthropic.MessageParam` etc. are accessible at the type level via
+// `import Anthropic from '...'`.
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace Anthropic {
+  export type TextBlock = { type: 'text'; text: string }
   export type ToolUseBlock = { type: 'tool_use'; id: string; name: string; input: any }
+  export type ToolResultBlock = {
+    type: 'tool_result'
+    tool_use_id: string
+    content: string | ContentBlock[]
+    is_error?: boolean
+  }
+  export type ImageBlock = {
+    type: 'image'
+    source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string }
+  }
+  export type DocumentBlock = {
+    type: 'document'
+    source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string }
+    title?: string
+  }
+  export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ImageBlock | DocumentBlock
+
   export type MessageParam = {
     role: 'user' | 'assistant' | 'system'
-    content: AnthropicContentBlock[]
+    content: string | ContentBlock[]
+  }
+
+  export type Tool = {
+    name: string
+    description?: string
+    input_schema: any
+  }
+
+  export type Message = {
+    id?: string
+    type?: 'message'
+    role?: 'assistant'
+    model?: string
+    content: ContentBlock[]
+    stop_reason?: string | null
+    stop_sequence?: string | null
+    usage?: { input_tokens?: number; output_tokens?: number }
   }
 }
+
+export default Anthropic

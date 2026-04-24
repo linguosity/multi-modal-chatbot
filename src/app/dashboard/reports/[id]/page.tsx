@@ -1,21 +1,38 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
 import { useReport } from '@/lib/context/ReportContext'
 
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { report, loading } = useReport()
+  const shouldOpenAI = searchParams.get('ai') === '1'
 
   // Redirect to first section when report loads
   useEffect(() => {
     if (report && report.sections.length > 0) {
       const firstSectionId = report.sections[0].id
-      router.replace(`/dashboard/reports/${id}/${firstSectionId}`)
+      // If ai=1, redirect without the query param but dispatch the event once mounted
+      if (shouldOpenAI) {
+        router.replace(`/dashboard/reports/${id}/${firstSectionId}`)
+      } else {
+        router.replace(`/dashboard/reports/${id}/${firstSectionId}`)
+      }
     }
-  }, [report, id, router])
+  }, [report, id, router, shouldOpenAI])
+
+  // After redirect, dispatch open-ai event to auto-open the drawer
+  useEffect(() => {
+    if (shouldOpenAI && report && report.sections.length > 0) {
+      const timer = setTimeout(() => {
+        window.dispatchEvent(new Event('open-ai'))
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [shouldOpenAI, report])
 
   if (loading) {
     return (

@@ -23,13 +23,12 @@ export async function GET() {
       .from('report_section_types')
       .select('id, name, default_title, description');
     
-    sectionTypes = fallbackResult.data;
     error = fallbackResult.error;
-    
+
     // Add ai_directive as undefined to match schema
-    if (sectionTypes) {
-      sectionTypes = sectionTypes.map(st => ({ ...st, ai_directive: undefined }));
-    }
+    sectionTypes = fallbackResult.data
+      ? fallbackResult.data.map(st => ({ ...st, ai_directive: undefined }))
+      : null;
   }
 
   if (error) {
