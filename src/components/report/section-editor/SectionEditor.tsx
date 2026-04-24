@@ -42,20 +42,35 @@ import React, {
   useState,
 } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import type {
-  SectionEditorMode,
-  SectionNode,
-  SectionNodeId,
-  SectionTree,
+import {
+  makeCriterion,
+  makeParagraph,
+  makeScoreCard,
+  type BlockKind,
+  type CriterionBlock,
+  type ParagraphBlock,
+  type ScoreCardBlock,
+  type SectionBlock,
+  type SectionEditorMode,
+  type SectionNodeId,
+  type SectionTree,
 } from './types'
 import {
   findById,
   insertAfter,
   normalizeDepths,
-  removePoint,
+  removeBlock,
   toFlat,
   toTree,
+  updateBlock,
 } from './tree-ops'
+import {
+  CriterionRow,
+  InsertMenu,
+  ScoreCardRow,
+  criterionToProseText,
+  scoreCardToProseText,
+} from './blocks'
 
 /** Spec §3 — readability cap at depth 2 (three visible levels). */
 const MAX_DEPTH = 2
@@ -153,79 +168,91 @@ export default function SectionEditor(props: SectionEditorProps) {
   const [focusTarget, setFocusTarget] = useState<FocusTarget | null>(null)
   const clearFocusTarget = useCallback(() => setFocusTarget(null), [])
 
-  // Walk helper: replace a node's text in-place in the tree by id.
-  const walkReplaceText = useCallback(
-    (ns: SectionNode[], id: SectionNodeId, text: string): SectionNode[] =>
-      ns.map((n) =>
-        n.id === id
-          ? { ...n, text }
-          : { ...n, children: walkReplaceText(n.children, id, text) },
-      ),
-    [],
-  )
-
   // ── Structural handlers ───────────────────────────────────────────────
   /**
    * Enter-split. Left half stays with `targetId` and keeps its children.
-   * Right half becomes a fresh-id sibling with no children. Degenerates
-   * correctly at end-of-line (rightText === '' → empty sibling) and
-   * start-of-line (leftText === '' → original text moves into the new
-   * row). Focus lands at the start of the new sibling.
+   * Right half becomes a fresh-id paragraph sibling with no children.
+   * Degenerates correctly at end-of-line (rightText === '' → empty
+   * sibling) and start-of-line (leftText === '' → original text moves
+   * into the new row). Focus lands at the start of the new sibling.
+   *
+   * Only meaningful on paragraph blocks. Card blocks (score, criterion)
+   * ignore the Enter-split — they route Enter to their own focus flow.
    */
   const splitAtCursor = useCallback(
     (targetId: SectionNodeId, leftText: string, rightText: string) => {
       if (readOnly || readOnlyStructure) return
-      const newNode: SectionNode = { id: idFactory(), text: rightText, children: [] }
+      const newBlock = makeParagraph(idFactory(), rightText)
       if (tree.topic.id === targetId) {
         commit({
           ...tree,
           topic: { ...tree.topic, text: leftText },
-          points: [newNode, ...tree.points],
+          blocks: [newBlock, ...tree.blocks],
         })
-        setFocusTarget({ id: newNode.id, position: 'start' })
+        setFocusTarget({ id: newBlock.id, position: 'start' })
         return
       }
-      const withLeftUpdated = walkReplaceText(tree.points, targetId, leftText)
+      const withLeftUpdated = updateBlock<ParagraphBlock>(
+        tree.blocks,
+        targetId,
+        (b) => ({ ...b, text: leftText }),
+      )
       commit({
         ...tree,
-        points: insertAfter(withLeftUpdated, targetId, newNode),
+        blocks: insertAfter(withLeftUpdated, targetId, newBlock),
       })
-      setFocusTarget({ id: newNode.id, position: 'start' })
+      setFocusTarget({ id: newBlock.id, position: 'start' })
     },
-    [tree, commit, idFactory, readOnly, readOnlyStructure, walkReplaceText],
+    [tree, commit, idFactory, readOnly, readOnlyStructure],
   )
 
   /**
    * Multi-paragraph paste. First paragraph inserts at the cursor via the
-   * normal paste path; the remainder become new sibling points below
-   * `targetId`, and focus lands at the end of the last inserted.
+   * normal paste path; the remainder become new sibling paragraph blocks
+   * below `targetId`, and focus lands at the end of the last inserted.
    */
   const insertParagraphsAfter = useCallback(
     (targetId: SectionNodeId, paragraphs: string[]) => {
       if (readOnly || readOnlyStructure) return
       if (paragraphs.length === 0) return
-      const newNodes: SectionNode[] = paragraphs.map((text) => ({
-        id: idFactory(),
-        text,
-        children: [],
-      }))
-      let nextPoints = tree.points
+      const newBlocks = paragraphs.map((text) => makeParagraph(idFactory(), text))
+      let nextBlocks = tree.blocks
       if (tree.topic.id === targetId) {
-        // Paste on topic → new points take the head of the list, in
-        // order.
-        nextPoints = [...newNodes, ...tree.points]
+        nextBlocks = [...newBlocks, ...tree.blocks]
       } else {
-        // insertAfter only inserts one at a time; splice via flat for
-        // the multi-paragraph case so order is preserved.
         let cursorId = targetId
-        for (const nn of newNodes) {
-          nextPoints = insertAfter(nextPoints, cursorId, nn)
+        for (const nn of newBlocks) {
+          nextBlocks = insertAfter(nextBlocks, cursorId, nn)
           cursorId = nn.id
         }
       }
-      commit({ ...tree, points: nextPoints })
-      const last = newNodes[newNodes.length - 1]
+      commit({ ...tree, blocks: nextBlocks })
+      const last = newBlocks[newBlocks.length - 1]
       setFocusTarget({ id: last.id, position: 'end' })
+    },
+    [tree, commit, idFactory, readOnly, readOnlyStructure],
+  )
+
+  /**
+   * Insert a fresh block of the given kind immediately after `targetId`.
+   * Used by the "+" insert affordance in the gutter. Focus lands on the
+   * new block.
+   */
+  const insertBlockAfter = useCallback(
+    (targetId: SectionNodeId, kind: BlockKind) => {
+      if (readOnly || readOnlyStructure) return
+      const newBlock: SectionBlock =
+        kind === 'score-card'
+          ? makeScoreCard(idFactory())
+          : kind === 'criterion'
+            ? makeCriterion(idFactory())
+            : makeParagraph(idFactory())
+      const nextBlocks =
+        tree.topic.id === targetId
+          ? [newBlock, ...tree.blocks]
+          : insertAfter(tree.blocks, targetId, newBlock)
+      commit({ ...tree, blocks: nextBlocks })
+      setFocusTarget({ id: newBlock.id, position: 'start' })
     },
     [tree, commit, idFactory, readOnly, readOnlyStructure],
   )
@@ -236,16 +263,16 @@ export default function SectionEditor(props: SectionEditorProps) {
       if (tree.topic.id === id) return // Never delete the topic.
       // Find which row precedes `id` — that's where focus lands.
       const flatOrdered: SectionNodeId[] = [tree.topic.id]
-      const walk = (ns: SectionNode[]) => {
+      const walk = (ns: SectionBlock[]) => {
         for (const n of ns) {
           flatOrdered.push(n.id)
           walk(n.children)
         }
       }
-      walk(tree.points)
+      walk(tree.blocks)
       const idx = flatOrdered.indexOf(id)
       const prevId = idx > 0 ? flatOrdered[idx - 1] : tree.topic.id
-      commit({ ...tree, points: removePoint(tree.points, id) })
+      commit({ ...tree, blocks: removeBlock(tree.blocks, id) })
       setFocusTarget({ id: prevId, position: 'end' })
     },
     [tree, commit, readOnly, readOnlyStructure],
@@ -255,7 +282,7 @@ export default function SectionEditor(props: SectionEditorProps) {
     (id: SectionNodeId, delta: number) => {
       if (readOnly || readOnlyStructure) return
       if (tree.topic.id === id) return // Topic has no depth.
-      const flat = toFlat(tree.points)
+      const flat = toFlat(tree.blocks)
       const idx = flat.findIndex((n) => n.id === id)
       if (idx === -1) return
 
@@ -282,7 +309,7 @@ export default function SectionEditor(props: SectionEditorProps) {
         flat[i].depth += delta
       }
       normalizeDepths(flat)
-      commit({ ...tree, points: toTree(flat) })
+      commit({ ...tree, blocks: toTree(flat) })
       setFocusTarget({ id, position: 'end' })
     },
     [tree, commit, readOnly, readOnlyStructure],
@@ -292,7 +319,7 @@ export default function SectionEditor(props: SectionEditorProps) {
     (sourceId: SectionNodeId, slotIndex: number, targetDepth: number) => {
       if (readOnly || readOnlyStructure) return
       if (tree.topic.id === sourceId) return
-      const flat = toFlat(tree.points)
+      const flat = toFlat(tree.blocks)
       const srcIdx = flat.findIndex((n) => n.id === sourceId)
       if (srcIdx === -1) return
 
@@ -324,7 +351,7 @@ export default function SectionEditor(props: SectionEditorProps) {
 
       const next = [...remaining.slice(0, insertAt), ...moving, ...remaining.slice(insertAt)]
       normalizeDepths(next)
-      commit({ ...tree, points: toTree(next) })
+      commit({ ...tree, blocks: toTree(next) })
       setFocusTarget({ id: sourceId, position: 'end' })
     },
     [tree, commit, readOnly, readOnlyStructure],
@@ -338,12 +365,38 @@ export default function SectionEditor(props: SectionEditorProps) {
         commit({ ...tree, topic: { ...tree.topic, text } })
         return
       }
-      const node = findById(tree.points, id)
-      if (!node || node.text === text) return
-      // Walk and replace by id.
-      const walk = (ns: SectionNode[]): SectionNode[] =>
-        ns.map((n) => (n.id === id ? { ...n, text } : { ...n, children: walk(n.children) }))
-      commit({ ...tree, points: walk(tree.points) })
+      const block = findById(tree.blocks, id)
+      if (!block) return
+      // Only paragraphs accept text updates via this path — card blocks
+      // have their own field-level updaters. No-op if the block is a
+      // different kind or text is unchanged.
+      if (block.kind !== 'paragraph' || block.text === text) return
+      commit({
+        ...tree,
+        blocks: updateBlock<ParagraphBlock>(tree.blocks, id, (b) => ({ ...b, text })),
+      })
+    },
+    [tree, commit, readOnly],
+  )
+
+  /**
+   * Update an individual field on a card block (score-card / criterion).
+   * Routed from the card's inline form. Text-only paragraph updates go
+   * through `updateText` above.
+   */
+  const updateBlockField = useCallback(
+    <K extends Exclude<BlockKind, 'paragraph'>>(
+      id: SectionNodeId,
+      patch: Partial<Omit<SectionBlock & { kind: K }, 'id' | 'kind' | 'children'>>,
+    ) => {
+      if (readOnly) return
+      commit({
+        ...tree,
+        blocks: updateBlock<SectionBlock>(tree.blocks, id, (b) => ({
+          ...b,
+          ...(patch as object),
+        } as SectionBlock)),
+      })
     },
     [tree, commit, readOnly],
   )
@@ -426,6 +479,8 @@ export default function SectionEditor(props: SectionEditorProps) {
             onAdjustDepth={adjustDepth}
             onMoveSubtree={moveSubtree}
             onPasteParagraphs={insertParagraphsAfter}
+            onInsertBlock={insertBlockAfter}
+            onUpdateBlockField={updateBlockField}
           />
         ) : (
           <ProseEditor
@@ -437,6 +492,8 @@ export default function SectionEditor(props: SectionEditorProps) {
             onEnter={splitAtCursor}
             onBackspaceEmpty={deletePoint}
             onPasteParagraphs={insertParagraphsAfter}
+            onInsertBlock={insertBlockAfter}
+            onUpdateBlockField={updateBlockField}
           />
         )}
       </motion.div>
@@ -566,6 +623,11 @@ interface SharedEditorProps {
   onEnter: (id: SectionNodeId, leftText: string, rightText: string) => void
   onBackspaceEmpty: (id: SectionNodeId) => void
   onPasteParagraphs: (id: SectionNodeId, paragraphs: string[]) => void
+  onInsertBlock: (afterId: SectionNodeId, kind: BlockKind) => void
+  onUpdateBlockField: (
+    id: SectionNodeId,
+    patch: Partial<ScoreCardBlock> | Partial<CriterionBlock>,
+  ) => void
 }
 
 interface OutlineEditorProps extends SharedEditorProps {
@@ -585,6 +647,8 @@ function OutlineEditor(props: OutlineEditorProps) {
     onAdjustDepth,
     onMoveSubtree,
     onPasteParagraphs,
+    onInsertBlock,
+    onUpdateBlockField,
   } = props
 
   // ── Drag state ───────────────────────────────────────────────────────
@@ -815,7 +879,7 @@ function OutlineEditor(props: OutlineEditorProps) {
         }}
       />
       <OutlineList
-        nodes={tree.points}
+        nodes={tree.blocks}
         depth={0}
         readOnly={readOnly}
         focusTarget={focusTarget}
@@ -823,6 +887,8 @@ function OutlineEditor(props: OutlineEditorProps) {
         onUpdateText={onUpdateText}
         onEnter={onEnter}
         onBackspaceEmpty={onBackspaceEmpty}
+        onInsertBlock={onInsertBlock}
+        onUpdateBlockField={onUpdateBlockField}
         onIndent={onAdjustDepth}
         onPasteParagraphs={onPasteParagraphs}
         onDragStart={handleDragStart}
@@ -836,7 +902,7 @@ function OutlineEditor(props: OutlineEditorProps) {
 }
 
 interface OutlineListProps {
-  nodes: SectionNode[]
+  nodes: SectionBlock[]
   depth: number
   readOnly: boolean
   focusTarget: { id: SectionNodeId; position: 'start' | 'end' } | null
@@ -846,9 +912,20 @@ interface OutlineListProps {
   onBackspaceEmpty: (id: SectionNodeId) => void
   onIndent: (id: SectionNodeId, delta: number) => void
   onPasteParagraphs: (id: SectionNodeId, paragraphs: string[]) => void
+  onInsertBlock: (afterId: SectionNodeId, kind: BlockKind) => void
+  onUpdateBlockField: (
+    id: SectionNodeId,
+    patch: Partial<ScoreCardBlock> | Partial<CriterionBlock>,
+  ) => void
   onDragStart: (id: SectionNodeId, text: string, e: React.PointerEvent) => void
   draggingId: SectionNodeId | null
   subtreeIds: Set<SectionNodeId> | null
+}
+
+function blockPreviewText(block: SectionBlock): string {
+  if (block.kind === 'paragraph') return block.text
+  if (block.kind === 'score-card') return block.testName || 'Score card'
+  return block.label || 'Criterion'
 }
 
 function OutlineList(props: OutlineListProps) {
@@ -863,6 +940,8 @@ function OutlineList(props: OutlineListProps) {
     onBackspaceEmpty,
     onIndent,
     onPasteParagraphs,
+    onInsertBlock,
+    onUpdateBlockField,
     onDragStart,
     draggingId,
     subtreeIds,
@@ -895,7 +974,7 @@ function OutlineList(props: OutlineListProps) {
           >
             <DragHandle
               readOnly={readOnly}
-              onPointerDown={(e) => onDragStart(n.id, n.text, e)}
+              onPointerDown={(e) => onDragStart(n.id, blockPreviewText(n), e)}
             />
             <span
               aria-hidden
@@ -906,30 +985,56 @@ function OutlineList(props: OutlineListProps) {
                 paddingTop: 9,
               }}
             >
-              {bulletFor(depth, i)}
+              {bulletFor(depth, i, n.kind)}
             </span>
-            <div>
-              <EditableLine
-                nodeId={n.id}
-                initialText={n.text}
-                placeholder="Add a point…"
-                ariaLabel={`Point ${i + 1}`}
-                readOnly={readOnly}
-                shouldFocus={focusTarget?.id === n.id}
-                focusPosition={focusTarget?.position}
-                onFocused={onFocused}
-                onCommitText={onUpdateText}
-                onEnter={onEnter}
-                onBackspaceEmpty={onBackspaceEmpty}
-                onIndent={onIndent}
-                onPasteParagraphs={onPasteParagraphs}
-                style={{
-                  fontSize: 15,
-                  lineHeight: 1.7,
-                  padding: '4px 6px',
-                  borderRadius: 4,
-                }}
-              />
+            <div style={{ position: 'relative' }}>
+              {n.kind === 'paragraph' ? (
+                <EditableLine
+                  nodeId={n.id}
+                  initialText={n.text}
+                  placeholder="Add a point…"
+                  ariaLabel={`Point ${i + 1}`}
+                  readOnly={readOnly}
+                  shouldFocus={focusTarget?.id === n.id}
+                  focusPosition={focusTarget?.position}
+                  onFocused={onFocused}
+                  onCommitText={onUpdateText}
+                  onEnter={onEnter}
+                  onBackspaceEmpty={onBackspaceEmpty}
+                  onIndent={onIndent}
+                  onPasteParagraphs={onPasteParagraphs}
+                  style={{
+                    fontSize: 15,
+                    lineHeight: 1.7,
+                    padding: '4px 6px',
+                    borderRadius: 4,
+                  }}
+                />
+              ) : n.kind === 'score-card' ? (
+                <ScoreCardRow
+                  block={n}
+                  readOnly={readOnly}
+                  onFieldChange={(id, patch) => onUpdateBlockField(id, patch)}
+                />
+              ) : (
+                <CriterionRow
+                  block={n}
+                  readOnly={readOnly}
+                  onFieldChange={(id, patch) => onUpdateBlockField(id, patch)}
+                />
+              )}
+              {!readOnly && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    right: -24,
+                    top: 4,
+                  }}
+                  className="se-insert-wrap"
+                >
+                  <InsertMenu readOnly={readOnly} onInsert={(kind) => onInsertBlock(n.id, kind)} />
+                </span>
+              )}
               {n.children.length > 0 && (
                 <OutlineList
                   nodes={n.children}
@@ -942,6 +1047,8 @@ function OutlineList(props: OutlineListProps) {
                   onBackspaceEmpty={onBackspaceEmpty}
                   onIndent={onIndent}
                   onPasteParagraphs={onPasteParagraphs}
+                  onInsertBlock={onInsertBlock}
+                  onUpdateBlockField={onUpdateBlockField}
                   onDragStart={onDragStart}
                   draggingId={draggingId}
                   subtreeIds={subtreeIds}
@@ -1096,7 +1203,11 @@ function DragOverlay({
   )
 }
 
-function bulletFor(depth: number, index: number): string {
+function bulletFor(depth: number, index: number, kind: BlockKind = 'paragraph'): string {
+  // Non-paragraph blocks render their own visual (card / checkbox), so
+  // the bullet gutter stays empty to keep alignment without competing
+  // with the card's internal chrome.
+  if (kind !== 'paragraph') return ''
   if (depth === 0) return String(index + 1).padStart(2, '0')
   if (depth === 1) return '·'
   return '○'
@@ -1348,12 +1459,13 @@ function ProseEditor(props: ProseEditorProps) {
     onEnter,
     onBackspaceEmpty,
     onPasteParagraphs,
+    onUpdateBlockField,
   } = props
 
   // Flatten depth-first so nested structure still renders (just without
   // visual indent). Editing any row commits via its stable id, keeping
   // the tree's nesting intact through round-trips.
-  const flat = useMemo(() => toFlat(tree.points), [tree.points])
+  const flat = useMemo(() => toFlat(tree.blocks), [tree.blocks])
 
   return (
     <div>
@@ -1381,33 +1493,58 @@ function ProseEditor(props: ProseEditorProps) {
           marginBottom: 12,
         }}
       />
-      {flat.map((p, i) => (
-        <div key={p.id} style={{ marginBottom: 8 }}>
-          <EditableLine
-            nodeId={p.id}
-            initialText={p.text}
-            placeholder="Paragraph…"
-            ariaLabel={`Paragraph ${i + 1}`}
-            readOnly={readOnly}
-            shouldFocus={focusTarget?.id === p.id}
-            focusPosition={focusTarget?.position}
-            onFocused={onFocused}
-            onCommitText={onUpdateText}
-            onEnter={onEnter}
-            onBackspaceEmpty={onBackspaceEmpty}
-            // Tab isn't useful in prose — no visual depth to express,
-            // and silent reordering would confuse the user.
-            onIndent={() => {}}
-            onPasteParagraphs={onPasteParagraphs}
-            style={{
-              fontSize: 15.5,
-              lineHeight: 1.78,
-              padding: '6px 8px',
-              borderRadius: 4,
-            }}
-          />
-        </div>
-      ))}
+      {flat.map((f, i) => {
+        const b = f.block
+        if (b.kind === 'paragraph') {
+          return (
+            <div key={b.id} style={{ marginBottom: 8 }}>
+              <EditableLine
+                nodeId={b.id}
+                initialText={b.text}
+                placeholder="Paragraph…"
+                ariaLabel={`Paragraph ${i + 1}`}
+                readOnly={readOnly}
+                shouldFocus={focusTarget?.id === b.id}
+                focusPosition={focusTarget?.position}
+                onFocused={onFocused}
+                onCommitText={onUpdateText}
+                onEnter={onEnter}
+                onBackspaceEmpty={onBackspaceEmpty}
+                // Tab isn't useful in prose — no visual depth to express,
+                // and silent reordering would confuse the user.
+                onIndent={() => {}}
+                onPasteParagraphs={onPasteParagraphs}
+                style={{
+                  fontSize: 15.5,
+                  lineHeight: 1.78,
+                  padding: '6px 8px',
+                  borderRadius: 4,
+                }}
+              />
+            </div>
+          )
+        }
+        if (b.kind === 'score-card') {
+          return (
+            <div key={b.id} style={{ marginBottom: 14 }}>
+              <ScoreCardRow
+                block={b}
+                readOnly={readOnly}
+                onFieldChange={(id, patch) => onUpdateBlockField(id, patch)}
+              />
+            </div>
+          )
+        }
+        return (
+          <div key={b.id} style={{ marginBottom: 10 }}>
+            <CriterionRow
+              block={b}
+              readOnly={readOnly}
+              onFieldChange={(id, patch) => onUpdateBlockField(id, patch)}
+            />
+          </div>
+        )
+      })}
     </div>
   )
 }

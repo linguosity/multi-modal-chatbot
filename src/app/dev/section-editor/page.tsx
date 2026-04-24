@@ -9,43 +9,63 @@
 import React, { useState } from 'react'
 import SectionEditor from '@/components/report/section-editor/SectionEditor'
 import type { SectionTree } from '@/components/report/section-editor/types'
+import {
+  makeCriterion,
+  makeParagraph,
+  makeScoreCard,
+  type ParagraphBlock,
+} from '@/components/report/section-editor/types'
+
+const topic = (text: string, id = 't'): ParagraphBlock => ({
+  kind: 'paragraph',
+  id,
+  text,
+  children: [],
+})
 
 const SAMPLES: Record<string, SectionTree> = {
   'Lucia — flat': {
-    id: 'section_1',
-    topic: { id: 't1', text: 'Lucia presents with reduced intelligibility.' },
-    points: [
-      { id: 'p1', text: 'She attends second grade at Lincoln Elementary.', children: [] },
-      { id: 'p2', text: 'Medical history is unremarkable.', children: [] },
-      { id: 'p3', text: 'Parent reports sound substitutions since age three.', children: [] },
+    id: 's1',
+    topic: topic('Lucia presents with reduced intelligibility.', 't1'),
+    blocks: [
+      makeParagraph('p1', 'She attends second grade at Lincoln Elementary.'),
+      makeParagraph('p2', 'Medical history is unremarkable.'),
+      makeParagraph('p3', 'Parent reports sound substitutions since age three.'),
     ],
   },
   'Lucia — nested': {
-    id: 'section_2',
-    topic: { id: 't2', text: 'Lucia presents with reduced intelligibility.' },
-    points: [
+    id: 's2',
+    topic: topic('Lucia presents with reduced intelligibility.', 't2'),
+    blocks: [
       {
-        id: 'p1',
-        text: 'Articulation errors are primarily phonological in nature.',
+        ...makeParagraph('p1', 'Articulation errors are primarily phonological in nature.'),
         children: [
-          { id: 'p1a', text: 'Fronting of /k/ and /g/ to /t/ and /d/.', children: [] },
-          { id: 'p1b', text: 'Stopping of fricatives.', children: [] },
+          makeParagraph('p1a', 'Fronting of /k/ and /g/ to /t/ and /d/.'),
+          makeParagraph('p1b', 'Stopping of fricatives.'),
         ],
       },
-      {
-        id: 'p2',
-        text: 'Receptive language is within functional limits.',
-        children: [
-          { id: 'p2a', text: 'Standard score of 98 on the CELF-5 core subtests.', children: [] },
-        ],
-      },
-      { id: 'p3', text: 'Medical history is unremarkable.', children: [] },
+      makeParagraph('p3', 'Medical history is unremarkable.'),
     ],
   },
+  'Scores + criteria': (() => {
+    const sc = makeScoreCard('sc1')
+    sc.testName = 'Goldman-Fristoe-3'
+    sc.standardScore = '78'
+    sc.percentile = '7'
+    sc.interpretation = 'More than one standard deviation below the mean.'
+    const crit = makeCriterion('c1', 'Communication impairment is present')
+    crit.met = true
+    crit.justification = 'Intelligibility reduced in connected speech; Goldman-Fristoe-3 SS = 78.'
+    return {
+      id: 's3',
+      topic: topic('Standardized measures converge on a moderate articulation delay.', 't3'),
+      blocks: [sc, crit, makeParagraph('p4', 'Receptive language fell within the average range.')],
+    }
+  })(),
   Empty: {
-    id: 'section_3',
-    topic: { id: 't3', text: '' },
-    points: [],
+    id: 's4',
+    topic: topic('', 't4'),
+    blocks: [],
   },
 }
 

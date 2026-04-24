@@ -1,14 +1,11 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useReport } from '@/lib/context/ReportContext'
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
-import { getSectionSchemaForType } from '@/lib/structured-schemas'
-import { useUserSettings } from '@/lib/context/UserSettingsContext'
 import { useAutosave } from '@/lib/hooks/useAutosave'
 import { motion } from 'framer-motion'
-import SectionPageV2 from '@/components/section/SectionPageV2'
 import SectionEditor from '@/components/report/section-editor/SectionEditor'
 import {
   contentToTree,
@@ -18,20 +15,15 @@ import type { SectionTree } from '@/components/report/section-editor/types'
 
 import { useToast } from '@/lib/context/ToastContext'
 
-import { NarrativeView } from '@/components/NarrativeView'
 import SourcesGrid from '@/components/SourcesGrid'
 import { useKeyboardNavigation } from '@/lib/context/NavigationContext'
-import { safeStringify } from '@/lib/utils/safeStringify'
 import type { Json } from '@/lib/types/json'
-import type { SectionSchema } from '@/lib/structured-schemas'
 
 export default function SectionPage() {
   const { id: reportId, sectionId } = useParams<{ id: string; sectionId: string }>()
   const router = useRouter()
   const { report, updateSectionData } = useReport()
-  const { settings } = useUserSettings()
   const [sectionContent, setSectionContent] = useState('')
-  const [currentSchema, setCurrentSchema] = useState<SectionSchema | null>(null)
   const [structuredData, setStructuredData] = useState<Json>({})
   const [proseTree, setProseTree] = useState<SectionTree | null>(null)
 
@@ -46,11 +38,6 @@ export default function SectionPage() {
       ? report?.sections[currentIndex + 1]
       : null
 
-  const sectionSchema = section
-    ? getSectionSchemaForType(section.sectionType, settings.preferredState)
-    : null
-  const hasStructuredSchema = !!sectionSchema
-
   useKeyboardNavigation(
     report?.sections.map((s) => ({
       id: s.id,
@@ -61,17 +48,6 @@ export default function SectionPage() {
     sectionId,
   )
 
-  // Schema state init (structured sections only).
-  useEffect(() => {
-    if (sectionSchema && !currentSchema) setCurrentSchema(sectionSchema)
-  }, [sectionSchema, currentSchema])
-
-  // Memoize initial structured data so SectionPageV2 doesn't remount on every parent render.
-  const memoizedInitialData = useMemo(() => {
-    if (!section) return {}
-    return section.structured_data || {}
-  }, [section?.structured_data, section?.id, section?.title])
-
   // Bootstrap local state from the report-context section record.
   useEffect(() => {
     if (!section) return
@@ -79,15 +55,14 @@ export default function SectionPage() {
     setStructuredData(section.structured_data || {})
   }, [section])
 
-  // Rebuild the prose tree whenever we switch to a different section. We
+  // Rebuild the section tree whenever we switch to a different section. We
   // re-init only on section.id change — subsequent content updates that
   // originate from our own editor onChange run through setSectionContent
   // only, so ids stay stable across in-session edits.
   useEffect(() => {
     if (!section) return
-    if (hasStructuredSchema) return
     setProseTree(contentToTree(section.content || ''))
-  }, [section?.id, hasStructuredSchema])
+  }, [section?.id])
 
   // Merge in external content updates (e.g. AI processing) when the
   // section changes under us.
@@ -194,29 +169,10 @@ export default function SectionPage() {
     )
   }
 
-  // ── Structured section: split-pane editor (Sources live in the inspector). ──
-  if (hasStructuredSchema && currentSchema) {
-    return (
-      <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--paper)]">
-        <SectionPageV2
-          schema={currentSchema}
-          initialData={memoizedInitialData}
-          sectionTitle={section.title}
-          sectionIndex={currentIndex}
-          totalSections={report.sections.length}
-          onChange={(data) => setStructuredData(data)}
-        />
-        <SectionNavStrip
-          prevSection={prevSection ?? null}
-          nextSection={nextSection ?? null}
-          onNavigate={navigateToSection}
-          disabled={isNavigating}
-        />
-      </div>
-    )
-  }
-
-  // ── Prose section: outline ⇄ prose editor + Sources panel. ──
+  // ── Unified block editor for every section. Structured schemas
+  //    stay in context for future migration hooks but don't branch the
+  //    render — the clinician works in the same outline/prose surface
+  //    regardless of section kind. ──
   const uploadedFiles =
     ((report.metadata as { uploadedFiles?: UploadedFile[] })?.uploadedFiles ?? [])
       .map((f) => ({
