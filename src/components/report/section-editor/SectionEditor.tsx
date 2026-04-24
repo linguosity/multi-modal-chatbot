@@ -42,6 +42,8 @@ import React, {
   useState,
 } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { Pencil } from 'lucide-react'
+import { getSlotDef } from './slots'
 import {
   makeCriterion,
   makeParagraph,
@@ -510,6 +512,7 @@ export default function SectionEditor(props: SectionEditorProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: fadeDuration, ease: 'easeOut' }}
         style={{
+          position: 'relative',
           backgroundColor: 'var(--se-card)',
           border: '1px solid var(--se-border)',
           borderRadius: 10,
@@ -519,6 +522,23 @@ export default function SectionEditor(props: SectionEditorProps) {
           transition: prefersReduced ? undefined : 'padding 280ms ease',
         }}
       >
+        {/* Editability affordance — small pencil in the upper-left
+            corner so clinicians clock the surface as writable before
+            they click. Decorative / pure indicator, not a button. */}
+        {!readOnly && (
+          <Pencil
+            aria-hidden
+            size={14}
+            style={{
+              position: 'absolute',
+              top: 14,
+              left: 14,
+              color: 'var(--se-muted)',
+              opacity: 0.5,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         {mode === 'outline' ? (
           <OutlineEditor
             tree={tree}
@@ -1040,6 +1060,8 @@ function OutlineList(props: OutlineListProps) {
     >
       {nodes.map((n, i) => {
         const isBeingDragged = !!subtreeIds && subtreeIds.has(n.id)
+        const slottedParagraph = n.kind === 'paragraph' && n.slot
+        const slotLabel = slottedParagraph ? getSlotDef(n.slot as string)?.label ?? n.slot : null
         return (
           <li
             key={n.id}
@@ -1062,6 +1084,7 @@ function OutlineList(props: OutlineListProps) {
             <span
               aria-hidden
               style={{
+                position: 'relative',
                 fontFamily: 'var(--font-se-mono, var(--font-mono))',
                 fontSize: 12,
                 color: 'var(--se-muted)',
@@ -1069,6 +1092,9 @@ function OutlineList(props: OutlineListProps) {
               }}
             >
               {bulletFor(depth, i, n.kind)}
+              {slotLabel && (
+                <SlotDot label={slotLabel} />
+              )}
             </span>
             <div style={{ position: 'relative' }}>
               {n.kind === 'paragraph' ? (
@@ -1167,6 +1193,33 @@ function DragHandle(props: { readOnly: boolean; onPointerDown: (e: React.Pointer
     >
       ⋮⋮
     </button>
+  )
+}
+
+/**
+ * Tiny indicator shown next to the bullet number when a paragraph is
+ * bound to a registered slot. Visible only on row hover (mirrors the
+ * drag-handle reveal) so it doesn't clutter the reading surface.
+ * `title` gives a tooltip with the slot's human label so clinicians
+ * can confirm that the AI has identified a field without ever seeing
+ * the raw slot id.
+ */
+function SlotDot({ label }: { label: string }) {
+  return (
+    <span
+      className="se-slot-dot"
+      title={`Slot: ${label}`}
+      aria-hidden
+      style={{
+        position: 'absolute',
+        right: -2,
+        top: 13,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: 'var(--se-accent)',
+      }}
+    />
   )
 }
 

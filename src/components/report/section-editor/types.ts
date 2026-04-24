@@ -30,6 +30,27 @@ interface BlockBase {
 export interface ParagraphBlock extends BlockBase {
   kind: 'paragraph'
   text: string
+  /**
+   * Canonical slot id this paragraph fills (see `slots.ts`). Optional —
+   * free-form paragraphs without an assigned slot are the default, a
+   * first-class state, not a bug. The clinician never sees this field;
+   * it guides AI extraction and validation only.
+   */
+  slot?: string
+  /**
+   * Structured value behind the prose, when the slot has a richer
+   * representation than the text (e.g. `{ months: 14 }` behind
+   * "First words emerged around 14 months"). Treated as a stale
+   * extraction hint once the clinician edits `text`; reconciliation
+   * with a type-aware parser is a follow-up.
+   */
+  value?: unknown
+  /**
+   * Where the value came from — a Supabase file id, evidence chip id,
+   * "ai:process-intake", or "user". Null when user-authored without
+   * upstream evidence.
+   */
+  source?: string | null
 }
 
 export interface ScoreCardBlock extends BlockBase {
@@ -53,8 +74,21 @@ export interface CriterionBlock extends BlockBase {
 
 export type SectionBlock = ParagraphBlock | ScoreCardBlock | CriterionBlock
 
+/**
+ * Current schema version for freshly-authored trees. Bump when the
+ * slot registry or block model changes in a backward-incompatible way.
+ * Trees authored under an older version should still load (see
+ * content-adapter.normalizeTree) — the renderer falls back to treating
+ * unknown slot ids as free-form text. Old reports never auto-migrate;
+ * offer migration at a natural boundary (e.g. "this report uses an
+ * older template, update?") so the clinician has control.
+ */
+export const CURRENT_SCHEMA_VERSION = 1
+
 export interface SectionTree {
   id: SectionNodeId
+  /** Defaults to CURRENT_SCHEMA_VERSION for new trees; preserved verbatim for older ones. */
+  schemaVersion?: number
   topic: ParagraphBlock
   blocks: SectionBlock[]
 }
@@ -99,8 +133,20 @@ export interface FlatNode {
 
 // ── Block factories ───────────────────────────────────────────────────
 
-export function makeParagraph(id: SectionNodeId, text = ''): ParagraphBlock {
-  return { kind: 'paragraph', id, text, children: [] }
+export function makeParagraph(
+  id: SectionNodeId,
+  text = '',
+  opts: { slot?: string; value?: unknown; source?: string | null } = {},
+): ParagraphBlock {
+  return {
+    kind: 'paragraph',
+    id,
+    text,
+    children: [],
+    ...(opts.slot !== undefined ? { slot: opts.slot } : {}),
+    ...(opts.value !== undefined ? { value: opts.value } : {}),
+    ...(opts.source !== undefined ? { source: opts.source } : {}),
+  }
 }
 
 export function makeScoreCard(id: SectionNodeId): ScoreCardBlock {

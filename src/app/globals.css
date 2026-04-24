@@ -154,6 +154,17 @@
     opacity: 0.7;
   }
 
+  /* Slot indicator dot: visible only on row hover. Signals to the
+   * clinician that this paragraph is bound to a schema slot (AI has
+   * identified a field) without exposing the slot id itself. */
+  .se-slot-dot {
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+  .se-row:hover .se-slot-dot {
+    opacity: 0.75;
+  }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;

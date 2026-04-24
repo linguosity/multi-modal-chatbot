@@ -16,7 +16,7 @@
  */
 
 import type { ParagraphBlock, SectionBlock, SectionNodeId, SectionTree } from './types'
-import { makeParagraph } from './types'
+import { CURRENT_SCHEMA_VERSION, makeParagraph } from './types'
 
 function tmpId(prefix = 'tmp'): SectionNodeId {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
@@ -133,12 +133,21 @@ function normalizeBlock(raw: unknown): SectionBlock {
     }
   }
   // Default: paragraph. Also covers legacy {id, text, children} rows.
-  return {
+  // Slot annotations (slot / value / source) are preserved verbatim so
+  // they round-trip through JSON storage without the adapter having to
+  // understand the slot registry.
+  const paragraph: ParagraphBlock = {
     kind: 'paragraph',
     id,
     text: str(b.text),
     children,
   }
+  if (typeof b.slot === 'string' && b.slot.length > 0) paragraph.slot = b.slot
+  if ('value' in b) paragraph.value = b.value
+  if ('source' in b && (typeof b.source === 'string' || b.source === null)) {
+    paragraph.source = b.source as string | null
+  }
+  return paragraph
 }
 
 function str(v: unknown): string {
@@ -153,8 +162,21 @@ function normalizeTree(raw: SectionTree): SectionTree {
     text: str(topicRaw.text),
     children: [],
   }
+  // Preserve slot annotations on the topic if an older/newer save
+  // carried them. Unknown slot ids are still passed through — the
+  // renderer treats them as free-form and the validator ignores them.
+  if (typeof topicRaw.slot === 'string' && topicRaw.slot.length > 0) {
+    topic.slot = topicRaw.slot
+  }
+  if ('value' in topicRaw) topic.value = topicRaw.value
+  if ('source' in topicRaw && (typeof topicRaw.source === 'string' || topicRaw.source === null)) {
+    topic.source = topicRaw.source as string | null
+  }
+  const rawVersion = (raw as unknown as { schemaVersion?: unknown }).schemaVersion
+  const schemaVersion = typeof rawVersion === 'number' ? rawVersion : CURRENT_SCHEMA_VERSION
   return {
     id: typeof raw.id === 'string' ? raw.id : tmpId('section'),
+    schemaVersion,
     topic,
     blocks: (raw.blocks as unknown[]).map(normalizeBlock),
   }
@@ -238,6 +260,7 @@ export function contentToTree(content: string): SectionTree {
   }
   return {
     id: tmpId('section'),
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     topic,
     blocks,
   }
@@ -245,11 +268,20 @@ export function contentToTree(content: string): SectionTree {
 
 /**
  * Serialize a SectionTree back to the storage string. Emits JSON so
- * card blocks round-trip on reload. Text-only consumers that don't
- * understand the shape should fall back to `treeToPlainText`.
+ * card blocks + slot annotations round-trip on reload. Text-only
+ * consumers that don't understand the shape should fall back to
+ * `treeToPlainText`.
  */
 export function treeToContent(tree: SectionTree): string {
-  return JSON.stringify(tree)
+  // Stamp the current schema version if the tree arrived without one
+  // (e.g. constructed in dev/sample pages pre-versioning). Preserve an
+  // existing version verbatim — older trees should remain older until
+  // an explicit migration rewrites them.
+  const withVersion: SectionTree = {
+    ...tree,
+    schemaVersion: tree.schemaVersion ?? CURRENT_SCHEMA_VERSION,
+  }
+  return JSON.stringify(withVersion)
 }
 
 /**
