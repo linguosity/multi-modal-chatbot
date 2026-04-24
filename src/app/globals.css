@@ -104,6 +104,19 @@
 
     /* Hatch pattern for emphasised/staged surfaces */
     --hatch: repeating-linear-gradient(45deg, #d8d4c7 0 2px, transparent 2px 6px);
+
+    /* Section Editor palette (outline ⇄ prose). Sibling to --wf-*, not
+     * an override — the editor is a focused writing surface and should
+     * feel distinct from the surrounding dashboard chrome.
+     * Spec: docs/outline-prose-editor-spec.md §9.1. */
+    --se-paper: #ebe3cf;
+    --se-card: #f6f1e4;
+    --se-border: #d4c9ad;
+    --se-ink: #2a241b;
+    --se-muted: #8a7f6e;
+    --se-accent: #c47a4a;
+    --se-hover: rgba(42, 36, 27, 0.04);
+    --se-focus: rgba(42, 36, 27, 0.06);
   }
 
   .dark {
