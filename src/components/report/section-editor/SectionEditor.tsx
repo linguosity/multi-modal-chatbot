@@ -1,19 +1,25 @@
 'use client'
 
 /**
- * Outline ⇄ Prose Section Editor — v1 editing (spec §15 steps 4–6).
+ * Outline ⇄ Prose Section Editor — v1 editor (spec §15 steps 4–7).
  *
- * Implements inline editing via contentEditable, blur / 400ms idle commit,
- * Enter-to-new-sibling, Backspace-on-empty-to-delete, plain-text paste,
- * and IME composition guard. Prose mode commits via commitProse on blur.
+ * Implements:
+ *   • Inline editing via contentEditable, blur / 400ms idle commit.
+ *   • Enter → new sibling below (topic → first point).
+ *   • Backspace on empty → delete, focus previous row.
+ *   • Tab / Shift+Tab → nest under / promote out of previous sibling;
+ *     subtree follows, capped at MAX_DEPTH.
+ *   • Pointer-event drag-and-drop with depth-from-cursor-X, drop
+ *     indicator line + dot, preview pill following the cursor, subtree
+ *     move, Escape cancels, no drop on own descendants.
+ *   • IME composition guard, plain-text paste.
+ *   • Prose mode: commit-on-blur via commitProse.
  *
- * Not implemented this round (spec §15 7–14):
- *   • Tab / Shift-Tab depth (skipped per user scope — current prose
- *     sections have no nested structure, so no regression).
+ * Not implemented this round (spec §15 7+):
  *   • Mid-point Enter split.
- *   • Drag-and-drop.
- *   • Keyboard drag alternative, fine keyboard nav between rows.
- *   • Per-keystroke undo.
+ *   • Keyboard drag alternative (Space pick up, arrows, Space drop).
+ *   • Per-keystroke undo — browser default undo inside contentEditable
+ *     is bypassed by our blur-commit flow.
  */
 
 import React, {
@@ -32,7 +38,18 @@ import type {
   SectionTree,
 } from './types'
 import { commitProse, toProse } from './segment'
-import { findById, insertAfter, removePoint } from './tree-ops'
+import {
+  findById,
+  insertAfter,
+  normalizeDepths,
+  removePoint,
+  toFlat,
+  toTree,
+} from './tree-ops'
+import type { FlatNode } from './types'
+
+/** Spec §3 — readability cap at depth 2 (three visible levels). */
+const MAX_DEPTH = 2
 
 export interface SectionEditorProps {
   /** Initial tree state. Re-syncs into local state when the user is not
@@ -153,6 +170,85 @@ export default function SectionEditor(props: SectionEditorProps) {
     [tree, commit, readOnly, readOnlyStructure],
   )
 
+  const adjustDepth = useCallback(
+    (id: SectionNodeId, delta: number) => {
+      if (readOnly || readOnlyStructure) return
+      if (tree.topic.id === id) return // Topic has no depth.
+      const flat = toFlat(tree.points)
+      const idx = flat.findIndex((n) => n.id === id)
+      if (idx === -1) return
+
+      const startDepth = flat[idx].depth
+      // Collect the subtree: all consecutive rows after `idx` whose depth
+      // is greater than `startDepth`.
+      let endIdx = idx
+      for (let i = idx + 1; i < flat.length; i++) {
+        if (flat[i].depth <= startDepth) break
+        endIdx = i
+      }
+
+      if (delta > 0) {
+        // Tab: only if there's a row above (so a prev sibling / ancestor
+        // exists to nest under) AND we're not at the depth cap.
+        if (idx === 0) return
+        if (startDepth + delta > MAX_DEPTH) return
+      }
+      if (delta < 0) {
+        if (startDepth + delta < 0) return
+      }
+
+      for (let i = idx; i <= endIdx; i++) {
+        flat[i].depth += delta
+      }
+      normalizeDepths(flat)
+      commit({ ...tree, points: toTree(flat) })
+      setFocusTarget(id)
+    },
+    [tree, commit, readOnly, readOnlyStructure],
+  )
+
+  const moveSubtree = useCallback(
+    (sourceId: SectionNodeId, slotIndex: number, targetDepth: number) => {
+      if (readOnly || readOnlyStructure) return
+      if (tree.topic.id === sourceId) return
+      const flat = toFlat(tree.points)
+      const srcIdx = flat.findIndex((n) => n.id === sourceId)
+      if (srcIdx === -1) return
+
+      const sourceDepth = flat[srcIdx].depth
+      let srcEnd = srcIdx
+      for (let i = srcIdx + 1; i < flat.length; i++) {
+        if (flat[i].depth <= sourceDepth) break
+        srcEnd = i
+      }
+      const subtreeLen = srcEnd - srcIdx + 1
+      // Extract the moving range.
+      const moving = flat.slice(srcIdx, srcEnd + 1).map((n) => ({ ...n }))
+      // Remove from the original position.
+      const remaining = [...flat.slice(0, srcIdx), ...flat.slice(srcEnd + 1)]
+
+      // `slotIndex` was computed against the original flat list. Adjust
+      // it for the removal: if the slot was at or after `srcIdx`, shift
+      // it back by the subtree length.
+      let insertAt = slotIndex
+      if (slotIndex > srcIdx) {
+        insertAt = Math.max(slotIndex - subtreeLen, 0)
+      }
+      insertAt = Math.min(Math.max(insertAt, 0), remaining.length)
+
+      // Shift depths proportionally so the subtree keeps its internal
+      // structure at the new top-level depth.
+      const depthDelta = targetDepth - sourceDepth
+      for (const m of moving) m.depth = Math.max(0, m.depth + depthDelta)
+
+      const next = [...remaining.slice(0, insertAt), ...moving, ...remaining.slice(insertAt)]
+      normalizeDepths(next)
+      commit({ ...tree, points: toTree(next) })
+      setFocusTarget(sourceId)
+    },
+    [tree, commit, readOnly, readOnlyStructure],
+  )
+
   const updateText = useCallback(
     (id: SectionNodeId, text: string) => {
       if (readOnly) return
@@ -252,6 +348,8 @@ export default function SectionEditor(props: SectionEditorProps) {
             onUpdateText={updateText}
             onEnter={insertAfterNode}
             onBackspaceEmpty={deletePoint}
+            onAdjustDepth={adjustDepth}
+            onMoveSubtree={moveSubtree}
           />
         ) : (
           <ProseEditor
@@ -387,12 +485,211 @@ interface OutlineEditorProps {
   onUpdateText: (id: SectionNodeId, text: string) => void
   onEnter: (id: SectionNodeId) => void
   onBackspaceEmpty: (id: SectionNodeId) => void
+  onAdjustDepth: (id: SectionNodeId, delta: number) => void
+  onMoveSubtree: (sourceId: SectionNodeId, slotIndex: number, targetDepth: number) => void
 }
 
 function OutlineEditor(props: OutlineEditorProps) {
-  const { tree, readOnly, focusTarget, onFocused, onUpdateText, onEnter, onBackspaceEmpty } = props
+  const {
+    tree,
+    readOnly,
+    focusTarget,
+    onFocused,
+    onUpdateText,
+    onEnter,
+    onBackspaceEmpty,
+    onAdjustDepth,
+    onMoveSubtree,
+  } = props
+
+  // ── Drag state ───────────────────────────────────────────────────────
+  // Snapshot of all rendered rows, captured at pointerdown. Keeps the
+  // drop math stable even if React re-renders during the drag (it won't,
+  // because we only update overlay state, but defensive snapshots cost
+  // nothing).
+  interface RowLayout {
+    id: SectionNodeId
+    depth: number
+    top: number
+    bottom: number
+    left: number
+  }
+  interface DragState {
+    sourceId: SectionNodeId
+    sourceDepth: number
+    subtreeIds: Set<SectionNodeId>
+    subtreeCount: number
+    previewText: string
+    rowLayouts: RowLayout[]
+    pointerX: number
+    pointerY: number
+    slotIndex: number | null
+    targetDepth: number | null
+    valid: boolean
+  }
+
+  const [drag, setDrag] = useState<DragState | null>(null)
+  const dragRef = useRef<DragState | null>(null)
+  useEffect(() => {
+    dragRef.current = drag
+  }, [drag])
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  /** Collect rowLayouts by scanning DOM nodes tagged with data-row-id. */
+  const captureRowLayouts = useCallback((): RowLayout[] => {
+    if (!containerRef.current) return []
+    const rows = Array.from(
+      containerRef.current.querySelectorAll<HTMLElement>('[data-row-id]'),
+    )
+    return rows.map((el) => {
+      const rect = el.getBoundingClientRect()
+      return {
+        id: el.dataset.rowId as SectionNodeId,
+        depth: Number(el.dataset.rowDepth ?? 0),
+        top: rect.top + window.scrollY,
+        bottom: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+      }
+    })
+  }, [])
+
+  const computeDropTarget = useCallback(
+    (
+      pointerX: number,
+      pointerY: number,
+      layouts: RowLayout[],
+      subtreeIds: Set<SectionNodeId>,
+    ): { slotIndex: number | null; targetDepth: number | null; valid: boolean } => {
+      if (layouts.length === 0) {
+        return { slotIndex: 0, targetDepth: 0, valid: true }
+      }
+      // Pick the slot index. Slot i = "insert before row i". Slot n =
+      // "insert after last row".
+      let slot = layouts.length
+      for (let i = 0; i < layouts.length; i++) {
+        const mid = (layouts[i].top + layouts[i].bottom) / 2
+        if (pointerY < mid) {
+          slot = i
+          break
+        }
+      }
+      // Drop must not land inside the dragged subtree.
+      const rowAbove = slot > 0 ? layouts[slot - 1] : null
+      const rowBelow = slot < layouts.length ? layouts[slot] : null
+      const aboveInSubtree = rowAbove ? subtreeIds.has(rowAbove.id) : false
+      const belowInSubtree = rowBelow ? subtreeIds.has(rowBelow.id) : false
+      if (aboveInSubtree || belowInSubtree) {
+        return { slotIndex: slot, targetDepth: null, valid: false }
+      }
+      // Compute depth from pointerX (relative to container's left).
+      const originLeft = layouts[0]?.left ?? 0
+      const handleGutter = 8
+      const proposed = Math.floor((pointerX - originLeft - handleGutter) / 26)
+      const maxDepth = Math.min(
+        MAX_DEPTH,
+        rowAbove ? rowAbove.depth + 1 : 0,
+      )
+      const minDepth = rowBelow ? rowBelow.depth : 0
+      const safeMin = Math.min(minDepth, maxDepth)
+      const clamped = Math.min(Math.max(proposed, safeMin), maxDepth)
+      return { slotIndex: slot, targetDepth: clamped, valid: true }
+    },
+    [],
+  )
+
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
+      const d = dragRef.current
+      if (!d) return
+      const pointerX = e.clientX + window.scrollX
+      const pointerY = e.clientY + window.scrollY
+      const { slotIndex, targetDepth, valid } = computeDropTarget(
+        pointerX,
+        pointerY,
+        d.rowLayouts,
+        d.subtreeIds,
+      )
+      setDrag({ ...d, pointerX, pointerY, slotIndex, targetDepth, valid })
+    },
+    [computeDropTarget],
+  )
+
+  const endDrag = useCallback(() => {
+    setDrag(null)
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+  }, [])
+
+  const handlePointerUp = useCallback(() => {
+    const d = dragRef.current
+    if (d && d.valid && d.slotIndex !== null && d.targetDepth !== null) {
+      onMoveSubtree(d.sourceId, d.slotIndex, d.targetDepth)
+    }
+    endDrag()
+  }, [onMoveSubtree, endDrag])
+
+  const handleKey = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && dragRef.current) {
+        e.preventDefault()
+        endDrag()
+      }
+    },
+    [endDrag],
+  )
+
+  // Document-level listeners only live while dragging.
+  useEffect(() => {
+    if (!drag) return
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', endDrag)
+    window.addEventListener('keydown', handleKey)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', endDrag)
+      window.removeEventListener('keydown', handleKey)
+    }
+  }, [drag, handlePointerMove, handlePointerUp, endDrag, handleKey])
+
+  const handleDragStart = useCallback(
+    (id: SectionNodeId, text: string, e: React.PointerEvent) => {
+      if (readOnly) return
+      e.preventDefault()
+      const layouts = captureRowLayouts()
+      const srcIdx = layouts.findIndex((l) => l.id === id)
+      if (srcIdx === -1) return
+      const sourceDepth = layouts[srcIdx].depth
+      const subtreeIds = new Set<SectionNodeId>()
+      subtreeIds.add(id)
+      let subtreeCount = 0
+      for (let i = srcIdx + 1; i < layouts.length; i++) {
+        if (layouts[i].depth <= sourceDepth) break
+        subtreeIds.add(layouts[i].id)
+        subtreeCount++
+      }
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'grabbing'
+      setDrag({
+        sourceId: id,
+        sourceDepth,
+        subtreeIds,
+        subtreeCount,
+        previewText: text.slice(0, 60) || 'Point',
+        rowLayouts: layouts,
+        pointerX: e.clientX + window.scrollX,
+        pointerY: e.clientY + window.scrollY,
+        slotIndex: null,
+        targetDepth: null,
+        valid: false,
+      })
+    },
+    [readOnly, captureRowLayouts],
+  )
+
   return (
-    <div>
+    <div ref={containerRef} style={{ position: 'relative' }}>
       <EditableLine
         nodeId={tree.topic.id}
         initialText={tree.topic.text}
@@ -404,8 +701,9 @@ function OutlineEditor(props: OutlineEditorProps) {
         onCommitText={onUpdateText}
         onEnter={onEnter}
         // Topic doesn't delete on backspace — empty-topic is a valid state
-        // (§8 case 10).
+        // (§8 case 10). Topic also doesn't nest — Tab is a no-op.
         onBackspaceEmpty={() => {}}
+        onIndent={() => {}}
         style={{
           fontSize: 15.5,
           fontWeight: 500,
@@ -425,7 +723,13 @@ function OutlineEditor(props: OutlineEditorProps) {
         onUpdateText={onUpdateText}
         onEnter={onEnter}
         onBackspaceEmpty={onBackspaceEmpty}
+        onIndent={onAdjustDepth}
+        onDragStart={handleDragStart}
+        draggingId={drag?.sourceId ?? null}
+        subtreeIds={drag?.subtreeIds ?? null}
       />
+
+      {drag && <DragOverlay drag={drag} />}
     </div>
   )
 }
@@ -439,11 +743,27 @@ interface OutlineListProps {
   onUpdateText: (id: SectionNodeId, text: string) => void
   onEnter: (id: SectionNodeId) => void
   onBackspaceEmpty: (id: SectionNodeId) => void
+  onIndent: (id: SectionNodeId, delta: number) => void
+  onDragStart: (id: SectionNodeId, text: string, e: React.PointerEvent) => void
+  draggingId: SectionNodeId | null
+  subtreeIds: Set<SectionNodeId> | null
 }
 
 function OutlineList(props: OutlineListProps) {
-  const { nodes, depth, readOnly, focusTarget, onFocused, onUpdateText, onEnter, onBackspaceEmpty } =
-    props
+  const {
+    nodes,
+    depth,
+    readOnly,
+    focusTarget,
+    onFocused,
+    onUpdateText,
+    onEnter,
+    onBackspaceEmpty,
+    onIndent,
+    onDragStart,
+    draggingId,
+    subtreeIds,
+  } = props
   return (
     <ul
       style={{
@@ -453,63 +773,199 @@ function OutlineList(props: OutlineListProps) {
         marginLeft: depth === 0 ? 0 : 26,
       }}
     >
-      {nodes.map((n, i) => (
-        <li
-          key={n.id}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '28px 1fr',
-            columnGap: 8,
-            padding: '2px 0',
-            alignItems: 'start',
-          }}
-        >
-          <span
-            aria-hidden
+      {nodes.map((n, i) => {
+        const isBeingDragged = !!subtreeIds && subtreeIds.has(n.id)
+        return (
+          <li
+            key={n.id}
+            data-row-id={n.id}
+            data-row-depth={depth}
+            className="se-row"
             style={{
-              fontFamily: 'var(--font-se-mono, var(--font-mono))',
-              fontSize: 12,
-              color: 'var(--se-muted)',
-              paddingTop: 9,
+              display: 'grid',
+              gridTemplateColumns: '16px 28px 1fr',
+              columnGap: 6,
+              padding: '2px 0',
+              alignItems: 'start',
+              opacity: isBeingDragged && draggingId === n.id ? 0.35 : 1,
             }}
           >
-            {bulletFor(depth, i)}
-          </span>
-          <div>
-            <EditableLine
-              nodeId={n.id}
-              initialText={n.text}
-              placeholder="Add a point…"
-              ariaLabel={`Point ${i + 1}`}
+            <DragHandle
               readOnly={readOnly}
-              shouldFocus={focusTarget === n.id}
-              onFocused={onFocused}
-              onCommitText={onUpdateText}
-              onEnter={onEnter}
-              onBackspaceEmpty={onBackspaceEmpty}
-              style={{
-                fontSize: 15,
-                lineHeight: 1.7,
-                padding: '4px 6px',
-                borderRadius: 4,
-              }}
+              onPointerDown={(e) => onDragStart(n.id, n.text, e)}
             />
-            {n.children.length > 0 && (
-              <OutlineList
-                nodes={n.children}
-                depth={depth + 1}
+            <span
+              aria-hidden
+              style={{
+                fontFamily: 'var(--font-se-mono, var(--font-mono))',
+                fontSize: 12,
+                color: 'var(--se-muted)',
+                paddingTop: 9,
+              }}
+            >
+              {bulletFor(depth, i)}
+            </span>
+            <div>
+              <EditableLine
+                nodeId={n.id}
+                initialText={n.text}
+                placeholder="Add a point…"
+                ariaLabel={`Point ${i + 1}`}
                 readOnly={readOnly}
-                focusTarget={focusTarget}
+                shouldFocus={focusTarget === n.id}
                 onFocused={onFocused}
-                onUpdateText={onUpdateText}
+                onCommitText={onUpdateText}
                 onEnter={onEnter}
                 onBackspaceEmpty={onBackspaceEmpty}
+                onIndent={onIndent}
+                style={{
+                  fontSize: 15,
+                  lineHeight: 1.7,
+                  padding: '4px 6px',
+                  borderRadius: 4,
+                }}
               />
-            )}
-          </div>
-        </li>
-      ))}
+              {n.children.length > 0 && (
+                <OutlineList
+                  nodes={n.children}
+                  depth={depth + 1}
+                  readOnly={readOnly}
+                  focusTarget={focusTarget}
+                  onFocused={onFocused}
+                  onUpdateText={onUpdateText}
+                  onEnter={onEnter}
+                  onBackspaceEmpty={onBackspaceEmpty}
+                  onIndent={onIndent}
+                  onDragStart={onDragStart}
+                  draggingId={draggingId}
+                  subtreeIds={subtreeIds}
+                />
+              )}
+            </div>
+          </li>
+        )
+      })}
     </ul>
+  )
+}
+
+function DragHandle(props: { readOnly: boolean; onPointerDown: (e: React.PointerEvent) => void }) {
+  if (props.readOnly) return <span aria-hidden />
+  return (
+    <button
+      type="button"
+      aria-label="Drag to reorder"
+      onPointerDown={props.onPointerDown}
+      className="se-drag-handle"
+      style={{
+        padding: '8px 2px 2px',
+        cursor: 'grab',
+        background: 'transparent',
+        border: 'none',
+        color: 'var(--se-muted)',
+        lineHeight: 1,
+        fontSize: 14,
+        borderRadius: 4,
+        touchAction: 'none',
+      }}
+    >
+      ⋮⋮
+    </button>
+  )
+}
+
+// ─── Drag overlay ───────────────────────────────────────────────────────
+
+function DragOverlay({
+  drag,
+}: {
+  drag: {
+    pointerX: number
+    pointerY: number
+    previewText: string
+    subtreeCount: number
+    rowLayouts: { id: SectionNodeId; depth: number; top: number; bottom: number; left: number }[]
+    slotIndex: number | null
+    targetDepth: number | null
+    valid: boolean
+  }
+}) {
+  const { pointerX, pointerY, previewText, subtreeCount, rowLayouts, slotIndex, targetDepth, valid } =
+    drag
+
+  let indicatorTop: number | null = null
+  let indicatorLeft: number | null = null
+  if (valid && slotIndex !== null && targetDepth !== null && rowLayouts.length > 0) {
+    const above = slotIndex > 0 ? rowLayouts[slotIndex - 1] : null
+    const below = slotIndex < rowLayouts.length ? rowLayouts[slotIndex] : null
+    indicatorTop = above ? above.bottom : below!.top
+    indicatorLeft = (rowLayouts[0]?.left ?? 0) + 8 + targetDepth * 26
+  }
+
+  return (
+    <>
+      {indicatorTop !== null && indicatorLeft !== null && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: indicatorTop - (rowLayouts[0]?.top ?? 0) + 'px',
+            left: Math.max(0, indicatorLeft - (rowLayouts[0]?.left ?? 0)) + 'px',
+            right: 0,
+            height: 2,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              left: -5,
+              top: -4,
+              width: 10,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: 'var(--se-accent)',
+              boxShadow: '0 0 0 2px rgba(255,255,255,0.9)',
+            }}
+          />
+          <div
+            style={{
+              height: 2,
+              background: 'var(--se-accent)',
+              borderRadius: 2,
+              opacity: 0.9,
+            }}
+          />
+        </div>
+      )}
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          top: pointerY - window.scrollY + 14,
+          left: pointerX - window.scrollX + 14,
+          padding: '6px 10px',
+          borderRadius: 6,
+          backgroundColor: 'var(--se-ink)',
+          color: '#fff',
+          fontSize: 12,
+          letterSpacing: 0,
+          whiteSpace: 'nowrap',
+          maxWidth: 320,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          pointerEvents: 'none',
+          zIndex: 50,
+          boxShadow: '0 10px 30px rgba(42,36,27,0.25)',
+          opacity: valid ? 1 : 0.55,
+        }}
+      >
+        {previewText.length > 60 ? previewText.slice(0, 57) + '…' : previewText}
+        {subtreeCount > 0 && (
+          <span style={{ marginLeft: 8, opacity: 0.75 }}>+{subtreeCount} nested</span>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -532,6 +988,7 @@ interface EditableLineProps {
   onCommitText: (id: SectionNodeId, text: string) => void
   onEnter: (id: SectionNodeId) => void
   onBackspaceEmpty: (id: SectionNodeId) => void
+  onIndent: (id: SectionNodeId, delta: number) => void
   style?: React.CSSProperties
 }
 
@@ -547,6 +1004,7 @@ function EditableLine(props: EditableLineProps) {
     onCommitText,
     onEnter,
     onBackspaceEmpty,
+    onIndent,
     style,
   } = props
 
@@ -673,6 +1131,12 @@ function EditableLine(props: EditableLineProps) {
           e.preventDefault()
           commitIfChanged()
           onEnter(nodeId)
+          return
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          commitIfChanged()
+          onIndent(nodeId, e.shiftKey ? -1 : 1)
           return
         }
         if (e.key === 'Backspace') {
