@@ -1,25 +1,36 @@
 'use client'
 
 /**
- * Outline ⇄ Prose Section Editor — v1 editor (spec §15 steps 4–7).
+ * Outline ⇄ Prose Section Editor — v1 editor.
  *
- * Implements:
+ * Model: one section = { topic, tree-of-points }. A "point" is a
+ * paragraph (not a sentence). Outline and prose are two renderings of
+ * the same tree — outline shows indent + numbering, prose renders each
+ * point as its own <p>, both commit text back by stable id on blur.
+ * No segmentation, no fuzzy matching — the tree is canonical and the
+ * toggle is a lens.
+ *
+ * Interactions:
  *   • Inline editing via contentEditable, blur / 400ms idle commit.
- *   • Enter → new sibling below (topic → first point).
- *   • Backspace on empty → delete, focus previous row.
- *   • Tab / Shift+Tab → nest under / promote out of previous sibling;
- *     subtree follows, capped at MAX_DEPTH.
- *   • Pointer-event drag-and-drop with depth-from-cursor-X, drop
- *     indicator line + dot, preview pill following the cursor, subtree
- *     move, Escape cancels, no drop on own descendants.
- *   • IME composition guard, plain-text paste.
- *   • Prose mode: commit-on-blur via commitProse.
+ *   • Enter: split the current paragraph at the cursor into two
+ *     siblings (left stays with original id + children, right is a
+ *     fresh-id empty-children sibling). At end-of-line the split is
+ *     degenerate — right is empty — which reduces to "new sibling
+ *     below". At start-of-line, left is empty, original text moves
+ *     into the right.
+ *   • Tab / Shift+Tab: nest / promote (outline only — prose view has
+ *     no visual depth).
+ *   • Backspace on empty: delete, focus previous row.
+ *   • Paste: stripped to plain text. Multi-paragraph paste → first
+ *     piece inserts at cursor, remainder becomes new sibling points.
+ *   • Drag-drop (outline only): pointer-event, depth-from-cursor-X.
+ *   • ⌘⇧O / Ctrl+⇧O: toggle mode from anywhere in the editor.
+ *   • IME composition guarded on every commit path.
  *
- * Not implemented this round (spec §15 7+):
- *   • Mid-point Enter split.
+ * Not implemented:
+ *   • Drag-drop in prose view (paragraphs have no handle gutter).
  *   • Keyboard drag alternative (Space pick up, arrows, Space drop).
- *   • Per-keystroke undo — browser default undo inside contentEditable
- *     is bypassed by our blur-commit flow.
+ *   • Per-keystroke undo — blur-commit bypasses browser undo.
  */
 
 import React, {
@@ -37,7 +48,6 @@ import type {
   SectionNodeId,
   SectionTree,
 } from './types'
-import { commitProse, toProse } from './segment'
 import {
   findById,
   insertAfter,
@@ -46,7 +56,6 @@ import {
   toFlat,
   toTree,
 } from './tree-ops'
-import type { FlatNode } from './types'
 
 /** Spec §3 — readability cap at depth 2 (three visible levels). */
 const MAX_DEPTH = 2
@@ -134,29 +143,89 @@ export default function SectionEditor(props: SectionEditorProps) {
   )
 
   // ── Focus orchestration ───────────────────────────────────────────────
-  // Structural ops (Enter, Backspace-delete) need to place focus on a row
-  // that doesn't exist until after the next render. Writing a node id
-  // here hands off to the EditableLine useEffect for imperative focus.
-  const [focusTarget, setFocusTarget] = useState<SectionNodeId | null>(null)
+  // Focus orchestration target. Structural ops don't run focus() until
+  // after React's next render — writing `{ id, position }` here hands off
+  // to each EditableLine's useEffect for imperative focus + caret place.
+  interface FocusTarget {
+    id: SectionNodeId
+    position: 'start' | 'end'
+  }
+  const [focusTarget, setFocusTarget] = useState<FocusTarget | null>(null)
   const clearFocusTarget = useCallback(() => setFocusTarget(null), [])
 
+  // Walk helper: replace a node's text in-place in the tree by id.
+  const walkReplaceText = useCallback(
+    (ns: SectionNode[], id: SectionNodeId, text: string): SectionNode[] =>
+      ns.map((n) =>
+        n.id === id
+          ? { ...n, text }
+          : { ...n, children: walkReplaceText(n.children, id, text) },
+      ),
+    [],
+  )
+
   // ── Structural handlers ───────────────────────────────────────────────
-  const insertAfterNode = useCallback(
-    (targetId: SectionNodeId) => {
+  /**
+   * Enter-split. Left half stays with `targetId` and keeps its children.
+   * Right half becomes a fresh-id sibling with no children. Degenerates
+   * correctly at end-of-line (rightText === '' → empty sibling) and
+   * start-of-line (leftText === '' → original text moves into the new
+   * row). Focus lands at the start of the new sibling.
+   */
+  const splitAtCursor = useCallback(
+    (targetId: SectionNodeId, leftText: string, rightText: string) => {
       if (readOnly || readOnlyStructure) return
-      const newNode: SectionNode = { id: idFactory(), text: '', children: [] }
-      // Topic has no siblings — Enter on topic creates the first point.
+      const newNode: SectionNode = { id: idFactory(), text: rightText, children: [] }
       if (tree.topic.id === targetId) {
-        commit({ ...tree, points: [newNode, ...tree.points] })
-        setFocusTarget(newNode.id)
+        commit({
+          ...tree,
+          topic: { ...tree.topic, text: leftText },
+          points: [newNode, ...tree.points],
+        })
+        setFocusTarget({ id: newNode.id, position: 'start' })
         return
       }
-      const next: SectionTree = {
+      const withLeftUpdated = walkReplaceText(tree.points, targetId, leftText)
+      commit({
         ...tree,
-        points: insertAfter(tree.points, targetId, newNode),
+        points: insertAfter(withLeftUpdated, targetId, newNode),
+      })
+      setFocusTarget({ id: newNode.id, position: 'start' })
+    },
+    [tree, commit, idFactory, readOnly, readOnlyStructure, walkReplaceText],
+  )
+
+  /**
+   * Multi-paragraph paste. First paragraph inserts at the cursor via the
+   * normal paste path; the remainder become new sibling points below
+   * `targetId`, and focus lands at the end of the last inserted.
+   */
+  const insertParagraphsAfter = useCallback(
+    (targetId: SectionNodeId, paragraphs: string[]) => {
+      if (readOnly || readOnlyStructure) return
+      if (paragraphs.length === 0) return
+      const newNodes: SectionNode[] = paragraphs.map((text) => ({
+        id: idFactory(),
+        text,
+        children: [],
+      }))
+      let nextPoints = tree.points
+      if (tree.topic.id === targetId) {
+        // Paste on topic → new points take the head of the list, in
+        // order.
+        nextPoints = [...newNodes, ...tree.points]
+      } else {
+        // insertAfter only inserts one at a time; splice via flat for
+        // the multi-paragraph case so order is preserved.
+        let cursorId = targetId
+        for (const nn of newNodes) {
+          nextPoints = insertAfter(nextPoints, cursorId, nn)
+          cursorId = nn.id
+        }
       }
-      commit(next)
-      setFocusTarget(newNode.id)
+      commit({ ...tree, points: nextPoints })
+      const last = newNodes[newNodes.length - 1]
+      setFocusTarget({ id: last.id, position: 'end' })
     },
     [tree, commit, idFactory, readOnly, readOnlyStructure],
   )
@@ -177,7 +246,7 @@ export default function SectionEditor(props: SectionEditorProps) {
       const idx = flatOrdered.indexOf(id)
       const prevId = idx > 0 ? flatOrdered[idx - 1] : tree.topic.id
       commit({ ...tree, points: removePoint(tree.points, id) })
-      setFocusTarget(prevId)
+      setFocusTarget({ id: prevId, position: 'end' })
     },
     [tree, commit, readOnly, readOnlyStructure],
   )
@@ -214,7 +283,7 @@ export default function SectionEditor(props: SectionEditorProps) {
       }
       normalizeDepths(flat)
       commit({ ...tree, points: toTree(flat) })
-      setFocusTarget(id)
+      setFocusTarget({ id, position: 'end' })
     },
     [tree, commit, readOnly, readOnlyStructure],
   )
@@ -256,7 +325,7 @@ export default function SectionEditor(props: SectionEditorProps) {
       const next = [...remaining.slice(0, insertAt), ...moving, ...remaining.slice(insertAt)]
       normalizeDepths(next)
       commit({ ...tree, points: toTree(next) })
-      setFocusTarget(sourceId)
+      setFocusTarget({ id: sourceId, position: 'end' })
     },
     [tree, commit, readOnly, readOnlyStructure],
   )
@@ -279,24 +348,6 @@ export default function SectionEditor(props: SectionEditorProps) {
     [tree, commit, readOnly],
   )
 
-  const commitProseText = useCallback(
-    (newParagraph: string) => {
-      if (readOnly) return
-      const { next } = commitProse(tree, newParagraph, idFactory)
-      // Only commit if something actually changed — avoid false-positive
-      // autosaves on blur-without-edit.
-      if (
-        next.topic.text === tree.topic.text &&
-        next.points.length === tree.points.length &&
-        next.points.every((p, i) => p.text === tree.points[i]?.text)
-      ) {
-        return
-      }
-      commit(next)
-    },
-    [tree, commit, idFactory, readOnly],
-  )
-
   const tablistId = useId()
   const outlineTabId = `${tablistId}-outline`
   const proseTabId = `${tablistId}-prose`
@@ -304,7 +355,19 @@ export default function SectionEditor(props: SectionEditorProps) {
   const prefersReduced = !!useReducedMotion()
   const fadeDuration = prefersReduced ? 0.001 : 0.16
 
-  const prose = useMemo(() => toProse(tree), [tree])
+  // ⌘⇧O / Ctrl+⇧O — toggle mode from anywhere inside the editor. Scoped
+  // to rootRef so we don't steal the shortcut when focus is elsewhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!rootRef.current?.contains(document.activeElement)) return
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault()
+        setMode(mode === 'outline' ? 'prose' : 'outline')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mode, setMode])
 
   return (
     <div
@@ -358,17 +421,22 @@ export default function SectionEditor(props: SectionEditorProps) {
             focusTarget={focusTarget}
             onFocused={clearFocusTarget}
             onUpdateText={updateText}
-            onEnter={insertAfterNode}
+            onEnter={splitAtCursor}
             onBackspaceEmpty={deletePoint}
             onAdjustDepth={adjustDepth}
             onMoveSubtree={moveSubtree}
+            onPasteParagraphs={insertParagraphsAfter}
           />
         ) : (
           <ProseEditor
             tree={tree}
-            text={prose}
             readOnly={readOnly}
-            onCommitProse={commitProseText}
+            focusTarget={focusTarget}
+            onFocused={clearFocusTarget}
+            onUpdateText={updateText}
+            onEnter={splitAtCursor}
+            onBackspaceEmpty={deletePoint}
+            onPasteParagraphs={insertParagraphsAfter}
           />
         )}
       </motion.div>
@@ -489,14 +557,18 @@ function ToggleTab(props: ToggleTabProps) {
 
 // ─── Outline editor ─────────────────────────────────────────────────────
 
-interface OutlineEditorProps {
+interface SharedEditorProps {
   tree: SectionTree
   readOnly: boolean
-  focusTarget: SectionNodeId | null
+  focusTarget: { id: SectionNodeId; position: 'start' | 'end' } | null
   onFocused: () => void
   onUpdateText: (id: SectionNodeId, text: string) => void
-  onEnter: (id: SectionNodeId) => void
+  onEnter: (id: SectionNodeId, leftText: string, rightText: string) => void
   onBackspaceEmpty: (id: SectionNodeId) => void
+  onPasteParagraphs: (id: SectionNodeId, paragraphs: string[]) => void
+}
+
+interface OutlineEditorProps extends SharedEditorProps {
   onAdjustDepth: (id: SectionNodeId, delta: number) => void
   onMoveSubtree: (sourceId: SectionNodeId, slotIndex: number, targetDepth: number) => void
 }
@@ -512,6 +584,7 @@ function OutlineEditor(props: OutlineEditorProps) {
     onBackspaceEmpty,
     onAdjustDepth,
     onMoveSubtree,
+    onPasteParagraphs,
   } = props
 
   // ── Drag state ───────────────────────────────────────────────────────
@@ -721,14 +794,16 @@ function OutlineEditor(props: OutlineEditorProps) {
         placeholder="Topic sentence…"
         ariaLabel="Topic sentence"
         readOnly={readOnly}
-        shouldFocus={focusTarget === tree.topic.id}
+        shouldFocus={focusTarget?.id === tree.topic.id}
+        focusPosition={focusTarget?.position}
         onFocused={onFocused}
         onCommitText={onUpdateText}
         onEnter={onEnter}
-        // Topic doesn't delete on backspace — empty-topic is a valid state
-        // (§8 case 10). Topic also doesn't nest — Tab is a no-op.
+        // Topic doesn't delete on backspace — empty-topic is a valid state.
+        // Topic also doesn't nest — Tab is a no-op.
         onBackspaceEmpty={() => {}}
         onIndent={() => {}}
+        onPasteParagraphs={onPasteParagraphs}
         style={{
           fontSize: 15.5,
           fontWeight: 500,
@@ -749,6 +824,7 @@ function OutlineEditor(props: OutlineEditorProps) {
         onEnter={onEnter}
         onBackspaceEmpty={onBackspaceEmpty}
         onIndent={onAdjustDepth}
+        onPasteParagraphs={onPasteParagraphs}
         onDragStart={handleDragStart}
         draggingId={drag?.sourceId ?? null}
         subtreeIds={drag?.subtreeIds ?? null}
@@ -763,12 +839,13 @@ interface OutlineListProps {
   nodes: SectionNode[]
   depth: number
   readOnly: boolean
-  focusTarget: SectionNodeId | null
+  focusTarget: { id: SectionNodeId; position: 'start' | 'end' } | null
   onFocused: () => void
   onUpdateText: (id: SectionNodeId, text: string) => void
-  onEnter: (id: SectionNodeId) => void
+  onEnter: (id: SectionNodeId, leftText: string, rightText: string) => void
   onBackspaceEmpty: (id: SectionNodeId) => void
   onIndent: (id: SectionNodeId, delta: number) => void
+  onPasteParagraphs: (id: SectionNodeId, paragraphs: string[]) => void
   onDragStart: (id: SectionNodeId, text: string, e: React.PointerEvent) => void
   draggingId: SectionNodeId | null
   subtreeIds: Set<SectionNodeId> | null
@@ -785,6 +862,7 @@ function OutlineList(props: OutlineListProps) {
     onEnter,
     onBackspaceEmpty,
     onIndent,
+    onPasteParagraphs,
     onDragStart,
     draggingId,
     subtreeIds,
@@ -837,12 +915,14 @@ function OutlineList(props: OutlineListProps) {
                 placeholder="Add a point…"
                 ariaLabel={`Point ${i + 1}`}
                 readOnly={readOnly}
-                shouldFocus={focusTarget === n.id}
+                shouldFocus={focusTarget?.id === n.id}
+                focusPosition={focusTarget?.position}
                 onFocused={onFocused}
                 onCommitText={onUpdateText}
                 onEnter={onEnter}
                 onBackspaceEmpty={onBackspaceEmpty}
                 onIndent={onIndent}
+                onPasteParagraphs={onPasteParagraphs}
                 style={{
                   fontSize: 15,
                   lineHeight: 1.7,
@@ -861,6 +941,7 @@ function OutlineList(props: OutlineListProps) {
                   onEnter={onEnter}
                   onBackspaceEmpty={onBackspaceEmpty}
                   onIndent={onIndent}
+                  onPasteParagraphs={onPasteParagraphs}
                   onDragStart={onDragStart}
                   draggingId={draggingId}
                   subtreeIds={subtreeIds}
@@ -1021,6 +1102,22 @@ function bulletFor(depth: number, index: number): string {
   return '○'
 }
 
+/**
+ * Return the caret offset (in characters) within `root`, flattening
+ * across text nodes. Used to split a point on Enter — we can't just
+ * read `range.startOffset` because it's local to whatever text node
+ * contains the caret.
+ */
+function getCursorOffset(root: HTMLElement): number {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return 0
+  const range = sel.getRangeAt(0)
+  const pre = range.cloneRange()
+  pre.selectNodeContents(root)
+  pre.setEnd(range.startContainer, range.startOffset)
+  return pre.toString().length
+}
+
 // ─── Editable line primitive ────────────────────────────────────────────
 
 interface EditableLineProps {
@@ -1030,11 +1127,14 @@ interface EditableLineProps {
   ariaLabel?: string
   readOnly: boolean
   shouldFocus: boolean
+  /** Where to place the caret when `shouldFocus` flips true. Defaults to end. */
+  focusPosition?: 'start' | 'end'
   onFocused: () => void
   onCommitText: (id: SectionNodeId, text: string) => void
-  onEnter: (id: SectionNodeId) => void
+  onEnter: (id: SectionNodeId, leftText: string, rightText: string) => void
   onBackspaceEmpty: (id: SectionNodeId) => void
   onIndent: (id: SectionNodeId, delta: number) => void
+  onPasteParagraphs: (id: SectionNodeId, paragraphs: string[]) => void
   style?: React.CSSProperties
 }
 
@@ -1046,11 +1146,13 @@ function EditableLine(props: EditableLineProps) {
     ariaLabel,
     readOnly,
     shouldFocus,
+    focusPosition = 'end',
     onFocused,
     onCommitText,
     onEnter,
     onBackspaceEmpty,
     onIndent,
+    onPasteParagraphs,
     style,
   } = props
 
@@ -1081,7 +1183,9 @@ function EditableLine(props: EditableLineProps) {
     lastCommittedRef.current = initialText
   }, [initialText])
 
-  // Imperative focus after structural ops. Places caret at end.
+  // Imperative focus after structural ops. Respects focusPosition so
+  // Enter-split can land the caret at the start of the new sibling
+  // while Backspace-delete lands it at the end of the previous row.
   useEffect(() => {
     if (!shouldFocus || !ref.current) return
     const el = ref.current
@@ -1090,12 +1194,12 @@ function EditableLine(props: EditableLineProps) {
     if (sel) {
       const range = document.createRange()
       range.selectNodeContents(el)
-      range.collapse(false)
+      range.collapse(focusPosition === 'start')
       sel.removeAllRanges()
       sel.addRange(range)
     }
     onFocused()
-  }, [shouldFocus, onFocused])
+  }, [shouldFocus, focusPosition, onFocused])
 
   const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
 
@@ -1165,18 +1269,32 @@ function EditableLine(props: EditableLineProps) {
       }}
       onPaste={(e) => {
         e.preventDefault()
-        const txt = e.clipboardData.getData('text/plain')
-        // execCommand is deprecated but still the pragmatic way to insert
-        // into contentEditable without fighting selection APIs. Matches
-        // the spec §6.1 rationale.
-        document.execCommand('insertText', false, txt)
+        const raw = e.clipboardData.getData('text/plain')
+        // Multi-paragraph paste → first paragraph inserts at cursor,
+        // remainder become new sibling points.
+        const paragraphs = raw.split(/\r?\n{2,}|\r?\n/).map((p) => p.trim()).filter(Boolean)
+        if (paragraphs.length === 0) return
+        document.execCommand('insertText', false, paragraphs[0])
+        if (paragraphs.length > 1) {
+          commitIfChanged()
+          onPasteParagraphs(nodeId, paragraphs.slice(1))
+        }
       }}
       onKeyDown={(e) => {
         if (composingRef.current) return
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault()
-          commitIfChanged()
-          onEnter(nodeId)
+          const el = ref.current
+          if (!el) return
+          const fullText = el.textContent ?? ''
+          const cursorOffset = getCursorOffset(el)
+          const leftText = fullText.slice(0, cursorOffset)
+          const rightText = fullText.slice(cursorOffset)
+          // Update our own lastCommittedRef so the imminent re-render
+          // (which re-seeds text from `initialText`) doesn't also fire
+          // a commitIfChanged and double-write leftText.
+          lastCommittedRef.current = normalize(leftText)
+          onEnter(nodeId, leftText, rightText)
           return
         }
         if (e.key === 'Tab') {
@@ -1208,93 +1326,88 @@ function EditableLine(props: EditableLineProps) {
 
 // ─── Prose editor ───────────────────────────────────────────────────────
 
-interface ProseEditorProps {
-  tree: SectionTree
-  text: string
-  readOnly: boolean
-  onCommitProse: (paragraph: string) => void
-}
+/**
+ * Prose view. Same tree, same ids — rendered as topic + each point as
+ * its own <p>, flat (depth-first order, no indent, no bullet, no
+ * handle). Every paragraph is the same EditableLine primitive used by
+ * outline mode, so Enter-split / Backspace-merge / paragraph paste all
+ * follow the same code path. Switching modes is a pure lens swap.
+ *
+ * No drag-drop in prose mode: there's no handle gutter to anchor the
+ * drop-indicator math against. Reordering belongs in outline view.
+ */
+type ProseEditorProps = SharedEditorProps
 
 function ProseEditor(props: ProseEditorProps) {
-  const { tree, text, readOnly, onCommitProse } = props
-  const ref = useRef<HTMLDivElement>(null)
-  const composingRef = useRef(false)
-  const lastCommittedRef = useRef(text)
+  const {
+    tree,
+    readOnly,
+    focusTarget,
+    onFocused,
+    onUpdateText,
+    onEnter,
+    onBackspaceEmpty,
+    onPasteParagraphs,
+  } = props
 
-  // Seed on mount.
-  useEffect(() => {
-    if (!ref.current) return
-    if (ref.current.textContent !== text) {
-      ref.current.textContent = text
-    }
-    lastCommittedRef.current = text
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Re-sync when the tree changes externally (mode swap, autosave
-  // round-trip) — but never while this element is focused.
-  useEffect(() => {
-    if (!ref.current) return
-    if (document.activeElement === ref.current) return
-    if (ref.current.textContent !== text) {
-      ref.current.textContent = text
-    }
-    lastCommittedRef.current = text
-  }, [text, tree])
+  // Flatten depth-first so nested structure still renders (just without
+  // visual indent). Editing any row commits via its stable id, keeping
+  // the tree's nesting intact through round-trips.
+  const flat = useMemo(() => toFlat(tree.points), [tree.points])
 
   return (
-    <div
-      ref={ref}
-      contentEditable={!readOnly}
-      suppressContentEditableWarning
-      role="textbox"
-      aria-label="Prose paragraph"
-      aria-multiline="true"
-      spellCheck={false}
-      data-placeholder="Write the section as a paragraph…"
-      onFocus={(e) => {
-        e.currentTarget.style.backgroundColor = 'var(--se-focus)'
-      }}
-      onBlur={(e) => {
-        e.currentTarget.style.backgroundColor = 'transparent'
-        if (composingRef.current) return
-        const txt = ref.current?.textContent ?? ''
-        if (txt === lastCommittedRef.current) return
-        lastCommittedRef.current = txt
-        onCommitProse(txt)
-      }}
-      onMouseEnter={(e) => {
-        if (document.activeElement === e.currentTarget) return
-        e.currentTarget.style.backgroundColor = 'var(--se-hover)'
-      }}
-      onMouseLeave={(e) => {
-        if (document.activeElement === e.currentTarget) return
-        e.currentTarget.style.backgroundColor = 'transparent'
-      }}
-      onCompositionStart={() => {
-        composingRef.current = true
-      }}
-      onCompositionEnd={() => {
-        composingRef.current = false
-      }}
-      onPaste={(e) => {
-        e.preventDefault()
-        const txt = e.clipboardData.getData('text/plain')
-        document.execCommand('insertText', false, txt)
-      }}
-      style={{
-        outline: 'none',
-        cursor: readOnly ? 'default' : 'text',
-        transition: 'background-color 140ms ease',
-        margin: 0,
-        fontSize: 15.5,
-        lineHeight: 1.78,
-        padding: '4px 6px',
-        borderRadius: 4,
-        minHeight: '4em',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    />
+    <div>
+      <EditableLine
+        nodeId={tree.topic.id}
+        initialText={tree.topic.text}
+        placeholder="Topic paragraph…"
+        ariaLabel="Topic paragraph"
+        readOnly={readOnly}
+        shouldFocus={focusTarget?.id === tree.topic.id}
+        focusPosition={focusTarget?.position}
+        onFocused={onFocused}
+        onCommitText={onUpdateText}
+        onEnter={onEnter}
+        onBackspaceEmpty={() => {}}
+        onIndent={() => {}}
+        onPasteParagraphs={onPasteParagraphs}
+        style={{
+          fontSize: 15.5,
+          fontWeight: 500,
+          lineHeight: 1.78,
+          letterSpacing: '-0.003em',
+          padding: '6px 8px',
+          borderRadius: 4,
+          marginBottom: 12,
+        }}
+      />
+      {flat.map((p, i) => (
+        <div key={p.id} style={{ marginBottom: 8 }}>
+          <EditableLine
+            nodeId={p.id}
+            initialText={p.text}
+            placeholder="Paragraph…"
+            ariaLabel={`Paragraph ${i + 1}`}
+            readOnly={readOnly}
+            shouldFocus={focusTarget?.id === p.id}
+            focusPosition={focusTarget?.position}
+            onFocused={onFocused}
+            onCommitText={onUpdateText}
+            onEnter={onEnter}
+            onBackspaceEmpty={onBackspaceEmpty}
+            // Tab isn't useful in prose — no visual depth to express,
+            // and silent reordering would confuse the user.
+            onIndent={() => {}}
+            onPasteParagraphs={onPasteParagraphs}
+            style={{
+              fontSize: 15.5,
+              lineHeight: 1.78,
+              padding: '6px 8px',
+              borderRadius: 4,
+            }}
+          />
+        </div>
+      ))}
+    </div>
   )
 }
