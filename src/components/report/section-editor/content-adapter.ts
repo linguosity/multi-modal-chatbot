@@ -25,29 +25,41 @@ function tmpId(prefix = 'tmp'): SectionNodeId {
 /**
  * Replace {token} placeholders in `content` with values from `ctx`.
  *
- * Only resolved tokens get substituted — anything whose key isn't in
- * ctx (or whose value is null / undefined / empty string) stays as
- * `{token}` so the clinician can still see and fill the gap.
+ * Coercions:
+ *   • missing / null / empty string → `—` (em dash). Cleaner for a
+ *     clinical report than raw `{token}` markup; the field is still
+ *     visibly a gap the clinician can fill by typing.
+ *   • boolean → `Yes` / `No`. Prose reports read unnaturally as
+ *     `false.` — and the numeric/JSON truthiness isn't meaningful to
+ *     the reader anyway.
+ *   • array of strings → comma-joined; empty array → em dash.
+ *   • nested object → em dash (not renderable as inline text).
+ *   • everything else → `String(value)`.
  *
  * One-shot substitution: once this runs and the clinician saves, the
  * resolved values become the stored content. The original `{token}`
- * is lost from that row. This is the documented v1 tradeoff — fine
- * for intake reports where the template fills in once, worse for
- * living records where upstream data (DOB, etc.) might change after.
- * A future pass can render tokens as live decorations over a
- * token-preserving tree; until then, ctx is authoritative at load.
+ * is lost from that row. Documented tradeoff — fine for intake-style
+ * reports, worse for living records where upstream data (DOB, etc.)
+ * might change after. A future token-preserving decoration layer can
+ * undo this if the team ever needs re-interpolation on demographic
+ * updates.
  */
+const MISSING_TOKEN = '—'
+
 export function interpolateTokens(
   content: string,
   ctx: Record<string, unknown> | null | undefined,
 ): string {
-  if (!content || !ctx) return content
-  return content.replace(/\{([^{}\s]+)\}/g, (match, rawKey: string) => {
+  if (!content) return content
+  return content.replace(/\{([^{}\s]+)\}/g, (_match, rawKey: string) => {
     const key = rawKey.trim()
-    const value = ctx[key]
-    if (value === undefined || value === null || value === '') return match
-    if (Array.isArray(value)) return value.join(', ')
-    if (typeof value === 'object') return JSON.stringify(value)
+    const value = ctx?.[key]
+    if (value === undefined || value === null || value === '') return MISSING_TOKEN
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+    if (Array.isArray(value)) {
+      return value.length === 0 ? MISSING_TOKEN : value.map(String).join(', ')
+    }
+    if (typeof value === 'object') return MISSING_TOKEN
     return String(value)
   })
 }
@@ -149,8 +161,44 @@ function normalizeTree(raw: SectionTree): SectionTree {
 }
 
 /**
+ * Segment a single paragraph into sentences. Uses Intl.Segmenter where
+ * available (modern browsers + Node ≥ 16); falls back to a regex split
+ * on terminator + whitespace + capital letter. Only used as a safety
+ * net for legacy / AI-generated content that arrives as one long
+ * period-separated blob — so the outline view shows real points
+ * instead of a single-paragraph dump.
+ */
+function splitSentences(text: string): string[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+  const SegmenterCtor = (typeof Intl !== 'undefined' &&
+    (Intl as unknown as { Segmenter?: unknown }).Segmenter) as
+    | (new (locale?: string, opts?: object) => {
+        segment: (s: string) => Iterable<{ segment: string }>
+      })
+    | undefined
+  if (SegmenterCtor) {
+    const seg = new SegmenterCtor('en', { granularity: 'sentence' })
+    const out: string[] = []
+    for (const piece of seg.segment(trimmed)) {
+      const s = piece.segment.trim()
+      if (s) out.push(s)
+    }
+    return out
+  }
+  return trimmed
+    .split(/(?<=[.!?])\s+(?=[A-Z])/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/**
  * Parse an existing content string into a SectionTree. JSON first —
- * fall back to paragraph splitting on any parse failure or shape mismatch.
+ * fall back to paragraph splitting on any parse failure or shape
+ * mismatch. When the content has no paragraph breaks at all (common
+ * for legacy content that was produced by the old template-joined
+ * path), fall through further into sentence splitting so the outline
+ * view renders as multiple points rather than one long line.
  */
 export function contentToTree(content: string): SectionTree {
   const trimmed = (content ?? '').trim()
@@ -166,10 +214,20 @@ export function contentToTree(content: string): SectionTree {
   }
 
   const plain = stripHtml(content ?? '')
-  const paragraphs = plain
+  let paragraphs = plain
     .split(/\r?\n{2,}|\r?\n/)
     .map((p) => p.trim())
     .filter(Boolean)
+
+  // Legacy / AI-generated blob with no paragraph breaks: rescue the
+  // outline view by sentence-splitting. Only triggers when the whole
+  // content came back as one paragraph AND that paragraph has multiple
+  // sentences. User-authored single paragraphs stay intact.
+  if (paragraphs.length === 1) {
+    const sentences = splitSentences(paragraphs[0])
+    if (sentences.length > 1) paragraphs = sentences
+  }
+
   const topicText = paragraphs[0] ?? ''
   const blocks: SectionBlock[] = paragraphs.slice(1).map((text) => makeParagraph(tmpId(), text))
   const topic: ParagraphBlock = {
