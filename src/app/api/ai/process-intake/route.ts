@@ -40,6 +40,8 @@ import { SectionSchema, ASSESSMENT_RESULTS_SECTION, ASSESSMENT_TOOLS_SECTION, VA
 import { z } from 'zod'
 import { parseWithZod } from '@/lib/ai/structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
+import { seedContentFromStructuredData } from '@/components/report/section-editor/slot-seeding'
+import { SECTION_SCHEMAS } from '@/components/report/section-editor/slots'
 import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { PIIRedactor, persistPIIMappings } from '@/lib/pii/redactor'
@@ -745,6 +747,13 @@ export async function POST(request: NextRequest) {
     const processSummaries = []
     const resolver = new StructuredFieldPathResolver()
 
+    // Collect per-section source refs keyed by slot id so the
+    // generated SectionTree preserves evidence links on each slotted
+    // paragraph. Only top-level field paths that match a registered
+    // slot id are tracked — nested / array paths stay as
+    // structured_data updates and aren't surfaced in the tree.
+    const sourcesBySection: Record<string, Record<string, string | null>> = {}
+
     // If domain_summary provided, upsert into Assessment Results section before granular updates
     // Respect dryRun: do not write to DB during preview-only runs
     if (!dryRun && domainSummary && domainSummary.length > 0) {
@@ -1041,15 +1050,44 @@ export async function POST(request: NextRequest) {
         } else {
           // Upsert the database row to ensure persistence even if it did not exist previously
           const meta = sectionMetaById.get(cleanedUpdate.section_id)
+
+          // Track the source ref for this field if it maps cleanly onto
+          // a registered slot. The resulting tree's paragraph will
+          // carry `source` so the editor can surface evidence-of-fill
+          // once we wire the UI for it.
+          if (cleanedUpdate.source_reference && cleanedUpdate.field_path) {
+            const slotSources =
+              sourcesBySection[cleanedUpdate.section_id] ??
+              (sourcesBySection[cleanedUpdate.section_id] = {})
+            slotSources[cleanedUpdate.field_path] = cleanedUpdate.source_reference
+          }
+
+          // Derive the slot-annotated SectionTree from the now-current
+          // structured_data and serialize it to `content`. For section
+          // types the slot registry doesn't know about this returns
+          // null — we leave `content` alone in that case, preserving
+          // whatever the client-side editor wrote last.
+          const sectionType = meta?.section_type || 'unknown'
+          const generatedContent = SECTION_SCHEMAS[sectionType]
+            ? seedContentFromStructuredData(sectionType, updatedData as Record<string, unknown>, {
+                sources: sourcesBySection[cleanedUpdate.section_id],
+                topicText: meta?.title,
+              })
+            : null
+
+          const upsertRow: Record<string, unknown> = {
+            id: cleanedUpdate.section_id,
+            report_id: reportId,
+            title: meta?.title || cleanedUpdate.section_id,
+            section_type: sectionType,
+            structured_data: updatedData,
+          }
+          if (generatedContent) upsertRow.content = generatedContent
+
           const { error } = await supabase
             .from('report_sections')
-            .upsert({
-              id: cleanedUpdate.section_id,
-              report_id: reportId,
-              title: meta?.title || cleanedUpdate.section_id,
-              section_type: meta?.section_type || 'unknown',
-              structured_data: updatedData
-            }, { onConflict: 'id' })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .upsert(upsertRow as any, { onConflict: 'id' })
 
           if (error) {
             console.error(`❌ Step 18.${i + 1} FAILED: Failed to update section ${update.section_id}:`, error)
