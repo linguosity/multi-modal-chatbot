@@ -51,6 +51,18 @@ import type { FlatNode } from './types'
 /** Spec §3 — readability cap at depth 2 (three visible levels). */
 const MAX_DEPTH = 2
 
+/**
+ * Outline row grid geometry. These drive BOTH depth-from-cursor-X in
+ * drag detection AND the visual drop indicator — keeping them together
+ * prevents detection and the rendered line from drifting apart.
+ *
+ * Row grid: `[handle 16px | gap 6 | bullet 28px | gap 6 | text 1fr]`.
+ * So depth-0 content starts 56px in from the row's left edge.
+ * Each additional depth adds 26px (spec §5.1 indent).
+ */
+const CONTENT_START_OFFSET = 16 + 6 + 28 + 6
+const DEPTH_INDENT = 26
+
 export interface SectionEditorProps {
   /** Initial tree state. Re-syncs into local state when the user is not
    *  actively editing (e.g. autosave round-trips). */
@@ -521,6 +533,12 @@ function OutlineEditor(props: OutlineEditorProps) {
     subtreeCount: number
     previewText: string
     rowLayouts: RowLayout[]
+    /** Outline container's page-coordinate top + left. Absolute drop
+     *  indicator positions are offset from these so the line always
+     *  lines up with the visible content edge, independent of what row
+     *  sits at index 0. */
+    containerTop: number
+    containerLeft: number
     pointerX: number
     pointerY: number
     slotIndex: number | null
@@ -559,6 +577,7 @@ function OutlineEditor(props: OutlineEditorProps) {
       pointerY: number,
       layouts: RowLayout[],
       subtreeIds: Set<SectionNodeId>,
+      containerLeft: number,
     ): { slotIndex: number | null; targetDepth: number | null; valid: boolean } => {
       if (layouts.length === 0) {
         return { slotIndex: 0, targetDepth: 0, valid: true }
@@ -581,14 +600,11 @@ function OutlineEditor(props: OutlineEditorProps) {
       if (aboveInSubtree || belowInSubtree) {
         return { slotIndex: slot, targetDepth: null, valid: false }
       }
-      // Compute depth from pointerX (relative to container's left).
-      const originLeft = layouts[0]?.left ?? 0
-      const handleGutter = 8
-      const proposed = Math.floor((pointerX - originLeft - handleGutter) / 26)
-      const maxDepth = Math.min(
-        MAX_DEPTH,
-        rowAbove ? rowAbove.depth + 1 : 0,
-      )
+      // Depth math, anchored at the real content-start X. Same constant
+      // the overlay uses to draw, so detection and rendering agree.
+      const contentStartX = containerLeft + CONTENT_START_OFFSET
+      const proposed = Math.floor((pointerX - contentStartX) / DEPTH_INDENT)
+      const maxDepth = Math.min(MAX_DEPTH, rowAbove ? rowAbove.depth + 1 : 0)
       const minDepth = rowBelow ? rowBelow.depth : 0
       const safeMin = Math.min(minDepth, maxDepth)
       const clamped = Math.min(Math.max(proposed, safeMin), maxDepth)
@@ -608,6 +624,7 @@ function OutlineEditor(props: OutlineEditorProps) {
         pointerY,
         d.rowLayouts,
         d.subtreeIds,
+        d.containerLeft,
       )
       setDrag({ ...d, pointerX, pointerY, slotIndex, targetDepth, valid })
     },
@@ -669,6 +686,12 @@ function OutlineEditor(props: OutlineEditorProps) {
         subtreeIds.add(layouts[i].id)
         subtreeCount++
       }
+      // Snapshot the container's page position so the overlay can
+      // offset-from-container instead of offset-from-row-0 (which was
+      // wrong for depth-1 first rows and for empty-list drops).
+      const cRect = containerRef.current?.getBoundingClientRect()
+      const containerTop = (cRect?.top ?? 0) + window.scrollY
+      const containerLeft = (cRect?.left ?? 0) + window.scrollX
       document.body.style.userSelect = 'none'
       document.body.style.cursor = 'grabbing'
       setDrag({
@@ -678,6 +701,8 @@ function OutlineEditor(props: OutlineEditorProps) {
         subtreeCount,
         previewText: text.slice(0, 60) || 'Point',
         rowLayouts: layouts,
+        containerTop,
+        containerLeft,
         pointerX: e.clientX + window.scrollX,
         pointerY: e.clientY + window.scrollY,
         slotIndex: null,
@@ -885,21 +910,42 @@ function DragOverlay({
     previewText: string
     subtreeCount: number
     rowLayouts: { id: SectionNodeId; depth: number; top: number; bottom: number; left: number }[]
+    containerTop: number
+    containerLeft: number
     slotIndex: number | null
     targetDepth: number | null
     valid: boolean
   }
 }) {
-  const { pointerX, pointerY, previewText, subtreeCount, rowLayouts, slotIndex, targetDepth, valid } =
-    drag
+  const {
+    pointerX,
+    pointerY,
+    previewText,
+    subtreeCount,
+    rowLayouts,
+    containerTop,
+    containerLeft,
+    slotIndex,
+    targetDepth,
+    valid,
+  } = drag
 
   let indicatorTop: number | null = null
   let indicatorLeft: number | null = null
-  if (valid && slotIndex !== null && targetDepth !== null && rowLayouts.length > 0) {
+  if (valid && slotIndex !== null && targetDepth !== null) {
     const above = slotIndex > 0 ? rowLayouts[slotIndex - 1] : null
     const below = slotIndex < rowLayouts.length ? rowLayouts[slotIndex] : null
-    indicatorTop = above ? above.bottom : below!.top
-    indicatorLeft = (rowLayouts[0]?.left ?? 0) + 8 + targetDepth * 26
+    // Place the line at the boundary between above and below. If only
+    // one exists (empty list / dropping at end), anchor to that one.
+    indicatorTop =
+      above && below
+        ? (above.bottom + below.top) / 2
+        : above
+          ? above.bottom
+          : below
+            ? below.top
+            : containerTop
+    indicatorLeft = containerLeft + CONTENT_START_OFFSET + targetDepth * DEPTH_INDENT
   }
 
   return (
@@ -909,8 +955,8 @@ function DragOverlay({
           aria-hidden
           style={{
             position: 'absolute',
-            top: indicatorTop - (rowLayouts[0]?.top ?? 0) + 'px',
-            left: Math.max(0, indicatorLeft - (rowLayouts[0]?.left ?? 0)) + 'px',
+            top: indicatorTop - containerTop - 1 + 'px',
+            left: Math.max(0, indicatorLeft - containerLeft) + 'px',
             right: 0,
             height: 2,
             pointerEvents: 'none',
