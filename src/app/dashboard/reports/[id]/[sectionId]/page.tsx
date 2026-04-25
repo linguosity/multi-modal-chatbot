@@ -14,6 +14,12 @@ import {
   treeToContent,
 } from '@/components/report/section-editor/content-adapter'
 import type { SectionTree } from '@/components/report/section-editor/types'
+import { resolveTemplate } from '@/components/section-templates/section-template-map'
+import TemplateA from '@/components/section-templates/TemplateA'
+import TemplateB from '@/components/section-templates/TemplateB'
+import TemplateC from '@/components/section-templates/TemplateC'
+import TemplateD from '@/components/section-templates/TemplateD'
+import TemplateE from '@/components/section-templates/TemplateE'
 
 import { useToast } from '@/lib/context/ToastContext'
 
@@ -115,6 +121,13 @@ export default function SectionPage() {
       handleContentChange(treeToContent(next))
     },
     [handleContentChange],
+  )
+
+  const handleStructuredDataChange = useCallback(
+    (next: Record<string, unknown>) => {
+      setStructuredData(next as Json)
+    },
+    [],
   )
 
   const saveSection = useCallback(
@@ -227,17 +240,15 @@ export default function SectionPage() {
           <section className="relative w-full">
             <div className="w-full px-6 pt-8 pb-6">
               <div className="mx-auto max-w-3xl">
-                {proseTree && (
-                  <SectionEditor
-                    key={section.id}
-                    value={proseTree}
-                    onChange={handleProseTreeChange}
-                    label={section.title}
-                    sectionMeta={sectionMeta}
-                    sectionTitle={section.title}
-                    onSourceClick={openSource}
-                  />
-                )}
+                <SectionRenderer
+                  section={section}
+                  structuredData={structuredData}
+                  onStructuredDataChange={handleStructuredDataChange}
+                  proseTree={proseTree}
+                  onProseTreeChange={handleProseTreeChange}
+                  sectionMeta={sectionMeta}
+                  onSourceClick={openSource}
+                />
               </div>
             </div>
           </section>
@@ -278,6 +289,81 @@ export default function SectionPage() {
         reportId={reportId}
       />
     </div>
+  )
+}
+
+// ─── Section renderer dispatcher ──────────────────────────────────────────
+
+interface SectionRendererProps {
+  section: NonNullable<ReturnType<typeof useReport>['report']>['sections'][number]
+  structuredData: Json
+  onStructuredDataChange: (next: Record<string, unknown>) => void
+  proseTree: SectionTree | null
+  onProseTreeChange: (next: SectionTree) => void
+  sectionMeta: string
+  onSourceClick: (ref: string) => void
+}
+
+function SectionRenderer(props: SectionRendererProps) {
+  const {
+    section,
+    structuredData,
+    onStructuredDataChange,
+    proseTree,
+    onProseTreeChange,
+    sectionMeta,
+    onSourceClick,
+  } = props
+  const config = resolveTemplate(section.sectionType)
+  const data = (structuredData as Record<string, unknown>) ?? {}
+
+  if (config.template === 'A') {
+    return <TemplateA data={data} onChange={onStructuredDataChange} />
+  }
+  if (config.template === 'B' && config.fields) {
+    return (
+      <TemplateB
+        data={data}
+        onChange={onStructuredDataChange}
+        fields={config.fields}
+      />
+    )
+  }
+  if (config.template === 'C' && config.criteria) {
+    return (
+      <TemplateC
+        data={data}
+        onChange={onStructuredDataChange}
+        criteria={config.criteria}
+        completePillLabel={config.completePillLabel}
+      />
+    )
+  }
+  if (config.template === 'D') {
+    return <TemplateD data={data} onChange={onStructuredDataChange} />
+  }
+  if (config.template === 'E' && config.eVariant) {
+    return (
+      <TemplateE
+        data={data}
+        onChange={onStructuredDataChange}
+        variant={config.eVariant}
+      />
+    )
+  }
+
+  // 'outline' (assessment_results / conclusion / fallback) — outline-prose editor.
+  if (!proseTree) return null
+  return (
+    <SectionEditor
+      key={section.id}
+      value={proseTree}
+      onChange={onProseTreeChange}
+      label={section.title}
+      sectionMeta={sectionMeta}
+      sectionTitle={section.title}
+      onSourceClick={onSourceClick}
+    />
   )
 }
 
