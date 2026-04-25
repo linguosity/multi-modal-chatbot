@@ -603,9 +603,13 @@ export async function POST(request: NextRequest) {
           type: 'text',
           cache_control: { type: 'ephemeral' },
           text: systemPrompt
-            + '\n\nWhen you emit a field update, set `source_reference` to the page marker from the '
-            + 'pre-extracted content (e.g. "p.4" or "p.2-3"). Those brackets in the input are provenance '
-            + 'anchors — copy them verbatim so clinicians can click through to the source.',
+            + '\n\nWhen you emit a field update, set `source_reference` to "<filename> <page-marker>". '
+            + 'The filename is the one printed in the "Main Points from PDF (<name>):" header just above '
+            + 'each file\'s extracted text — copy it verbatim. The page marker is the [p.N] / [p.N-M] '
+            + 'token from the surrounding extracted content. Example: '
+            + '"celf_prek.pdf p.4" or "Levi.pdf p.2-3". If the value spans multiple files, pick the '
+            + 'primary one. The clinician\'s UI parses the filename to link the citation back to the '
+            + 'uploaded source — page-only references break the link.',
         },
         {
           type: 'text',

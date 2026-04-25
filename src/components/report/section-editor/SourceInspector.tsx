@@ -85,34 +85,69 @@ export default function SourceInspector(props: SourceInspectorProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // If the source string didn't carry a filename (older intakes emit
+  // page-only markers like "p.1-2"), we still want to resolve the
+  // citation when the report has exactly one uploaded file. That file
+  // has to be the source — there's no ambiguity. We query for all
+  // files on the report and use the singleton when present.
+  const [fallbackFile, setFallbackFile] = useState<FileRow | null>(null)
+
   useEffect(() => {
-    if (!open) return
-    const p = sourceRef ? parseSource(sourceRef) : null
-    if (!p || p.kind !== 'file' || !p.filename) {
+    if (!open) {
       setFile(null)
+      setFallbackFile(null)
       return
     }
+    const p = sourceRef ? parseSource(sourceRef) : null
     let cancelled = false
-    setLoading(true)
-    setError(null)
     const supabase = createBrowserSupabase()
-    supabase
-      .from('file_uploads')
-      .select('id, filename, file_type, file_size, storage_path, extracted_text, created_at')
-      .eq('report_id', reportId)
-      .ilike('filename', p.filename)
-      .limit(1)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (cancelled) return
-        if (error) {
-          setError(error.message)
-          setFile(null)
-        } else {
-          setFile(data as FileRow | null)
-        }
-        setLoading(false)
-      })
+
+    if (p?.kind === 'file' && p.filename) {
+      setLoading(true)
+      setError(null)
+      supabase
+        .from('file_uploads')
+        .select('id, filename, file_type, file_size, storage_path, extracted_text, created_at')
+        .eq('report_id', reportId)
+        .ilike('filename', p.filename)
+        .limit(1)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (cancelled) return
+          if (error) {
+            setError(error.message)
+            setFile(null)
+          } else {
+            setFile(data as FileRow | null)
+          }
+          setLoading(false)
+        })
+    } else if (p && (p.kind === 'unknown' || p.kind === 'file')) {
+      // Single-file fallback for unrecognized tokens.
+      setLoading(true)
+      setError(null)
+      supabase
+        .from('file_uploads')
+        .select('id, filename, file_type, file_size, storage_path, extracted_text, created_at')
+        .eq('report_id', reportId)
+        .limit(2)
+        .then(({ data, error }) => {
+          if (cancelled) return
+          if (error) {
+            setError(error.message)
+            setFallbackFile(null)
+          } else if (data && data.length === 1) {
+            setFallbackFile(data[0] as FileRow)
+          } else {
+            setFallbackFile(null)
+          }
+          setLoading(false)
+        })
+    } else {
+      setFile(null)
+      setFallbackFile(null)
+    }
+
     return () => {
       cancelled = true
     }
@@ -134,7 +169,6 @@ export default function SourceInspector(props: SourceInspectorProps) {
           {!parsed && <EmptyState />}
           {parsed?.kind === 'ai' && <AISource raw={parsed.raw} />}
           {parsed?.kind === 'user' && <UserSource raw={parsed.raw} />}
-          {parsed?.kind === 'unknown' && <UnknownSource raw={parsed.raw} />}
           {parsed?.kind === 'file' && (
             <FileSource
               parsed={parsed}
@@ -142,6 +176,24 @@ export default function SourceInspector(props: SourceInspectorProps) {
               loading={loading}
               error={error}
             />
+          )}
+          {parsed?.kind === 'unknown' && (
+            fallbackFile ? (
+              <FileSource
+                parsed={{
+                  kind: 'file',
+                  filename: fallbackFile.filename,
+                  marker: parsed.raw,
+                  raw: parsed.raw,
+                }}
+                file={fallbackFile}
+                loading={loading}
+                error={error}
+                inferred
+              />
+            ) : (
+              <UnknownSource raw={parsed.raw} loading={loading} />
+            )
           )}
         </div>
       </SheetContent>
@@ -189,7 +241,15 @@ function UserSource({ raw }: { raw: string }) {
   )
 }
 
-function UnknownSource({ raw }: { raw: string }) {
+function UnknownSource({ raw, loading }: { raw: string; loading?: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 wf-sm" style={{ color: 'var(--ink-2)' }}>
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Resolving source…
+      </div>
+    )
+  }
   return (
     <div className="space-y-3">
       <div className="wf-label">Unrecognized provenance</div>
@@ -207,15 +267,18 @@ function FileSource(props: {
   file: FileRow | null
   loading: boolean
   error: string | null
+  /** True when we inferred the file because the report has only one upload
+   *  and the original token didn't include a filename. */
+  inferred?: boolean
 }) {
-  const { parsed, file, loading, error } = props
+  const { parsed, file, loading, error, inferred } = props
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3">
         <FileTypeIcon type={file?.file_type ?? extFromName(parsed.filename ?? '')} />
         <div className="min-w-0 flex-1">
           <div className="wf-label" style={{ color: 'var(--terracotta-ink)' }}>
-            File evidence
+            {inferred ? 'File evidence (inferred)' : 'File evidence'}
           </div>
           <div
             className="truncate"
@@ -249,6 +312,14 @@ function FileSource(props: {
       {error && (
         <p className="wf-sm" style={{ color: 'var(--terracotta)' }}>
           Couldn't load file metadata: {error}
+        </p>
+      )}
+
+      {inferred && file && (
+        <p className="wf-sm" style={{ color: 'var(--ink-2)' }}>
+          The AI emitted only a page marker, not a filename. Since this
+          report has a single uploaded file, the citation is attributed
+          to it.
         </p>
       )}
 
