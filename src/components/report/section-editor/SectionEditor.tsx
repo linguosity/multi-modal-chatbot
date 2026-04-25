@@ -118,6 +118,14 @@ export interface SectionEditorProps {
 
   /** Override the id factory (tests, cross-instance coordination). */
   idFactory?: () => SectionNodeId
+
+  /**
+   * Click handler for the per-paragraph source chevron. When set, the
+   * chevron renders as a button and fires this with the raw source
+   * token. The page is expected to open an inspector / drawer keyed on
+   * that token.
+   */
+  onSourceClick?: (sourceRef: string) => void
 }
 
 function defaultIdFactory(): SectionNodeId {
@@ -137,6 +145,7 @@ export default function SectionEditor(props: SectionEditorProps) {
     readOnly = false,
     readOnlyStructure = false,
     idFactory = defaultIdFactory,
+    onSourceClick,
   } = props
 
   const [uncontrolledMode, setUncontrolledMode] = useState<SectionEditorMode>('outline')
@@ -553,6 +562,7 @@ export default function SectionEditor(props: SectionEditorProps) {
             onPasteParagraphs={insertParagraphsAfter}
             onInsertBlock={insertBlockAfter}
             onUpdateBlockField={updateBlockField}
+            onSourceClick={onSourceClick}
           />
         ) : (
           <ProseEditor
@@ -566,6 +576,7 @@ export default function SectionEditor(props: SectionEditorProps) {
             onPasteParagraphs={insertParagraphsAfter}
             onInsertBlock={insertBlockAfter}
             onUpdateBlockField={updateBlockField}
+            onSourceClick={onSourceClick}
           />
         )}
       </motion.div>
@@ -731,6 +742,7 @@ interface SharedEditorProps {
     id: SectionNodeId,
     patch: Partial<ScoreCardBlock> | Partial<CriterionBlock>,
   ) => void
+  onSourceClick?: (sourceRef: string) => void
 }
 
 interface OutlineEditorProps extends SharedEditorProps {
@@ -752,6 +764,7 @@ function OutlineEditor(props: OutlineEditorProps) {
     onPasteParagraphs,
     onInsertBlock,
     onUpdateBlockField,
+    onSourceClick,
   } = props
 
   // ── Drag state ───────────────────────────────────────────────────────
@@ -997,6 +1010,7 @@ function OutlineEditor(props: OutlineEditorProps) {
         onDragStart={handleDragStart}
         draggingId={drag?.sourceId ?? null}
         subtreeIds={drag?.subtreeIds ?? null}
+        onSourceClick={onSourceClick}
       />
 
       {drag && <DragOverlay drag={drag} />}
@@ -1023,6 +1037,7 @@ interface OutlineListProps {
   onDragStart: (id: SectionNodeId, text: string, e: React.PointerEvent) => void
   draggingId: SectionNodeId | null
   subtreeIds: Set<SectionNodeId> | null
+  onSourceClick?: (sourceRef: string) => void
 }
 
 function blockPreviewText(block: SectionBlock): string {
@@ -1048,6 +1063,7 @@ function OutlineList(props: OutlineListProps) {
     onDragStart,
     draggingId,
     subtreeIds,
+    onSourceClick,
   } = props
   return (
     <ul
@@ -1099,7 +1115,12 @@ function OutlineList(props: OutlineListProps) {
               {slotLabel && (
                 <SlotDot label={slotLabel} />
               )}
-              {sourceRef && <SourceChevron sourceRef={sourceRef} />}
+              {sourceRef && (
+                <SourceChevron
+                  sourceRef={sourceRef}
+                  onClick={onSourceClick ? () => onSourceClick(sourceRef) : undefined}
+                />
+              )}
             </span>
             <div style={{ position: 'relative' }}>
               {n.kind === 'paragraph' ? (
@@ -1166,6 +1187,7 @@ function OutlineList(props: OutlineListProps) {
                   onDragStart={onDragStart}
                   draggingId={draggingId}
                   subtreeIds={subtreeIds}
+                  onSourceClick={onSourceClick}
                 />
               )}
             </div>
@@ -1204,24 +1226,51 @@ function DragHandle(props: { readOnly: boolean; onPointerDown: (e: React.Pointer
 /**
  * Small "linked to evidence" chevron shown when a paragraph carries
  * a `source` reference (process-intake wrote it, evidence chip
- * supplied it, etc). Same hover-reveal pattern as the slot dot.
- * `title` surfaces the raw source token so clinicians can at least
- * eyeball provenance; a future PR can upgrade this to a clickable
- * side-panel lookup that resolves the token to a source document.
+ * supplied it, etc). Same hover-reveal pattern as the slot dot. When
+ * an `onClick` is provided the chevron renders as a button that opens
+ * the source inspector; otherwise it falls back to a non-interactive
+ * span with a `title` tooltip.
  */
-function SourceChevron({ sourceRef }: { sourceRef: string }) {
+function SourceChevron({
+  sourceRef,
+  onClick,
+}: {
+  sourceRef: string
+  onClick?: () => void
+}) {
+  const sharedStyle: React.CSSProperties = {
+    position: 'absolute',
+    right: -2,
+    top: 25,
+    color: 'var(--se-accent)',
+    display: 'inline-flex',
+  }
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="se-slot-dot"
+        title={`Evidence: ${sourceRef}`}
+        aria-label={`Open source: ${sourceRef}`}
+        onClick={onClick}
+        style={{
+          ...sharedStyle,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          cursor: 'pointer',
+        }}
+      >
+        <Link2 size={10} />
+      </button>
+    )
+  }
   return (
     <span
       className="se-slot-dot"
       title={`Evidence: ${sourceRef}`}
       aria-hidden
-      style={{
-        position: 'absolute',
-        right: -2,
-        top: 25,
-        color: 'var(--se-accent)',
-        display: 'inline-flex',
-      }}
+      style={sharedStyle}
     >
       <Link2 size={10} />
     </span>

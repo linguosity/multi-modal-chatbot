@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { useAutosave } from '@/lib/hooks/useAutosave'
 import { motion } from 'framer-motion'
 import SectionEditor from '@/components/report/section-editor/SectionEditor'
+import SourceInspector from '@/components/report/section-editor/SourceInspector'
 import {
   contentToTree,
   interpolateTokens,
@@ -29,7 +30,13 @@ export default function SectionPage() {
   const [proseTree, setProseTree] = useState<SectionTree | null>(null)
 
   const [isNavigating, setIsNavigating] = useState(false)
+  const [activeSource, setActiveSource] = useState<string | null>(null)
   const { showAIUpdateToast } = useToast()
+
+  const openSource = useCallback((ref: string) => setActiveSource(ref), [])
+  const closeSource = useCallback((next: boolean) => {
+    if (!next) setActiveSource(null)
+  }, [])
 
   const section = report?.sections.find((s) => s.id === sectionId)
   const currentIndex = report?.sections.findIndex((s) => s.id === sectionId) ?? -1
@@ -228,6 +235,7 @@ export default function SectionPage() {
                     label={section.title}
                     sectionMeta={sectionMeta}
                     sectionTitle={section.title}
+                    onSourceClick={openSource}
                   />
                 )}
               </div>
@@ -261,6 +269,13 @@ export default function SectionPage() {
         variant="rich"
         currentIndex={currentIndex}
         totalSections={report.sections.length}
+      />
+
+      <SourceInspector
+        open={activeSource !== null}
+        onOpenChange={closeSource}
+        sourceRef={activeSource}
+        reportId={reportId}
       />
     </div>
   )
