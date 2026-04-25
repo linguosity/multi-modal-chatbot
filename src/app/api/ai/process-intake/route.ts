@@ -182,6 +182,19 @@ export async function POST(request: NextRequest) {
     console.log('✅ Step 10: Processing uploaded files (Claude for PDFs, OpenAI for audio transcription)...')
     const files: File[] = []
     const uploadedFilesMeta: Array<{ id: string; name: string; type: string; size?: number; uploadDate: string; description?: string }>=[]
+    /** Per-file row data destined for the `file_uploads` table. Populated as
+     *  each file is processed so the source-inspector chevron can resolve
+     *  citation strings back to the original file (filename + extracted_text).
+     *  Mirrors `uploadedFilesMeta` index-for-index. */
+    const uploadedFilesRows: Array<{
+      id: string
+      filename: string
+      file_type: string
+      file_size: number | null
+      extracted_text: string | null
+      processing_status: 'completed' | 'failed'
+      error_message: string | null
+    }> = []
     let fileIndex = 0
     while (formData.get(`file_${fileIndex}`)) {
       files.push(formData.get(`file_${fileIndex}`) as File)
@@ -304,10 +317,14 @@ export async function POST(request: NextRequest) {
     const VERBOSE = (process.env.NEXT_PUBLIC_PROGRESS_VERBOSE === 'true') || (process.env.NEXT_PUBLIC_SSE_VERBOSE === 'true')
     for (const f of files) {
       console.log(`📎 File: name="${f.name}" type="${f.type}" size=${(f.size / 1024 / 1024).toFixed(2)}MB`)
+      // Stable id used for both the metadata.uploadedFiles entry and the
+      // file_uploads row, so the source-inspector chevron can cross-reference.
+      const fileId = crypto.randomUUID()
+      let perFileExtracted: string | null = null
       try {
         // collect source metadata for report metadata.uploadedFiles
         const metaType = f.type.startsWith('application/pdf') ? 'pdf' : (f.type.startsWith('image/') ? 'image' : (f.type.startsWith('audio/') ? 'audio' : (f.type.startsWith('text/') ? 'text' : 'document')))
-        uploadedFilesMeta.push({ id: crypto.randomUUID(), name: f.name, type: metaType, size: (f as any).size, uploadDate: new Date().toISOString() })
+        uploadedFilesMeta.push({ id: fileId, name: f.name, type: metaType, size: (f as any).size, uploadDate: new Date().toISOString() })
         // Verbose per-file progress
         if (VERBOSE) {
           try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()} ... replace`) } catch {}
@@ -383,6 +400,7 @@ export async function POST(request: NextRequest) {
           const textBlock2 = { type: 'text', text: `Main Points from PDF (${f.name}):\n${extractedText}` }
           content.push(textBlock2)
           openaiContent.push(textBlock2)
+          perFileExtracted = extractedText
         } else if (f.type.startsWith('audio/')) {
           const transcriptRaw = await transcribeAudio(f)
           const { redactedText: transcript, entitiesFound: audioEnts } = piiRedactor.redact(transcriptRaw)
@@ -392,6 +410,7 @@ export async function POST(request: NextRequest) {
           const audioBlock = { type: 'text', text: `Audio transcript from ${f.name}:\n${transcript}` }
           content.push(audioBlock)
           openaiContent.push(audioBlock)
+          perFileExtracted = transcript
         } else if (
           f.type.startsWith('text/') ||
           f.type === 'application/rtf' ||
@@ -406,6 +425,7 @@ export async function POST(request: NextRequest) {
           const textFileBlock = { type: 'text', text: `Text content from ${f.name}:\n${t}` }
           content.push(textFileBlock)
           openaiContent.push(textFileBlock)
+          perFileExtracted = t
         } else if (f.type.startsWith('image/')) {
           const base64 = await fileToBase64(f)
           openaiContent.push({
@@ -431,6 +451,15 @@ export async function POST(request: NextRequest) {
         if (VERBOSE) {
           try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
         }
+        uploadedFilesRows.push({
+          id: fileId,
+          filename: f.name,
+          file_type: f.type || 'application/octet-stream',
+          file_size: typeof (f as any).size === 'number' ? (f as any).size : null,
+          extracted_text: perFileExtracted,
+          processing_status: 'completed',
+          error_message: null,
+        })
       } catch (e) {
         const err = e as Error
         processingErrors.push(`${f.name}: ${err.message}`)
@@ -439,6 +468,15 @@ export async function POST(request: NextRequest) {
         if (VERBOSE) {
           try { emitProgress(operationId, `❌ Failed to update ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
         }
+        uploadedFilesRows.push({
+          id: fileId,
+          filename: f.name,
+          file_type: f.type || 'application/octet-stream',
+          file_size: typeof (f as any).size === 'number' ? (f as any).size : null,
+          extracted_text: perFileExtracted,
+          processing_status: 'failed',
+          error_message: err.message?.slice(0, 500) ?? 'unknown error',
+        })
       }
     }
 
@@ -1126,6 +1164,40 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎉 Step 19: Processing complete: ${successful} successful, ${failed} failed`)
     console.log(`📋 Process summaries:`, processSummaries)
+
+    // Persist file_uploads rows so the source-inspector can resolve
+    // citation strings back to the original file (filename + extracted_text).
+    // Best-effort; failure here doesn't block the metadata path below.
+    if (uploadedFilesRows.length > 0) {
+      try {
+        const { data: userData, error: userErr } = await supabase.auth.getUser()
+        const userId = userData?.user?.id ?? null
+        if (userErr || !userId) {
+          console.warn('⚠️ file_uploads persist skipped: no authenticated user')
+        } else {
+          const rows = uploadedFilesRows.map((r) => ({
+            id: r.id,
+            report_id: reportId,
+            user_id: userId,
+            filename: r.filename,
+            file_type: r.file_type,
+            file_size: r.file_size,
+            storage_path: null,
+            processing_status: r.processing_status,
+            extracted_text: r.extracted_text,
+            error_message: r.error_message,
+          }))
+          const { error: insErr } = await supabase.from('file_uploads').insert(rows)
+          if (insErr) {
+            console.warn('⚠️ Failed to persist file_uploads rows:', insErr.message)
+          } else {
+            console.log(`📁 Persisted ${rows.length} file_uploads row(s)`)
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Unexpected error persisting file_uploads:', e instanceof Error ? e.message : String(e))
+      }
+    }
 
     // Persist uploaded files and activity timeline to report metadata (best-effort)
     try {
