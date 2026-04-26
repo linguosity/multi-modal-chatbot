@@ -53,15 +53,18 @@ function newId(): string {
 }
 
 export function TemplateD({ data, onChange, onAIExtract }: TemplateDProps) {
-  // AI-emitted tool rows may lack stable `id` fields. Stamp a stable id
-  // on read so React keys + the toggle/remove/update id-lookups all work.
+  // AI-emitted tool rows may lack stable `id` fields and use slightly
+  // different keys than the template's local shape. Map the common
+  // alternatives (`title` ← name, `measure_type` ← type, `completed`
+  // ← date, `purpose` ← population) so AI-saved data renders without
+  // requiring prompt-side schema enforcement.
   const tools = Array.isArray(data.tools)
-    ? (data.tools as Partial<TemplateDTool>[]).map((t, i) => ({
+    ? (data.tools as Array<Partial<TemplateDTool> & { title?: string; measure_type?: string; completed?: string; purpose?: string }>).map((t, i) => ({
         id: t.id ?? `tool-${i}`,
-        name: t.name ?? '',
-        type: t.type ?? 'Standardized',
-        date: t.date ?? '',
-        population: t.population ?? '',
+        name: t.name ?? t.title ?? '',
+        type: t.type ?? t.measure_type ?? 'Standardized',
+        date: t.date ?? t.completed ?? '',
+        population: t.population ?? t.purpose ?? '',
       })) as TemplateDTool[]
     : []
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())

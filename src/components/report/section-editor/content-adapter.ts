@@ -51,6 +51,21 @@ export function interpolateTokens(
   ctx: Record<string, unknown> | null | undefined,
 ): string {
   if (!content) return content
+  // JSON-encoded SectionTree is the new canonical storage. The
+  // template-style {token} regex below would happily match nested
+  // JSON objects like `{"kind":"paragraph",...}` as one giant "token"
+  // and replace them with em-dashes, corrupting the tree before
+  // `contentToTree` ever sees it. Detect JSON up front and pass it
+  // through untouched — it has no clinician-facing tokens to resolve.
+  const trimmed = content.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      JSON.parse(trimmed)
+      return content
+    } catch {
+      // Not valid JSON — fall through to the regex path.
+    }
+  }
   return content.replace(/\{([^{}\s]+)\}/g, (_match, rawKey: string) => {
     const key = rawKey.trim()
     const value = ctx?.[key]

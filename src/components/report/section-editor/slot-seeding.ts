@@ -87,7 +87,7 @@ export function seedTreeFromStructuredData(
   const schema = SECTION_SCHEMAS[sectionType]
   if (schema) {
     const sources = options.sources ?? {}
-    const blocks = schema.slotIds
+    const schemaBlocks = schema.slotIds
       .map((slotId) => {
         const def = getSlotDef(slotId)
         if (!def) return null
@@ -100,21 +100,59 @@ export function seedTreeFromStructuredData(
         })
       })
       .filter((b): b is NonNullable<typeof b> => b !== null)
+
+    // Fold any AI-emitted keys the schema doesn't know about into the
+    // tree as generic paragraphs. The AI tends to drift from the
+    // canonical slot ids (e.g. emits `summary_statement` when the
+    // schema lists `recommendations_summary`), and silently dropping
+    // those leaves clinicians with a half-empty section. Provenance
+    // metadata is internal-only; never render it.
+    const handledKeys = new Set<string>(schema.slotIds)
+    const leftover: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(data)) {
+      if (handledKeys.has(k)) continue
+      if (k.startsWith('__')) continue
+      leftover[k] = v
+    }
+    const leftoverTree = seedGenericTree(leftover, options)
+    const leftoverBlocks = leftoverTree?.blocks ?? []
+
     return {
       id: tmpId('section'),
       schemaVersion: CURRENT_SCHEMA_VERSION,
       topic: makeParagraph(tmpId('topic'), options.topicText ?? schema.label),
-      blocks,
+      blocks: [...schemaBlocks, ...leftoverBlocks],
     }
   }
 
   if (sectionType === 'assessment_results') {
-    return seedAssessmentResultsTree(data, options)
+    const tree = seedAssessmentResultsTree(data, options)
+    if (tree.blocks.length > 0) return tree
+    // Specialized handler matched none of the canonical keys — let the
+    // generic fallback surface whatever the AI did emit.
+    return seedGenericTree(stripInternal(data), options)
   }
   if (sectionType === 'assessment_tools') {
-    return seedAssessmentToolsTree(data, options)
+    const tree = seedAssessmentToolsTree(data, options)
+    if (tree.blocks.length > 0) return tree
+    return seedGenericTree(stripInternal(data), options)
   }
-  return null
+
+  // Generic fallback. The AI extracted data we don't have a schema for;
+  // surface it as plain "Label: Value." paragraphs so the editor isn't
+  // silently empty. Slot ids are the raw data keys — unknown to the
+  // registry, but the slots model treats unknown ids as free-form so
+  // future schema additions remain non-breaking.
+  return seedGenericTree(stripInternal(data), options)
+}
+
+function stripInternal(data: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(data)) {
+    if (k.startsWith('__')) continue
+    out[k] = v
+  }
+  return out
 }
 
 // ─── Specialized tree builders ─────────────────────────────────────────
@@ -254,6 +292,170 @@ function seedAssessmentToolsTree(
       options.topicText ??
         'The following measures were administered to evaluate the student.',
     ),
+    blocks,
+  }
+}
+
+// ─── Generic fallback ──────────────────────────────────────────────────
+//
+// For section types without a registered slot schema or specialized
+// handler, walk the AI-emitted structured_data and produce a flat
+// "Label: Value." paragraph tree so nothing gets silently swallowed.
+// Two recursion levels are enough for the shapes the extractor emits
+// today (top-level scalars, arrays of scalars/records, one nesting of
+// records).
+
+function humanizeKey(key: string): string {
+  return key
+    .replace(/[._]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function formatScalar(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No'
+  if (typeof v === 'number') return String(v)
+  if (typeof v === 'string') return v
+  return ''
+}
+
+function isPrimitive(v: unknown): boolean {
+  const t = typeof v
+  return v === null || t === 'string' || t === 'number' || t === 'boolean'
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function summarizeRecord(rec: Record<string, unknown>): string {
+  // Compact one-line summary for an array element. Picks the most
+  // identifying field present, then appends one-or-two scalar fields
+  // for context.
+  const labelKey = ['name', 'title', 'test_name', 'label'].find((k) => isFilled(rec[k]))
+  const head = labelKey ? formatScalar(rec[labelKey]) : ''
+  const detail = Object.entries(rec)
+    .filter(([k, v]) => k !== labelKey && isPrimitive(v) && isFilled(v))
+    .slice(0, 2)
+    .map(([k, v]) => `${humanizeKey(k)}: ${formatScalar(v)}`)
+    .join('; ')
+  if (head && detail) return `${head} — ${detail}`
+  if (head) return head
+  if (detail) return detail
+  // Last resort — JSON-encode the whole record so it's at least visible.
+  try {
+    return JSON.stringify(rec)
+  } catch {
+    return ''
+  }
+}
+
+function seedGenericTree(
+  data: Record<string, unknown>,
+  options: SeedTreeOptions,
+): SectionTree | null {
+  const sources = options.sources ?? {}
+  const blocks: SectionBlock[] = []
+
+  for (const [key, value] of Object.entries(data)) {
+    if (!isFilled(value)) continue
+
+    if (isPrimitive(value)) {
+      const text = `${humanizeKey(key)}: ${formatScalar(value)}.`
+      blocks.push(
+        makeParagraph(tmpId(), text, {
+          slot: key,
+          value,
+          source: sources[key] ?? null,
+        }),
+      )
+      continue
+    }
+
+    if (Array.isArray(value)) {
+      const allPrimitive = value.every(isPrimitive)
+      if (allPrimitive) {
+        const joined = value.map(formatScalar).filter(Boolean).join(', ')
+        if (!joined) continue
+        const text = `${humanizeKey(key)}: ${joined}.`
+        blocks.push(
+          makeParagraph(tmpId(), text, {
+            slot: key,
+            value,
+            source: sources[key] ?? null,
+          }),
+        )
+        continue
+      }
+      // Array of records — header paragraph + one item per record.
+      blocks.push(makeParagraph(tmpId(), humanizeKey(key)))
+      let idx = 0
+      for (const item of value) {
+        if (!isRecord(item)) continue
+        const summary = summarizeRecord(item)
+        if (!summary) continue
+        blocks.push(
+          makeParagraph(tmpId(), summary + '.', {
+            slot: `${key}[${idx}]`,
+            value: item,
+            source: null,
+          }),
+        )
+        idx += 1
+      }
+      continue
+    }
+
+    if (isRecord(value)) {
+      const entries = Object.entries(value).filter(([, v]) => isFilled(v))
+      if (entries.length === 0) continue
+      blocks.push(makeParagraph(tmpId(), humanizeKey(key)))
+      for (const [innerKey, innerValue] of entries) {
+        const slotId = `${key}.${innerKey}`
+        if (isPrimitive(innerValue)) {
+          blocks.push(
+            makeParagraph(tmpId(), `${humanizeKey(innerKey)}: ${formatScalar(innerValue)}.`, {
+              slot: slotId,
+              value: innerValue,
+              source: sources[slotId] ?? null,
+            }),
+          )
+        } else if (Array.isArray(innerValue) && innerValue.every(isPrimitive)) {
+          const joined = innerValue.map(formatScalar).filter(Boolean).join(', ')
+          if (!joined) continue
+          blocks.push(
+            makeParagraph(tmpId(), `${humanizeKey(innerKey)}: ${joined}.`, {
+              slot: slotId,
+              value: innerValue,
+              source: sources[slotId] ?? null,
+            }),
+          )
+        } else {
+          // Deeper nesting — fall back to JSON so the data is still visible.
+          let snippet = ''
+          try {
+            snippet = JSON.stringify(innerValue)
+          } catch {
+            snippet = '[unserializable]'
+          }
+          blocks.push(
+            makeParagraph(tmpId(), `${humanizeKey(innerKey)}: ${snippet}.`, {
+              slot: slotId,
+              value: innerValue,
+              source: sources[slotId] ?? null,
+            }),
+          )
+        }
+      }
+    }
+  }
+
+  if (blocks.length === 0) return null
+
+  return {
+    id: tmpId('section'),
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    topic: makeParagraph(tmpId('topic'), options.topicText ?? 'Section'),
     blocks,
   }
 }
