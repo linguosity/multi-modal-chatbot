@@ -135,72 +135,89 @@ const FAMILY_FIELDS: TemplateBField[] = [
   },
 ]
 
+// Decision/justification fields here mirror ELIGIBILITY_CHECKLIST_SECTION
+// in src/lib/structured-schemas.ts — that schema is what the AI tool
+// gets, so keeping these in sync means extracted values render directly.
 const ELIGIBILITY_CRITERIA: TemplateCCriterion[] = [
   {
     key: 'speech_impairment',
     title: 'Meets criteria for speech/language impairment',
     definition:
       'A student has a language or speech disorder when they demonstrate difficulty understanding or using spoken language to such an extent that it adversely affects educational performance.',
-    decisionAliases: ['speech_criteria'],
-    justificationAliases: ['speech_justification'],
+    decisionField: 'speech_criteria',
+    justificationField: 'speech_justification',
   },
   {
     key: 'language_impairment',
     title: 'Meets criteria for language impairment',
     definition:
       'The student demonstrates deficits in comprehension and/or expression of language that significantly impact the ability to communicate in educational settings.',
-    decisionAliases: ['language_criteria'],
-    justificationAliases: ['language_justification'],
+    decisionField: 'language_criteria',
+    justificationField: 'language_justification',
   },
   {
     key: 'educational_impact',
     title: 'Adverse effect on educational performance',
     definition:
       "The communication disorder negatively impacts the student's ability to access curriculum, participate in classroom activities, and/or interact with peers and adults in the educational environment.",
-    decisionAliases: ['adverse_effect'],
-    justificationAliases: ['educational_impact_details', 'adverse_effect_details'],
+    decisionField: 'educational_impact',
+    justificationField: 'educational_impact_details',
   },
   {
     key: 'specialized_instruction',
     title: 'Requires specialized instruction',
     definition:
       'The student requires instruction specifically designed to meet their unique communication needs that cannot be provided through general education alone.',
-    decisionAliases: ['services_required'],
-    justificationAliases: ['services_justification'],
+    decisionField: 'services_required',
+    justificationField: 'services_justification',
   },
 ]
 
+// Validity criteria. Only `results_valid` maps to a canonical schema
+// field (`is_valid`); the rest are UI-side toggles using `_decision` /
+// `_justification` suffixes the clinician fills directly. Nested schema
+// fields like `student_cooperation.cooperative` would need a path-aware
+// renderer — out of scope for this pass.
 const VALIDITY_CRITERIA: TemplateCCriterion[] = [
   {
     key: 'results_valid',
     title: 'Test results are valid and reliable',
     definition:
       "Results are considered representative of the student's typical performance based on behavior during testing, cooperation level, and consistency of responses.",
-    decisionAliases: ['is_valid'],
+    decisionField: 'is_valid',
+    justificationField: 'results_valid_justification',
   },
   {
     key: 'student_cooperation',
     title: 'Student demonstrated adequate cooperation',
     definition:
       'The student was sufficiently cooperative and engaged throughout the evaluation to obtain reliable results.',
+    decisionField: 'student_cooperation_decision',
+    justificationField: 'student_cooperation_justification',
   },
   {
     key: 'attention_factors',
     title: 'Attention and fatigue factors controlled',
     definition:
       'Testing breaks and accommodations were provided as needed. No significant attention or fatigue effects compromised results.',
+    decisionField: 'attention_factors_decision',
+    justificationField: 'attention_factors_justification',
   },
   {
     key: 'cultural_factors',
     title: 'Linguistic and cultural factors considered',
     definition:
       "The student's bilingual status and cultural background were appropriately considered in test selection, administration, and interpretation of results.",
+    decisionField: 'cultural_factors_decision',
+    justificationField: 'cultural_factors_justification',
   },
   {
     key: 'environmental_factors',
     title: 'Environmental conditions adequate',
     definition:
       'Testing was conducted in a quiet room with minimal distractions, appropriate lighting, and comfortable seating.',
+    decisionField: 'environmental_factors_decision',
+    justificationField: 'environmental_factors_justification',
   },
 ]
 

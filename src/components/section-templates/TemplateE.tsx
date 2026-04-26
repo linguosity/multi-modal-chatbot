@@ -36,26 +36,6 @@ function readString(data: Record<string, unknown>, key: string): string | undefi
   return typeof v === 'string' ? v : undefined
 }
 
-// Try canonical key first, then each alias the AI commonly emits.
-function readStringFirst(data: Record<string, unknown>, keys: string[]): string | undefined {
-  for (const k of keys) {
-    const v = readString(data, k)
-    if (v !== undefined) return v
-  }
-  return undefined
-}
-
-function readStringArrayFirst(
-  data: Record<string, unknown>,
-  keys: string[],
-): string[] | undefined {
-  for (const k of keys) {
-    const v = readStringArray(data, k)
-    if (v !== undefined) return v
-  }
-  return undefined
-}
-
 function readGoals(data: Record<string, unknown>): TemplateEGoal[] | undefined {
   const v = data.goals
   if (!Array.isArray(v)) return undefined
@@ -175,12 +155,20 @@ export function TemplateE({
     onChange({ ...data, [key]: value })
   }
 
+  // All field names below match ACCOMMODATIONS_SECTION in
+  // src/lib/structured-schemas.ts — the schema the AI is given. Keep
+  // these aligned so AI-extracted values land where the renderer reads.
   if (variant === 'accommodations') {
-    const testing = readStringArrayFirst(data, ['testing_accommodations']) ?? []
-    const classroom =
-      readStringArrayFirst(data, ['classroom_mods', 'classroom_modifications']) ?? []
-    const assistive = readStringArrayFirst(data, ['assistive_tech']) ?? []
-    const otherSupports = readStringFirst(data, ['other_supports']) ?? ''
+    const testing = readStringArray(data, 'testing_accommodations') ?? []
+    const classroom = readStringArray(data, 'classroom_modifications') ?? []
+    // assistive_technology is a string in the schema, but the UI is a
+    // chip multiselect — accept either shape.
+    const assistive =
+      readStringArray(data, 'assistive_technology') ??
+      (readString(data, 'assistive_technology')
+        ? [readString(data, 'assistive_technology') as string]
+        : [])
+    const otherSupports = readString(data, 'other_supports') ?? ''
 
     return (
       <div style={{ ...CARD_STYLE, gap: 16 }}>
@@ -194,14 +182,14 @@ export function TemplateE({
         <FieldRow label="Classroom Modifications">
           <MultiSelectChips
             value={classroom}
-            onChange={(v) => set('classroom_mods', v)}
+            onChange={(v) => set('classroom_modifications', v)}
             suggestions={[...CLASSROOM_MODS]}
           />
         </FieldRow>
         <FieldRow label="Assistive Technology">
           <MultiSelectChips
             value={assistive}
-            onChange={(v) => set('assistive_tech', v)}
+            onChange={(v) => set('assistive_technology', v)}
             suggestions={[...ASSISTIVE_TECH]}
           />
         </FieldRow>
@@ -217,14 +205,14 @@ export function TemplateE({
     )
   }
 
-  // Recommendations variant. Aliases cover the AI's drift from the
-  // canonical keys (e.g. emits `service_frequency` instead of `frequency`).
-  const frequency = readStringFirst(data, ['frequency', 'service_frequency']) ?? '2'
-  const duration = readStringFirst(data, ['duration', 'session_duration']) ?? '30'
-  const settingArr = readStringArrayFirst(data, ['setting'])
-  // `service_setting` arrives as a free-form string from the AI — split
-  // on common delimiters into the multi-select shape the UI expects.
-  const settingStr = readStringFirst(data, ['service_setting'])
+  // Recommendations variant. Field names match RECOMMENDATIONS_SECTION
+  // in src/lib/structured-schemas.ts — the schema the AI is given.
+  // `service_setting` is a free-form string in the schema; split on
+  // common delimiters into the multi-select shape the UI expects.
+  const frequency = readString(data, 'service_frequency') ?? '2'
+  const duration = readString(data, 'session_duration') ?? '30'
+  const settingArr = readStringArray(data, 'service_setting')
+  const settingStr = readString(data, 'service_setting')
   const setting =
     settingArr ??
     (settingStr
@@ -233,11 +221,11 @@ export function TemplateE({
           .map((s) => s.trim())
           .filter(Boolean)
       : DEFAULT_SETTING)
-  // `goals_targets` is a free-form prose blob from the AI; surface it as
-  // a single goal so the clinician can split / edit it rather than
-  // silently losing the content.
+  // The schema declares `goals_targets` as a single string; until the
+  // schema gains a structured goal-array, surface the prose as a single
+  // editable goal so the clinician can split it instead of losing it.
   const goalsFromData = readGoals(data)
-  const goalsTargets = readStringFirst(data, ['goals_targets'])
+  const goalsTargets = readString(data, 'goals_targets')
   const goals: TemplateEGoal[] =
     goalsFromData && goalsFromData.length > 0
       ? goalsFromData
@@ -247,6 +235,10 @@ export function TemplateE({
   const usingDefaultGoals =
     (!goalsFromData || goalsFromData.length === 0) && !goalsTargets
 
+  // Goals writes intentionally use 'goals' (a structured array key) even
+  // though the AI emits prose into 'goals_targets'. Once the clinician
+  // edits / splits, the structured array becomes canonical and the
+  // single 'AI-extracted' card disappears.
   const removeGoal = (index: number) => {
     const next = goals.filter((_, i) => i !== index)
     set('goals', next)
@@ -270,14 +262,14 @@ export function TemplateE({
             <SegmentedControl
               options={FREQUENCY_OPTIONS}
               value={frequency}
-              onChange={(v) => set('frequency', v)}
+              onChange={(v) => set('service_frequency', v)}
             />
           </FieldRow>
           <FieldRow label="Session Duration">
             <SegmentedControl
               options={DURATION_OPTIONS}
               value={duration}
-              onChange={(v) => set('duration', v)}
+              onChange={(v) => set('session_duration', v)}
             />
           </FieldRow>
         </div>
@@ -285,7 +277,7 @@ export function TemplateE({
           <FieldRow label="Service Setting">
             <MultiSelectChips
               value={setting}
-              onChange={(v) => set('setting', v)}
+              onChange={(v) => set('service_setting', v)}
               suggestions={[...SETTING_OPTIONS]}
               freeAdd={false}
             />
