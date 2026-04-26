@@ -2,13 +2,22 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { progressToastDispatcher, ProgressToast } from '@/lib/progress-toast-dispatcher'
-import { logProcessor, eventBus, ProcessingCompleteEvent } from '@/lib/event-bus'
+import {
+  eventBus,
+  ProcessingCompleteEvent,
+  dispatchProgressEvent,
+  dispatchSseLine,
+} from '@/lib/event-bus'
+import type { ProgressEvent } from '@/lib/progress-events'
 import { ProgressToastContainer } from '@/components/ProgressToast'
 import { useRecentUpdates } from '@/lib/context/RecentUpdatesContext'
 
 interface ProgressToastContextType {
   toasts: ProgressToast[]
-  processLogLine: (logLine: string) => void
+  /** Dispatch a typed progress event (preferred path). */
+  dispatch: (event: ProgressEvent) => void
+  /** Parse and dispatch a raw SSE `data:` line. Returns false if non-JSON. */
+  dispatchSse: (raw: string) => boolean
   clearAllToasts: () => void
   dismissToast: (id: string) => void
 }
@@ -20,55 +29,47 @@ export function ProgressToastProvider({ children }: { children: React.ReactNode 
   const { addRecentUpdate } = useRecentUpdates()
 
   useEffect(() => {
-    // Subscribe to toast updates
     const unsubscribe = progressToastDispatcher.subscribe((toastMap) => {
       setToasts(Array.from(toastMap.values()))
     })
 
-    // Also listen for processing complete events to mark inline updates
-    const unsubscribeEvents = eventBus.subscribe<ProcessingCompleteEvent>('processing-complete', (evt) => {
-      if (!evt?.id) return
-      const [sectionId, fieldPath] = String(evt.id).split('.')
-      if (evt.success && sectionId && fieldPath) {
-        try { addRecentUpdate(sectionId, [fieldPath], 'ai_update', 'info') } catch {}
-      }
-    })
+    // Mark inline updates as recent so other UI surfaces can flag them.
+    const unsubscribeEvents = eventBus.subscribe<ProcessingCompleteEvent>(
+      'processing-complete',
+      (evt) => {
+        if (!evt?.id) return
+        const [sectionId, fieldPath] = String(evt.id).split('.')
+        if (evt.success && sectionId && fieldPath) {
+          try {
+            addRecentUpdate(sectionId, [fieldPath], 'ai_update', 'info')
+          } catch {
+            /* noop */
+          }
+        }
+      },
+    )
 
     return () => {
       unsubscribe()
       unsubscribeEvents()
-      // Cleanup on unmount
       progressToastDispatcher.cleanup()
-      logProcessor.cleanup()
     }
-  }, [])
-
-  const processLogLine = (logLine: string) => {
-    logProcessor.processLogLine(logLine)
-  }
-
-  const clearAllToasts = () => {
-    progressToastDispatcher.clearAllToasts()
-  }
-
-  const dismissToast = (id: string) => {
-    // Remove specific toast using the dispatcher's method
-    progressToastDispatcher.removeToast(id)
-  }
+  }, [addRecentUpdate])
 
   return (
-    <ProgressToastContext.Provider value={{
-      toasts,
-      processLogLine,
-      clearAllToasts,
-      dismissToast
-    }}>
+    <ProgressToastContext.Provider
+      value={{
+        toasts,
+        dispatch: dispatchProgressEvent,
+        dispatchSse: dispatchSseLine,
+        clearAllToasts: () => progressToastDispatcher.clearAllToasts(),
+        dismissToast: (id: string) => progressToastDispatcher.removeToast(id),
+      }}
+    >
       {children}
-      
-      {/* Render toast container */}
-      <ProgressToastContainer 
+      <ProgressToastContainer
         toasts={toasts}
-        onDismiss={dismissToast}
+        onDismiss={(id) => progressToastDispatcher.removeToast(id)}
       />
     </ProgressToastContext.Provider>
   )
@@ -80,48 +81,4 @@ export function useProgressToasts() {
     throw new Error('useProgressToasts must be used within a ProgressToastProvider')
   }
   return context
-}
-
-/**
- * Hook for simulating log processing (for testing)
- */
-export function useLogSimulator() {
-  const { processLogLine } = useProgressToasts()
-
-  const simulateProcessing = (sectionId: string, fields: string[]) => {
-    fields.forEach((field, index) => {
-      // Simulate processing start
-      setTimeout(() => {
-        processLogLine(`📝 Processing update: ${sectionId}.${field} ... replace`)
-      }, index * 500)
-
-      // Simulate processing complete
-      setTimeout(() => {
-        const success = Math.random() > 0.1 // 90% success rate
-        if (success) {
-          processLogLine(`✅ Updated ${sectionId}.${field}`)
-        } else {
-          processLogLine(`❌ Failed to update ${sectionId}.${field}`)
-        }
-      }, (index * 500) + 2000 + Math.random() * 3000)
-    })
-  }
-
-  const simulateError = (sectionId: string, field: string) => {
-    processLogLine(`📝 Processing update: ${sectionId}.${field} ... replace`)
-    setTimeout(() => {
-      processLogLine(`❌ Failed to update ${sectionId}.${field}`)
-    }, 2000)
-  }
-
-  const simulateTimeout = (sectionId: string, field: string) => {
-    processLogLine(`📝 Processing update: ${sectionId}.${field} ... replace`)
-    // Don't send completion - will timeout after 30s
-  }
-
-  return {
-    simulateProcessing,
-    simulateError,
-    simulateTimeout
-  }
 }

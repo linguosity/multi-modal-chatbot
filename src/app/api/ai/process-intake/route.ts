@@ -41,9 +41,36 @@ import { z } from 'zod'
 import { parseWithZod } from '@/lib/ai/structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
 import { seedContentFromStructuredData } from '@/components/report/section-editor/slot-seeding'
-import { emitProgress, completeProgress } from '@/lib/server/progress-stream'
+import { getSlotDef } from '@/components/report/section-editor/slots'
+import { emitEvent, completeProgress } from '@/lib/server/progress-stream'
+import { previewValue, type FileKind, type MergeStrategy } from '@/lib/progress-events'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { PIIRedactor, persistPIIMappings } from '@/lib/pii/redactor'
+
+// Strip array indices and return the leaf segment of a field path.
+// 'language_skills.morphology' → 'morphology'; 'tests[2].score' → 'score'.
+function leafKey(path: string): string {
+  const noIdx = path.replace(/\[\d+\]/g, '')
+  const segs = noIdx.split('.')
+  return segs[segs.length - 1] || path
+}
+
+// Friendly label for a field path. Prefers the slot registry; falls back
+// to a snake_case → Title Case humanization of the leaf.
+function slotLabelFor(path: string): string {
+  const leaf = leafKey(path)
+  const def = getSlotDef(leaf)
+  if (def) return def.label
+  return leaf.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function fileKindFor(mimeType: string, name: string): FileKind {
+  if (mimeType === 'application/pdf') return 'pdf'
+  if (mimeType.startsWith('audio/')) return 'audio'
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('text/') || /\.(txt|md|csv|html|rtf)$/i.test(name)) return 'note'
+  return 'other'
+}
 
 // Claude client is instantiated per-request via `new Anthropic()`
 
@@ -88,7 +115,7 @@ export async function POST(request: NextRequest) {
     const piiRedactor = new PIIRedactor()
     const textRedaction = piiRedactor.redact(rawText || '')
     const text = textRedaction.redactedText
-    try { emitProgress(operationId, `🛡 De-identifying source text: ${textRedaction.entitiesFound.length} entities found`) } catch {}
+    try { emitEvent(operationId, { kind: 'pii', source: 'text', entitiesFound: textRedaction.entitiesFound.length }) } catch {}
 
     console.log('📝 Request data summary:', {
       reportId,
@@ -203,14 +230,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Step 10: Found ${files.length} files`)
     // SSE milestone (upload complete)
-    try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.uploading_files`) } catch {}
+    try { emitEvent(operationId, { kind: 'stage', stage: 'uploading_files', status: 'done', sectionId: sectionIds[0] }) } catch {}
     try { broadcastPublish('progress', { stage: 'uploading_files_complete' }) } catch {}
     dbLog({ stage: 'uploading_files_complete', message: 'All files parsed', event_type: 'stage' }).catch(() => {})
 
     const processingErrors: string[] = []
 
     console.log('✅ Step 11: Getting target sections with full context...')
-    try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text ... replace`) } catch {}
+    try { emitEvent(operationId, { kind: 'stage', stage: 'extracting_text', status: 'start', sectionId: sectionIds[0] }) } catch {}
     try { broadcastPublish('progress', { stage: 'extracting_text_start' }) } catch {}
     dbLog({ stage: 'extracting_text_start', message: 'Text extraction started', event_type: 'stage' }).catch(() => {})
     let targetSectionsWithContext = reportContextBuilder.getTargetSectionsWithContext(reportContext)
@@ -327,7 +354,7 @@ export async function POST(request: NextRequest) {
         uploadedFilesMeta.push({ id: fileId, name: f.name, type: metaType, size: (f as any).size, uploadDate: new Date().toISOString() })
         // Verbose per-file progress
         if (VERBOSE) {
-          try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()} ... replace`) } catch {}
+          try { emitEvent(operationId, { kind: 'file', filename: f.name, fileKind: fileKindFor(f.type, f.name), status: 'start', sectionId: sectionIds[0] }) } catch {}
         }
         if (f.type === 'application/pdf') {
           // Send PDF to Claude to extract a concise, report-ready "Main Points"
@@ -395,7 +422,7 @@ export async function POST(request: NextRequest) {
           // PII guard: redact before the text reaches the Claude/Gemini prompt.
           const { redactedText: extractedText, entitiesFound: pdfEnts } = piiRedactor.redact(extractedTextRaw)
           if (pdfEnts.length > 0) {
-            try { emitProgress(operationId, `🛡 De-identified ${pdfEnts.length} entities in ${f.name}`) } catch {}
+            try { emitEvent(operationId, { kind: 'pii', source: 'file', filename: f.name, entitiesFound: pdfEnts.length }) } catch {}
           }
           const textBlock2 = { type: 'text', text: `Main Points from PDF (${f.name}):\n${extractedText}` }
           content.push(textBlock2)
@@ -405,7 +432,7 @@ export async function POST(request: NextRequest) {
           const transcriptRaw = await transcribeAudio(f)
           const { redactedText: transcript, entitiesFound: audioEnts } = piiRedactor.redact(transcriptRaw)
           if (audioEnts.length > 0) {
-            try { emitProgress(operationId, `🛡 De-identified ${audioEnts.length} entities in ${f.name}`) } catch {}
+            try { emitEvent(operationId, { kind: 'pii', source: 'file', filename: f.name, entitiesFound: audioEnts.length }) } catch {}
           }
           const audioBlock = { type: 'text', text: `Audio transcript from ${f.name}:\n${transcript}` }
           content.push(audioBlock)
@@ -420,7 +447,7 @@ export async function POST(request: NextRequest) {
           const tRaw = await f.text()
           const { redactedText: t, entitiesFound: textEnts } = piiRedactor.redact(tRaw)
           if (textEnts.length > 0) {
-            try { emitProgress(operationId, `🛡 De-identified ${textEnts.length} entities in ${f.name}`) } catch {}
+            try { emitEvent(operationId, { kind: 'pii', source: 'file', filename: f.name, entitiesFound: textEnts.length }) } catch {}
           }
           const textFileBlock = { type: 'text', text: `Text content from ${f.name}:\n${t}` }
           content.push(textFileBlock)
@@ -449,7 +476,7 @@ export async function POST(request: NextRequest) {
           })
         }
         if (VERBOSE) {
-          try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
+          try { emitEvent(operationId, { kind: 'file', filename: f.name, fileKind: fileKindFor(f.type, f.name), status: 'done', sectionId: sectionIds[0] }) } catch {}
         }
         uploadedFilesRows.push({
           id: fileId,
@@ -466,7 +493,7 @@ export async function POST(request: NextRequest) {
         console.error(`❌ File processing failed for ${f.name}:`, err.message)
         if (err.stack) console.error(err.stack.split('\n').slice(0, 5).join('\n'))
         if (VERBOSE) {
-          try { emitProgress(operationId, `❌ Failed to update ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.file_${f.name.replace(/[^a-z0-9_-]/gi,'_').toLowerCase()}`) } catch {}
+          try { emitEvent(operationId, { kind: 'file', filename: f.name, fileKind: fileKindFor(f.type, f.name), status: 'failed', sectionId: sectionIds[0] }) } catch {}
         }
         uploadedFilesRows.push({
           id: fileId,
@@ -495,7 +522,7 @@ export async function POST(request: NextRequest) {
     openaiContent.push(instruction)
 
     console.log(`✅ Step 14: Content array built with ${content.length} items`)
-    try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.extracting_text`) } catch {}
+    try { emitEvent(operationId, { kind: 'stage', stage: 'extracting_text', status: 'done', sectionId: sectionIds[0] }) } catch {}
     try { broadcastPublish('progress', { stage: 'extracting_text_complete' }) } catch {}
     dbLog({ stage: 'extracting_text_complete', message: 'Text extraction complete', event_type: 'stage' }).catch(() => {})
 
@@ -601,7 +628,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.log('🤖 Step 16: Calling Claude Opus 4.7 with forced tool...')
-      try { emitProgress(operationId, `📝 Processing update: ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai ... replace`) } catch {}
+      try { emitEvent(operationId, { kind: 'stage', stage: 'analyzing_with_ai', status: 'start', sectionId: sectionIds[0] }) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_start' }) } catch {}
 
       // Compose Report Schema JSON (selected sections only) to provide full structural context
@@ -702,7 +729,7 @@ export async function POST(request: NextRequest) {
           console.warn('  ⚠️ stop_reason=max_tokens — response was truncated; bump max_tokens if this recurs')
         }
       } catch {}
-      try { emitProgress(operationId, `✅ Updated ${(sectionIds[0] || '00000000-0000-0000-0000-000000000000')}.analyzing_with_ai`) } catch {}
+      try { emitEvent(operationId, { kind: 'stage', stage: 'analyzing_with_ai', status: 'done', sectionId: sectionIds[0] }) } catch {}
       try { broadcastPublish('progress', { stage: 'analyzing_with_ai_complete' }) } catch {}
       console.log('✅ Step 17: Extracting tool_use block from response...')
 
@@ -891,7 +918,18 @@ export async function POST(request: NextRequest) {
       // Validate field path against section schema (if available)
       const sectionSchema = sectionSchemaById.get(cleanedUpdate.section_id)
       // SSE: emit per-field start
-      try { emitProgress(operationId, `📝 Processing update: ${cleanedUpdate.section_id}.${cleanedUpdate.field_path} ... ${cleanedUpdate.merge_strategy || 'replace'}`) } catch {}
+      try {
+        emitEvent(operationId, {
+          kind: 'field',
+          sectionId: cleanedUpdate.section_id,
+          sectionLabel: sectionMetaById.get(cleanedUpdate.section_id)?.title,
+          fieldPath: cleanedUpdate.field_path,
+          slotLabel: slotLabelFor(cleanedUpdate.field_path),
+          valuePreview: previewValue(cleanedUpdate.value),
+          mergeStrategy: ((cleanedUpdate.merge_strategy ?? 'replace') as MergeStrategy),
+          status: 'pending',
+        })
+      } catch {}
       // Normalize field path to be relative to section root (model often prefixes with section key)
       cleanedUpdate.field_path = normalizeFieldPath(cleanedUpdate.field_path, sectionSchema)
       const pathCheck = validatePathAgainstSchema(sectionSchema, cleanedUpdate.field_path)
@@ -1138,14 +1176,36 @@ export async function POST(request: NextRequest) {
           if (error) {
             console.error(`❌ Step 18.${i + 1} FAILED: Failed to update section ${update.section_id}:`, error)
             results.push({ sectionId: update.section_id, success: false, error })
-            try { emitProgress(operationId, `❌ Failed to update ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+            try {
+              emitEvent(operationId, {
+                kind: 'field',
+                sectionId: cleanedUpdate.section_id,
+                sectionLabel: sectionMetaById.get(cleanedUpdate.section_id)?.title,
+                fieldPath: cleanedUpdate.field_path,
+                slotLabel: slotLabelFor(cleanedUpdate.field_path),
+                mergeStrategy: ((cleanedUpdate.merge_strategy ?? 'replace') as MergeStrategy),
+                status: 'failed',
+                error: error?.message,
+              })
+            } catch {}
             try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: false }) } catch {}
             dbLog({ event_type: 'section_update', stage: 'error', section_id: cleanedUpdate.section_id, message: `Failed to update ${cleanedUpdate.field_path}`, data: { error } }).catch(() => {})
           } else {
             console.log(`✅ Step 18.${i + 1}: Updated section ${update.section_id}`)
             results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: true })
             processSummaries.push(update.process_summary)
-            try { emitProgress(operationId, `✅ Updated ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+            try {
+              emitEvent(operationId, {
+                kind: 'field',
+                sectionId: cleanedUpdate.section_id,
+                sectionLabel: sectionMetaById.get(cleanedUpdate.section_id)?.title,
+                fieldPath: cleanedUpdate.field_path,
+                slotLabel: slotLabelFor(cleanedUpdate.field_path),
+                valuePreview: previewValue(cleanedUpdate.value),
+                mergeStrategy: ((cleanedUpdate.merge_strategy ?? 'replace') as MergeStrategy),
+                status: 'applied',
+              })
+            } catch {}
             try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: true }) } catch {}
             dbLog({ event_type: 'section_update', stage: 'success', section_id: cleanedUpdate.section_id, message: `Updated ${cleanedUpdate.field_path}` }).catch(() => {})
           }
@@ -1153,7 +1213,18 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.error(`❌ Step 18.${i + 1} FAILED: Error processing update for section ${update.section_id}:`, error)
         results.push({ sectionId: update.section_id, fieldPath: cleanedUpdate.field_path, success: false, error: error instanceof Error ? error.message : String(error) })
-        try { emitProgress(operationId, `❌ Failed to update ${cleanedUpdate.section_id}.${cleanedUpdate.field_path}`) } catch {}
+        try {
+          emitEvent(operationId, {
+            kind: 'field',
+            sectionId: cleanedUpdate.section_id,
+            sectionLabel: sectionMetaById.get(cleanedUpdate.section_id)?.title,
+            fieldPath: cleanedUpdate.field_path,
+            slotLabel: slotLabelFor(cleanedUpdate.field_path),
+            mergeStrategy: ((cleanedUpdate.merge_strategy ?? 'replace') as MergeStrategy),
+            status: 'failed',
+            error: error instanceof Error ? error.message : String(error),
+          })
+        } catch {}
         try { broadcastPublish('section_update', { sectionId: cleanedUpdate.section_id, fieldPath: cleanedUpdate.field_path, success: false }) } catch {}
         dbLog({ event_type: 'section_update', stage: 'error', section_id: cleanedUpdate.section_id, message: `Exception updating ${cleanedUpdate.field_path}`, data: { error: error instanceof Error ? error.message : String(error) } }).catch(() => {})
       }

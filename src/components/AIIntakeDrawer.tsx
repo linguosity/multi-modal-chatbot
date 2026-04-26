@@ -33,10 +33,18 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
   onProcessData
 }) => {
   const pathname = usePathname()
-  const { processLogLine, clearAllToasts } = useProgressToasts()
+  const { dispatch, dispatchSse, clearAllToasts } = useProgressToasts()
   const { showProcessingSummaryToast } = useAppToast()
   const { addRecentUpdate } = useRecentUpdates()
   const { report, refreshReport } = useReport()
+
+  // Resolve a friendly section title from the in-memory report context.
+  // Used when the drawer dispatches synthetic field events (the API path
+  // already attaches sectionLabel server-side, so this is mostly a
+  // fallback for the non-SSE simulation path).
+  const sectionLabelFor = (sectionId: string): string | undefined => {
+    return report?.sections?.find((s) => s.id === sectionId)?.title
+  }
   
   // UI State
   const [isOpen, setIsOpen] = useState(false)
@@ -177,23 +185,29 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       setLoadingActive(true)
     }
     
-    // Emit staged progress toasts to indicate work while request runs
+    // Emit staged progress events to indicate work while the request runs.
+    // These get filtered out of the toast stack by the dispatcher (stage
+    // events go through 'stage-progress', not 'processing-update'), but
+    // LoadingMoment listens for them to advance the cycle text.
     const firstSectionId = selectedSectionIds[0] || '00000000-0000-0000-0000-000000000000'
-    const stage = (slug: string, delay: number) => {
+    const stageStart = (id: 'uploading_files' | 'extracting_text' | 'analyzing_with_ai' | 'applying_updates', delay: number) => {
       setTimeout(() => {
-        // Use a deterministic synthetic field to match toast parser
-        processLogLine(`📝 Processing update: ${firstSectionId}.${slug} ... replace`)
+        dispatch({ kind: 'stage', stage: id, status: 'start', sectionId: firstSectionId })
       }, delay)
     }
-    stage('uploading_files', 0)
-    stage('extracting_text', 900)
-    stage('analyzing_with_ai', 1800)
-    stage('applying_updates', 2700)
+    stageStart('uploading_files', 0)
+    stageStart('extracting_text', 900)
+    stageStart('analyzing_with_ai', 1800)
+    stageStart('applying_updates', 2700)
     
     try {
       const reportId = pathname.split('/')[3]
-      // Optional SSE progress subscription
-      const enableSse = process?.env?.NEXT_PUBLIC_ENABLE_SSE_PROGRESS === 'true'
+      // SSE progress subscription. Default-on now that the wire format
+      // is typed JSON ProgressEvents — the previous opt-in flag was a
+      // soft launch for the regex-string era. Set the env var to 'false'
+      // explicitly to opt out (useful for prod multi-region deploys
+      // where in-memory SSE state isn't shared across processes).
+      const enableSse = process?.env?.NEXT_PUBLIC_ENABLE_SSE_PROGRESS !== 'false'
       const operationId = enableSse ? uuidv4() : null
       setLoadingOperationId(operationId)
 
@@ -212,8 +226,8 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
           es = new EventSource(`/api/stream/${operationId}`)
           es.onmessage = (evt) => {
             if (!evt?.data) return
-            // Route raw server log lines into the toast pipeline
-            processLogLine(evt.data)
+            // Each SSE `data:` payload is a JSON-encoded ProgressEvent.
+            dispatchSse(evt.data)
           }
           es.onerror = () => {
             // Silent; stream may close naturally at end
@@ -254,26 +268,50 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
         try { await refreshReport() } catch {}
 
         // Mark staged steps as completed for non-SSE flows
-        const completeStage = (slug: string) => processLogLine(`✅ Updated ${firstSectionId}.${slug}`)
+        const completeStage = (id: 'uploading_files' | 'extracting_text' | 'analyzing_with_ai' | 'applying_updates') => {
+          dispatch({ kind: 'stage', stage: id, status: 'done', sectionId: firstSectionId })
+        }
         completeStage('uploading_files')
         completeStage('extracting_text')
         completeStage('analyzing_with_ai')
         completeStage('applying_updates')
-        
-        // Display granular update results as progress toasts (simulate procedural stacking)
+
+        // Display granular update results as progress toasts (simulate procedural stacking).
+        // SSE has likely already streamed these in real time when enabled; the
+        // simulation only exists for the non-SSE path.
         const updates: any[] = (result.results.updateResults && Array.isArray(result.results.updateResults)) ? result.results.updateResults : []
         updates.forEach((u: any, idx: number) => {
           const fp = u.fieldPath || 'section'
-          const action = replaceMode ? 'replace' : (u.merge_strategy || 'append')
-          // Create a processing toast first
-          processLogLine(`📝 Processing update: ${u.sectionId}.${fp} ... ${action}`)
-          // Then mark completion shortly after to simulate progress
+          const merge = (replaceMode ? 'replace' : (u.merge_strategy || 'append')) as 'replace' | 'append' | 'remove'
+          const sectionLabel = sectionLabelFor(u.sectionId)
+          dispatch({
+            kind: 'field',
+            sectionId: u.sectionId,
+            sectionLabel,
+            fieldPath: fp,
+            mergeStrategy: merge,
+            status: 'pending',
+          })
           setTimeout(() => {
             if (u.success) {
-              processLogLine(`✅ Updated ${u.sectionId}.${fp}`)
+              dispatch({
+                kind: 'field',
+                sectionId: u.sectionId,
+                sectionLabel,
+                fieldPath: fp,
+                mergeStrategy: merge,
+                status: 'applied',
+              })
               try { addRecentUpdate(u.sectionId, [fp], 'ai_update', 'notice') } catch {}
             } else {
-              processLogLine(`❌ Failed to update ${u.sectionId}.${fp}`)
+              dispatch({
+                kind: 'field',
+                sectionId: u.sectionId,
+                sectionLabel,
+                fieldPath: fp,
+                mergeStrategy: merge,
+                status: 'failed',
+              })
             }
           }, 300 + idx * 120)
         })
@@ -297,7 +335,7 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
         // If no update results, finalize progress so UI does not appear stuck
         if ((!updates || updates.length === 0)) {
           setTimeout(() => {
-            processLogLine(`✅ Updated ${firstSectionId}.complete`)
+            dispatch({ kind: 'complete' })
           }, 400)
         }
 
@@ -321,19 +359,24 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
         }, 1500)
       } else {
         // Mark staged steps as failed for visibility
-        processLogLine(`❌ Failed to update ${firstSectionId}.applying_updates`)
-        processLogLine(`❌ Failed to update ${firstSectionId}.analyzing_with_ai`)
-        processLogLine(`❌ Failed to update ${firstSectionId}.extracting_text`)
-        processLogLine(`❌ Failed to update ${firstSectionId}.uploading_files`)
-        processLogLine(`❌ Processing failed: ${result.error}`)
+        const failStage = (id: 'uploading_files' | 'extracting_text' | 'analyzing_with_ai' | 'applying_updates') => {
+          dispatch({ kind: 'stage', stage: id, status: 'failed', sectionId: firstSectionId })
+        }
+        failStage('applying_updates')
+        failStage('analyzing_with_ai')
+        failStage('extracting_text')
+        failStage('uploading_files')
+        dispatch({ kind: 'error', message: `Processing failed: ${result.error}` })
       }
     } catch (error) {
-      // Mark staged steps as failed for visibility
-      processLogLine(`❌ Failed to update ${firstSectionId}.applying_updates`)
-      processLogLine(`❌ Failed to update ${firstSectionId}.analyzing_with_ai`)
-      processLogLine(`❌ Failed to update ${firstSectionId}.extracting_text`)
-      processLogLine(`❌ Failed to update ${firstSectionId}.uploading_files`)
-      processLogLine(`❌ Error during processing: ${error}`)
+      const failStage = (id: 'uploading_files' | 'extracting_text' | 'analyzing_with_ai' | 'applying_updates') => {
+        dispatch({ kind: 'stage', stage: id, status: 'failed', sectionId: firstSectionId })
+      }
+      failStage('applying_updates')
+      failStage('analyzing_with_ai')
+      failStage('extracting_text')
+      failStage('uploading_files')
+      dispatch({ kind: 'error', message: `Error during processing: ${error}` })
     } finally {
       setIsProcessing(false)
       // Hold the loading moment briefly so the user sees completion state
@@ -375,7 +418,7 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
       const response = await fetch('/api/ai/process-intake', { method: 'POST', body: formData })
       const result = await response.json()
       if (result.success) {
-        processLogLine(`✅ Applied ${result.results.successful} updates`)
+        dispatch({ kind: 'complete' })
         setTimeout(() => {
           setIsOpen(false)
           setRawText('')
@@ -383,7 +426,7 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
           setProcessingResults(null)
         }, 1200)
       } else {
-        processLogLine(`❌ Failed to apply updates: ${result.error}`)
+        dispatch({ kind: 'error', message: `Failed to apply updates: ${result.error}` })
       }
     } finally {
       setIsProcessing(false)

@@ -97,7 +97,10 @@ export function LoadingMoment({ active, files, operationId, onSkip, onPause }: L
     return () => clearInterval(id)
   }, [active, files])
 
-  // Subscribe to SSE if operationId provided
+  // Subscribe to SSE if operationId provided. Each `data:` payload is a
+  // typed ProgressEvent — file events advance the per-file feed, other
+  // kinds just keep the watchdog timer fresh so the auto-advance
+  // fallback doesn't fire spuriously.
   useEffect(() => {
     if (!active || !operationId) return
     const es = new EventSource(`/api/stream/${operationId}`)
@@ -105,17 +108,27 @@ export function LoadingMoment({ active, files, operationId, onSkip, onPause }: L
       lastProgressRef.current = Date.now()
       const raw = String(evt?.data || '').trim()
       if (!raw) return
-      // Match file-name mentions in log lines — advance any matching "working" file to "done"
-      // and promote the next "queued" file to "working".
-      setStatuses(prev => {
+      let parsed: { kind?: string; filename?: string; status?: string } | null = null
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        return
+      }
+      if (!parsed || parsed.kind !== 'file') return
+
+      const target = files.find((f) => f.name === parsed!.filename)
+      if (!target) return
+
+      setStatuses((prev) => {
         const next = { ...prev }
-        for (const f of files) {
-          if (next[f.id] === 'working' && (raw.includes(f.name) || /^(✅|✓|Done|Processed)/i.test(raw))) {
-            next[f.id] = 'done'
-            const nextQueuedIdx = files.findIndex(x => next[x.id] === 'queued')
-            if (nextQueuedIdx >= 0) next[files[nextQueuedIdx].id] = 'working'
-            break
-          }
+        if (parsed!.status === 'done' && next[target.id] === 'working') {
+          next[target.id] = 'done'
+          const nextQueuedIdx = files.findIndex((x) => next[x.id] === 'queued')
+          if (nextQueuedIdx >= 0) next[files[nextQueuedIdx].id] = 'working'
+        } else if (parsed!.status === 'failed') {
+          next[target.id] = 'failed'
+          const nextQueuedIdx = files.findIndex((x) => next[x.id] === 'queued')
+          if (nextQueuedIdx >= 0) next[files[nextQueuedIdx].id] = 'working'
         }
         return next
       })

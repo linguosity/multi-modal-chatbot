@@ -1,226 +1,227 @@
 /**
- * Event Bus for Real-time Processing Updates
- * Handles streaming log events and dispatches them to subscribers
+ * Typed event bus for AI processing updates.
+ *
+ * The pipeline is end-to-end typed now: server emits a ProgressEvent,
+ * the client dispatches it directly through this bus — no regex on
+ * stringified log lines. Subscribers are split by event kind so the
+ * toast UI handles field updates while LoadingMoment handles file +
+ * stage progression.
  */
 
+import type { ProgressEvent } from '@/lib/progress-events'
+
 export interface ProcessingUpdateEvent {
-  id: string; // ${section_id}.${field_path}
-  sectionId: string;
-  fieldPath: string;
-  fieldLabel: string; // User-friendly label
-  action: 'replace' | 'append' | 'remove';
-  verb: string; // "Updating", "Adding", "Removing"
-  timestamp: number;
+  /** Stable id for pairing pending → applied/failed: `${sectionId}.${fieldPath}`. */
+  id: string
+  sectionId: string
+  /** Friendly section title from the route (e.g. "Student Information"). */
+  sectionLabel?: string
+  fieldPath: string
+  /** Friendly slot label (e.g. "Date of birth"). */
+  fieldLabel: string
+  /** Truncated server-side preview of the new value. */
+  valuePreview?: string
+  action: 'replace' | 'append' | 'remove'
+  /** Verb derived from action — "Updating", "Adding", "Removing". */
+  verb: string
+  timestamp: number
 }
 
 export interface ProcessingCompleteEvent {
-  id: string; // Matches ProcessingUpdateEvent.id
-  success: boolean;
-  errors?: string[];
-  timestamp: number;
+  id: string
+  sectionId?: string
+  sectionLabel?: string
+  fieldLabel?: string
+  valuePreview?: string
+  success: boolean
+  errors?: string[]
+  timestamp: number
 }
 
 export interface ProcessingErrorEvent {
-  id: string;
-  errors: string[];
-  timestamp: number;
+  id: string
+  sectionId?: string
+  sectionLabel?: string
+  fieldLabel?: string
+  errors: string[]
+  timestamp: number
 }
 
-type EventType = 'processing-update' | 'processing-complete' | 'processing-error';
+export interface StageProgressEvent {
+  stage: 'uploading_files' | 'extracting_text' | 'analyzing_with_ai' | 'applying_updates'
+  status: 'start' | 'done' | 'failed'
+  timestamp: number
+}
 
-type EventHandler<T> = (event: T) => void;
+export interface FileProgressEvent {
+  filename: string
+  fileKind: string
+  status: 'start' | 'done' | 'failed'
+  timestamp: number
+}
+
+export interface PiiProgressEvent {
+  source: 'text' | 'file'
+  filename?: string
+  entitiesFound: number
+  timestamp: number
+}
+
+type EventType =
+  | 'processing-update'
+  | 'processing-complete'
+  | 'processing-error'
+  | 'stage-progress'
+  | 'file-progress'
+  | 'pii-progress'
+  | 'processing-finished'
+
+type EventHandler<T> = (event: T) => void
 
 class EventBus {
-  private listeners: Map<EventType, Set<EventHandler<any>>> = new Map();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private listeners: Map<EventType, Set<EventHandler<any>>> = new Map()
 
   subscribe<T>(eventType: EventType, handler: EventHandler<T>): () => void {
     if (!this.listeners.has(eventType)) {
-      this.listeners.set(eventType, new Set());
+      this.listeners.set(eventType, new Set())
     }
-    
-    this.listeners.get(eventType)!.add(handler);
-    
-    // Return unsubscribe function
+    this.listeners.get(eventType)!.add(handler)
     return () => {
-      this.listeners.get(eventType)?.delete(handler);
-    };
+      this.listeners.get(eventType)?.delete(handler)
+    }
   }
 
   emit<T>(eventType: EventType, event: T): void {
-    const handlers = this.listeners.get(eventType);
-    if (handlers) {
-      handlers.forEach(handler => handler(event));
-    }
+    const handlers = this.listeners.get(eventType)
+    if (handlers) handlers.forEach((handler) => handler(event))
   }
 
-  // Clear all listeners (useful for cleanup)
   clear(): void {
-    this.listeners.clear();
+    this.listeners.clear()
   }
 }
 
-// Global event bus instance
-export const eventBus = new EventBus();
+export const eventBus = new EventBus()
 
-/**
- * Parse log line for processing updates
- * Matches: "📝 Processing update: ebddbf13-....language_criteria ... replace"
- */
-export function parseProcessingUpdateLog(logLine: string): ProcessingUpdateEvent | null {
-  const regex = /^📝 Processing update: (?<section>[a-f0-9\-]+)\.(?<field>[^ ]+) .* (?<action>replace|append|remove)/;
-  const match = logLine.match(regex);
-  
-  if (!match?.groups) return null;
-  
-  const { section, field, action } = match.groups;
-
-  // Ignore synthetic stage markers that are used for UX only
-  // These do not represent actual field updates and were causing coalesced
-  // toasts like "Updating Section (4 fields)" to appear regardless of input.
-  const stageMarkers = new Set([
-    'uploading_files',
-    'extracting_text',
-    'analyzing_with_ai',
-    'applying_updates',
-  ])
-  if (stageMarkers.has(field)) return null;
-  const fieldLabel = formatFieldLabel(field);
-  const verb = getActionVerb(action as any);
-  
-  return {
-    id: `${section}.${field}`,
-    sectionId: section,
-    fieldPath: field,
-    fieldLabel,
-    action: action as any,
-    verb,
-    timestamp: Date.now()
-  };
-}
-
-/**
- * Parse log line for processing completion
- * Matches: "✅ Updated section.field" or "❌ Failed to update section.field"
- */
-export function parseProcessingCompleteLog(logLine: string): ProcessingCompleteEvent | null {
-  // Success pattern
-  const successRegex = /^✅ Updated (?<section>[a-f0-9\-]+)\.(?<field>[^ ]+)/;
-  const successMatch = logLine.match(successRegex);
-  
-  if (successMatch?.groups) {
-    const { section, field } = successMatch.groups;
-    return {
-      id: `${section}.${field}`,
-      success: true,
-      timestamp: Date.now()
-    };
-  }
-  
-  // Error pattern
-  const errorRegex = /^❌ Failed to update (?<section>[a-f0-9\-]+)\.(?<field>[^ ]+)/;
-  const errorMatch = logLine.match(errorRegex);
-  
-  if (errorMatch?.groups) {
-    const { section, field } = errorMatch.groups;
-    return {
-      id: `${section}.${field}`,
-      success: false,
-      errors: ['Update failed'], // Could be enhanced to parse specific errors
-      timestamp: Date.now()
-    };
-  }
-  
-  return null;
-}
-
-/**
- * Convert field path to user-friendly label
- * e.g., "language_criteria" → "Language Criteria"
- */
-function formatFieldLabel(fieldPath: string): string {
-  return fieldPath
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/**
- * Convert action to user-friendly verb
- */
-function getActionVerb(action: 'replace' | 'append' | 'remove'): string {
+function actionVerb(action: 'replace' | 'append' | 'remove'): string {
   switch (action) {
     case 'replace':
-      return 'Updating';
+      return 'Updating'
     case 'append':
-      return 'Adding';
+      return 'Adding'
     case 'remove':
-      return 'Removing';
+      return 'Removing'
     default:
-      return 'Processing';
+      return 'Processing'
   }
 }
 
 /**
- * Log stream processor
- * Processes incoming log lines and emits events
+ * Dispatch a typed ProgressEvent through the bus. Used by both the SSE
+ * consumer (after JSON.parse on each `data:` line) and synthetic
+ * client-side emitters (e.g. drawer staging the AI call before SSE
+ * connects).
+ *
+ * Stage markers like `uploading_files` aren't field updates — they go
+ * out as `stage-progress` events so the toast UI can ignore them while
+ * LoadingMoment uses them to advance its file feed.
  */
-export class LogStreamProcessor {
-  private timeoutMap: Map<string, NodeJS.Timeout> = new Map();
-  private readonly TIMEOUT_MS = 30000; // 30 seconds timeout
-
-  processLogLine(logLine: string): void {
-    // Try to parse as processing update
-    const updateEvent = parseProcessingUpdateLog(logLine);
-    if (updateEvent) {
-      eventBus.emit('processing-update', updateEvent);
-      
-      // Set timeout for this update
-      this.setUpdateTimeout(updateEvent.id);
-      return;
-    }
-    
-    // Try to parse as processing complete
-    const completeEvent = parseProcessingCompleteLog(logLine);
-    if (completeEvent) {
-      eventBus.emit('processing-complete', completeEvent);
-      
-      // Clear timeout for this update
-      this.clearUpdateTimeout(completeEvent.id);
-      return;
-    }
-  }
-
-  private setUpdateTimeout(id: string): void {
-    // Clear existing timeout if any
-    this.clearUpdateTimeout(id);
-    
-    // Set new timeout
-    const timeout = setTimeout(() => {
-      eventBus.emit('processing-error', {
+export function dispatchProgressEvent(event: ProgressEvent): void {
+  const ts = Date.now()
+  switch (event.kind) {
+    case 'stage':
+      eventBus.emit<StageProgressEvent>('stage-progress', {
+        stage: event.stage,
+        status: event.status,
+        timestamp: ts,
+      })
+      return
+    case 'file':
+      eventBus.emit<FileProgressEvent>('file-progress', {
+        filename: event.filename,
+        fileKind: event.fileKind,
+        status: event.status,
+        timestamp: ts,
+      })
+      return
+    case 'pii':
+      eventBus.emit<PiiProgressEvent>('pii-progress', {
+        source: event.source,
+        filename: event.filename,
+        entitiesFound: event.entitiesFound,
+        timestamp: ts,
+      })
+      return
+    case 'field': {
+      const id = `${event.sectionId}.${event.fieldPath}`
+      const label = event.slotLabel ?? event.fieldPath
+      if (event.status === 'pending') {
+        eventBus.emit<ProcessingUpdateEvent>('processing-update', {
+          id,
+          sectionId: event.sectionId,
+          sectionLabel: event.sectionLabel,
+          fieldPath: event.fieldPath,
+          fieldLabel: label,
+          valuePreview: event.valuePreview,
+          action: event.mergeStrategy,
+          verb: actionVerb(event.mergeStrategy),
+          timestamp: ts,
+        })
+        return
+      }
+      if (event.status === 'applied') {
+        eventBus.emit<ProcessingCompleteEvent>('processing-complete', {
+          id,
+          sectionId: event.sectionId,
+          sectionLabel: event.sectionLabel,
+          fieldLabel: label,
+          valuePreview: event.valuePreview,
+          success: true,
+          timestamp: ts,
+        })
+        return
+      }
+      // failed
+      eventBus.emit<ProcessingCompleteEvent>('processing-complete', {
         id,
-        errors: ['Update timed out'],
-        timestamp: Date.now()
-      });
-      this.timeoutMap.delete(id);
-    }, this.TIMEOUT_MS);
-    
-    this.timeoutMap.set(id, timeout);
-  }
-
-  private clearUpdateTimeout(id: string): void {
-    const timeout = this.timeoutMap.get(id);
-    if (timeout) {
-      clearTimeout(timeout);
-      this.timeoutMap.delete(id);
+        sectionId: event.sectionId,
+        sectionLabel: event.sectionLabel,
+        fieldLabel: label,
+        success: false,
+        errors: event.error ? [event.error] : ['Update failed'],
+        timestamp: ts,
+      })
+      return
     }
-  }
-
-  // Cleanup method
-  cleanup(): void {
-    this.timeoutMap.forEach(timeout => clearTimeout(timeout));
-    this.timeoutMap.clear();
+    case 'complete':
+      eventBus.emit<{ timestamp: number }>('processing-finished', { timestamp: ts })
+      return
+    case 'error':
+      eventBus.emit<{ message: string; timestamp: number }>('processing-finished', {
+        timestamp: ts,
+        message: event.message,
+      })
+      return
   }
 }
 
-// Global log processor instance
-export const logProcessor = new LogStreamProcessor();
+/**
+ * Parse a raw SSE `data:` payload into a ProgressEvent and dispatch it.
+ * Returns false when the payload isn't a JSON ProgressEvent (e.g.
+ * heartbeat comments or legacy string lines), letting callers decide
+ * how to handle the leftover.
+ */
+export function dispatchSseLine(raw: string): boolean {
+  if (!raw) return false
+  try {
+    const parsed = JSON.parse(raw) as ProgressEvent
+    if (parsed && typeof parsed === 'object' && 'kind' in parsed) {
+      dispatchProgressEvent(parsed)
+      return true
+    }
+  } catch {
+    /* not JSON — heartbeat or comment */
+  }
+  return false
+}
