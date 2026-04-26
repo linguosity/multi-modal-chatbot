@@ -2011,6 +2011,74 @@
   cursor: pointer; margin-top: 6px;
   text-decoration: none;
 }
+
+/* ── Four-step privacy flow ───────────────────────────────────────────── */
+.wf-splash-flow {
+  background: var(--card-surface);
+  padding: 56px 40px 72px;
+  display: flex; flex-direction: column; gap: 56px;
+}
+.wf-splash-flow-header { max-width: 780px; }
+.wf-splash-flow-kicker {
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.16em; color: var(--terracotta-ink);
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.wf-splash-flow-headline {
+  font-family: var(--font-display); font-size: 26px; line-height: 1.25;
+  font-weight: 400; color: var(--ink);
+}
+.wf-splash-flow-step {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 48px;
+  align-items: center;
+  max-width: 980px;
+}
+.wf-splash-flow-img {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+}
+.wf-splash-flow-img-el { object-fit: contain; padding: 12px; }
+.wf-splash-flow-num {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.16em; color: var(--terracotta-ink);
+  text-transform: uppercase; font-weight: 700;
+  margin-bottom: 8px;
+}
+.wf-splash-flow-title {
+  font-family: var(--font-display); font-size: 22px; line-height: 1.2;
+  font-weight: 400; color: var(--ink); margin-bottom: 10px;
+}
+.wf-splash-flow-body {
+  font-size: 14.5px; line-height: 1.65; color: var(--ink-2);
+  max-width: 56ch;
+}
+.wf-splash-flow-footer {
+  display: flex; align-items: center; gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--terracotta);
+  margin-top: 8px;
+  max-width: 780px;
+  font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--ink-2); line-height: 1.55;
+}
+
+@media (max-width: 768px) {
+  .wf-splash-flow { padding: 40px 24px 56px; gap: 40px; }
+  .wf-splash-flow-step {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .wf-splash-flow-img { max-width: 360px; margin: 0 auto; }
+  .wf-splash-flow-headline { font-size: 22px; }
+  .wf-splash-flow-title { font-size: 19px; }
+}
+
 .wf-splash-tier-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 48px 40px; }
 .wf-splash-tier {
   position: relative;

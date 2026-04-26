@@ -1,7 +1,43 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
 /** Public pre-auth splash — wireframe splash.jsx.
  * Editorial, restrained, no stock imagery. One clear CTA per state. */
+
+const PRIVACY_FLOW_STEPS = [
+  {
+    num: '01',
+    title: 'Evidence arrives',
+    body:
+      'Upload an assessment PDF, audio session, or handwritten notes — anything you would normally bring into your evaluation.',
+    src: '/landing/step-1-evidence-arrives.png',
+    alt: 'A raw evaluation PDF showing labels for student name, date of birth, and SSN — the kind of document a clinician would normally upload.',
+  },
+  {
+    num: '02',
+    title: 'Private details are removed first',
+    body:
+      'Names, dates of birth, SSNs, and other identifiers are detected and replaced with stable placeholders. The real values stay on our server, never in the prompt.',
+    src: '/landing/step-2-private-details-removed.png',
+    alt: 'The same evaluation document with student-identifying fields replaced by placeholders [STUDENT_1], [DOB], and [REMOVED].',
+  },
+  {
+    num: '03',
+    title: 'AI sees placeholders, not identities',
+    body:
+      'Our pipeline sends only the redacted prompt to the model. Real names, dates of birth, SSNs, and other identifiers never cross the wire.',
+    src: '/landing/step-3-ai-sees-placeholders.png',
+    alt: 'A diagram of the AI provider receiving only redacted placeholders, with a severed dashed line marked × showing what is blocked from leaving the server.',
+  },
+  {
+    num: '04',
+    title: 'Report is restored in your secure session',
+    body:
+      'Identifiers are decoded locally inside your authenticated session — visible to you, never to the AI provider.',
+    src: '/landing/step-4-report-restored.png',
+    alt: 'A laptop showing a restored evaluation report with student name visible and SSN masked, in a secure clinician session.',
+  },
+]
 
 export default function LandingPage() {
   return (
@@ -88,17 +124,63 @@ export default function LandingPage() {
           />
         </svg>
         <div className="flex flex-col gap-2 flex-1">
-          <div className="wf-splash-privacy-kicker">On-device by default</div>
+          <div className="wf-splash-privacy-kicker">Private by design</div>
           <div className="wf-splash-privacy-title">
             Student names. DOBs. Addresses. MRNs.<br />
-            None of it reaches our servers.
+            None of it reaches the model.
           </div>
           <div className="wf-splash-privacy-body">
-            Identifying information is detected and replaced locally before any analysis.
-            A stable synthetic ID (<code>STU-0421</code>) is what our pipeline and your cloud
-            storage ever see. The mapping sits on your device.
+            Identifying information is detected and replaced with safe placeholders
+            before any analysis runs. The mapping between placeholder and real value
+            stays on our server — only your authenticated session can decode it.
           </div>
-          <a href="#pricing" className="wf-splash-privacy-link">Read the full architecture →</a>
+          <a href="#privacy-flow" className="wf-splash-privacy-link">See how it works ↓</a>
+        </div>
+      </section>
+
+      <section id="privacy-flow" className="wf-splash-flow">
+        <div className="wf-splash-flow-header">
+          <div className="wf-splash-flow-kicker">How identification works</div>
+          <h3 className="wf-splash-flow-headline">
+            Four checkpoints between intake and inference.
+          </h3>
+        </div>
+
+        {PRIVACY_FLOW_STEPS.map((step) => (
+          <div key={step.num} className="wf-splash-flow-step">
+            <div className="wf-splash-flow-img">
+              <Image
+                src={step.src}
+                alt={step.alt}
+                fill
+                sizes="(max-width: 768px) 100vw, 360px"
+                className="wf-splash-flow-img-el"
+              />
+            </div>
+            <div className="wf-splash-flow-copy">
+              <div className="wf-splash-flow-num">Step {step.num}</div>
+              <h4 className="wf-splash-flow-title">{step.title}</h4>
+              <p className="wf-splash-flow-body">{step.body}</p>
+            </div>
+          </div>
+        ))}
+
+        <div className="wf-splash-flow-footer">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 2 L20 5 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V5 Z"
+              stroke="var(--terracotta-ink)" strokeWidth="1.5" fill="#fff5ee"
+            />
+            <path
+              d="M12 9 v3 m0 3 v0.01"
+              stroke="var(--terracotta-ink)" strokeWidth="2"
+              strokeLinecap="round" fill="none"
+            />
+          </svg>
+          <span>
+            Student-identifying information is removed before AI processing.
+            The model never sees the student&rsquo;s real name, date of birth, or SSN.
+          </span>
         </div>
       </section>
 
