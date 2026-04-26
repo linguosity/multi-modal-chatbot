@@ -12,6 +12,17 @@ export interface TemplateCCriterion {
   title: string
   definition?: string
   evidence?: string[]
+  /**
+   * Alternate structured_data keys the AI commonly emits for this
+   * criterion's decision (boolean). Read order: `${key}_decision` first,
+   * then each alias. The AI tends to drift from the canonical
+   * `${key}_decision` convention (e.g. emits `speech_criteria` instead of
+   * `speech_impairment_decision`); aliases let the template recover the
+   * value without requiring prompt-side schema enforcement.
+   */
+  decisionAliases?: string[]
+  /** Same for the justification text. */
+  justificationAliases?: string[]
 }
 
 export interface TemplateCProps {
@@ -35,6 +46,14 @@ const asString = (v: unknown): string | undefined =>
 
 const isDecided = (v: unknown): boolean => typeof v === 'boolean'
 
+const readFirst = (data: Record<string, unknown>, keys: string[]): unknown => {
+  for (const k of keys) {
+    const v = data[k]
+    if (v !== undefined && v !== null) return v
+  }
+  return undefined
+}
+
 export function TemplateC({
   data,
   onChange,
@@ -44,8 +63,13 @@ export function TemplateC({
 }: TemplateCProps) {
   const set = (k: string, v: unknown) => onChange({ ...data, [k]: v })
 
+  const decisionFor = (c: TemplateCCriterion) =>
+    readFirst(data, [`${c.key}_decision`, ...(c.decisionAliases ?? [])])
+  const justificationFor = (c: TemplateCCriterion) =>
+    readFirst(data, [`${c.key}_justification`, ...(c.justificationAliases ?? [])])
+
   const total = criteria.length
-  const decided = criteria.filter((c) => isDecided(data[`${c.key}_decision`])).length
+  const decided = criteria.filter((c) => isDecided(decisionFor(c))).length
   const complete = total > 0 && decided === total
 
   return (
@@ -88,9 +112,9 @@ export function TemplateC({
               number={String(i + 1).padStart(2, '0')}
               title={c.title}
               definition={c.definition}
-              decision={asDecision(data[decisionKey])}
+              decision={asDecision(decisionFor(c))}
               onDecisionChange={(v) => set(decisionKey, v)}
-              justification={asString(data[justificationKey])}
+              justification={asString(justificationFor(c))}
               onJustificationChange={(v) => set(justificationKey, v)}
               evidence={c.evidence}
               onAIDraft={onAIDraft ? () => onAIDraft(c.key) : undefined}

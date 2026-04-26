@@ -141,24 +141,32 @@ const ELIGIBILITY_CRITERIA: TemplateCCriterion[] = [
     title: 'Meets criteria for speech/language impairment',
     definition:
       'A student has a language or speech disorder when they demonstrate difficulty understanding or using spoken language to such an extent that it adversely affects educational performance.',
+    decisionAliases: ['speech_criteria'],
+    justificationAliases: ['speech_justification'],
   },
   {
     key: 'language_impairment',
     title: 'Meets criteria for language impairment',
     definition:
       'The student demonstrates deficits in comprehension and/or expression of language that significantly impact the ability to communicate in educational settings.',
+    decisionAliases: ['language_criteria'],
+    justificationAliases: ['language_justification'],
   },
   {
     key: 'educational_impact',
     title: 'Adverse effect on educational performance',
     definition:
       "The communication disorder negatively impacts the student's ability to access curriculum, participate in classroom activities, and/or interact with peers and adults in the educational environment.",
+    decisionAliases: ['adverse_effect'],
+    justificationAliases: ['educational_impact_details', 'adverse_effect_details'],
   },
   {
     key: 'specialized_instruction',
     title: 'Requires specialized instruction',
     definition:
       'The student requires instruction specifically designed to meet their unique communication needs that cannot be provided through general education alone.',
+    decisionAliases: ['services_required'],
+    justificationAliases: ['services_justification'],
   },
 ]
 
@@ -168,6 +176,7 @@ const VALIDITY_CRITERIA: TemplateCCriterion[] = [
     title: 'Test results are valid and reliable',
     definition:
       "Results are considered representative of the student's typical performance based on behavior during testing, cooperation level, and consistency of responses.",
+    decisionAliases: ['is_valid'],
   },
   {
     key: 'student_cooperation',

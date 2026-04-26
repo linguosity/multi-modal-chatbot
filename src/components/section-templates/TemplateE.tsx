@@ -36,6 +36,26 @@ function readString(data: Record<string, unknown>, key: string): string | undefi
   return typeof v === 'string' ? v : undefined
 }
 
+// Try canonical key first, then each alias the AI commonly emits.
+function readStringFirst(data: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = readString(data, k)
+    if (v !== undefined) return v
+  }
+  return undefined
+}
+
+function readStringArrayFirst(
+  data: Record<string, unknown>,
+  keys: string[],
+): string[] | undefined {
+  for (const k of keys) {
+    const v = readStringArray(data, k)
+    if (v !== undefined) return v
+  }
+  return undefined
+}
+
 function readGoals(data: Record<string, unknown>): TemplateEGoal[] | undefined {
   const v = data.goals
   if (!Array.isArray(v)) return undefined
@@ -156,10 +176,11 @@ export function TemplateE({
   }
 
   if (variant === 'accommodations') {
-    const testing = readStringArray(data, 'testing_accommodations') ?? []
-    const classroom = readStringArray(data, 'classroom_mods') ?? []
-    const assistive = readStringArray(data, 'assistive_tech') ?? []
-    const otherSupports = readString(data, 'other_supports') ?? ''
+    const testing = readStringArrayFirst(data, ['testing_accommodations']) ?? []
+    const classroom =
+      readStringArrayFirst(data, ['classroom_mods', 'classroom_modifications']) ?? []
+    const assistive = readStringArrayFirst(data, ['assistive_tech']) ?? []
+    const otherSupports = readStringFirst(data, ['other_supports']) ?? ''
 
     return (
       <div style={{ ...CARD_STYLE, gap: 16 }}>
@@ -196,14 +217,35 @@ export function TemplateE({
     )
   }
 
-  // Recommendations variant
-  const frequency = readString(data, 'frequency') ?? '2'
-  const duration = readString(data, 'duration') ?? '30'
-  const setting = readStringArray(data, 'setting') ?? DEFAULT_SETTING
+  // Recommendations variant. Aliases cover the AI's drift from the
+  // canonical keys (e.g. emits `service_frequency` instead of `frequency`).
+  const frequency = readStringFirst(data, ['frequency', 'service_frequency']) ?? '2'
+  const duration = readStringFirst(data, ['duration', 'session_duration']) ?? '30'
+  const settingArr = readStringArrayFirst(data, ['setting'])
+  // `service_setting` arrives as a free-form string from the AI — split
+  // on common delimiters into the multi-select shape the UI expects.
+  const settingStr = readStringFirst(data, ['service_setting'])
+  const setting =
+    settingArr ??
+    (settingStr
+      ? settingStr
+          .split(/[,;/]|\band\b/i)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : DEFAULT_SETTING)
+  // `goals_targets` is a free-form prose blob from the AI; surface it as
+  // a single goal so the clinician can split / edit it rather than
+  // silently losing the content.
   const goalsFromData = readGoals(data)
+  const goalsTargets = readStringFirst(data, ['goals_targets'])
   const goals: TemplateEGoal[] =
-    goalsFromData && goalsFromData.length > 0 ? goalsFromData : DEFAULT_GOALS
-  const usingDefaultGoals = !goalsFromData || goalsFromData.length === 0
+    goalsFromData && goalsFromData.length > 0
+      ? goalsFromData
+      : goalsTargets
+        ? [{ domain: 'AI-extracted', text: goalsTargets }]
+        : DEFAULT_GOALS
+  const usingDefaultGoals =
+    (!goalsFromData || goalsFromData.length === 0) && !goalsTargets
 
   const removeGoal = (index: number) => {
     const next = goals.filter((_, i) => i !== index)
