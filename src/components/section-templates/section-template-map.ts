@@ -112,6 +112,39 @@ const PARENT_FIELDS: TemplateBField[] = [
   },
 ]
 
+// Conclusion fields. Mirrors CONCLUSION_SECTION in
+// src/lib/structured-schemas.ts. summary_statement is the headline
+// narrative the AI synthesizes — it gets the most rows so the prose
+// renders as one cohesive passage instead of fragments.
+const CONCLUSION_FIELDS: TemplateBField[] = [
+  {
+    key: 'primary_diagnosis',
+    label: 'Primary Diagnosis',
+    placeholder: 'State the primary diagnosis…',
+    rows: 2,
+    ai: true,
+  },
+  {
+    key: 'severity_level',
+    label: 'Severity',
+    type: 'chips',
+    options: ['Mild', 'Moderate', 'Severe'],
+  },
+  {
+    key: 'prognosis',
+    label: 'Prognosis',
+    type: 'chips',
+    options: ['Excellent', 'Good', 'Fair', 'Poor'],
+  },
+  {
+    key: 'summary_statement',
+    label: 'Summary Statement',
+    placeholder: 'Synthesize findings, eligibility decision, and rationale…',
+    rows: 8,
+    ai: true,
+  },
+]
+
 const FAMILY_FIELDS: TemplateBField[] = [
   {
     key: 'home_languages',
@@ -173,11 +206,11 @@ const ELIGIBILITY_CRITERIA: TemplateCCriterion[] = [
   },
 ]
 
-// Validity criteria. Only `results_valid` maps to a canonical schema
-// field (`is_valid`); the rest are UI-side toggles using `_decision` /
-// `_justification` suffixes the clinician fills directly. Nested schema
-// fields like `student_cooperation.cooperative` would need a path-aware
-// renderer — out of scope for this pass.
+// Validity criteria. Field paths bind to VALIDITY_STATEMENT_SECTION in
+// src/lib/structured-schemas.ts — TemplateC reads via dot-paths so the
+// schema's nested `student_cooperation.cooperative` and
+// `validity_factors.attention_issues` shapes resolve directly. The
+// `environmental_factors` row stays UI-only (no canonical schema field).
 const VALIDITY_CRITERIA: TemplateCCriterion[] = [
   {
     key: 'results_valid',
@@ -192,24 +225,24 @@ const VALIDITY_CRITERIA: TemplateCCriterion[] = [
     title: 'Student demonstrated adequate cooperation',
     definition:
       'The student was sufficiently cooperative and engaged throughout the evaluation to obtain reliable results.',
-    decisionField: 'student_cooperation_decision',
-    justificationField: 'student_cooperation_justification',
+    decisionField: 'student_cooperation.cooperative',
+    justificationField: 'student_cooperation.understanding',
   },
   {
     key: 'attention_factors',
     title: 'Attention and fatigue factors controlled',
     definition:
       'Testing breaks and accommodations were provided as needed. No significant attention or fatigue effects compromised results.',
-    decisionField: 'attention_factors_decision',
-    justificationField: 'attention_factors_justification',
+    decisionField: 'validity_factors.attention_issues',
+    justificationField: 'validity_factors.attention_notes',
   },
   {
     key: 'cultural_factors',
     title: 'Linguistic and cultural factors considered',
     definition:
       "The student's bilingual status and cultural background were appropriately considered in test selection, administration, and interpretation of results.",
-    decisionField: 'cultural_factors_decision',
-    justificationField: 'cultural_factors_justification',
+    decisionField: 'validity_factors.cultural_considerations',
+    justificationField: 'validity_factors.cultural_notes',
   },
   {
     key: 'environmental_factors',
@@ -237,7 +270,7 @@ export const SECTION_TEMPLATE_MAP: Record<string, TemplateConfig> = {
   assessment_tools: { template: 'D' },
 
   assessment_results: { template: 'outline' },
-  conclusion: { template: 'outline' },
+  conclusion: { template: 'B', fields: CONCLUSION_FIELDS },
 
   validity_statement: {
     template: 'C',

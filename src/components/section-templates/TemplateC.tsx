@@ -45,6 +45,38 @@ const asString = (v: unknown): string | undefined =>
 
 const isDecided = (v: unknown): boolean => typeof v === 'boolean'
 
+// Read a dot-path out of structured_data. Schema fields like
+// `student_cooperation.cooperative` resolve through nested objects;
+// flat fields like `is_valid` work through the same code path.
+function readPath(data: Record<string, unknown>, path: string): unknown {
+  const segs = path.split('.')
+  let cursor: unknown = data
+  for (const seg of segs) {
+    if (cursor == null || typeof cursor !== 'object') return undefined
+    cursor = (cursor as Record<string, unknown>)[seg]
+  }
+  return cursor
+}
+
+// Write a dot-path back into structured_data, immutably rebuilding the
+// chain. Missing intermediate objects are created on the fly so a
+// brand-new clinician edit can establish the nesting the schema expects.
+function writePath(
+  data: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): Record<string, unknown> {
+  const segs = path.split('.')
+  if (segs.length === 1) return { ...data, [segs[0]]: value }
+  const [head, ...rest] = segs
+  const existing = data[head]
+  const inner =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? (existing as Record<string, unknown>)
+      : {}
+  return { ...data, [head]: writePath(inner, rest.join('.'), value) }
+}
+
 export function TemplateC({
   data,
   onChange,
@@ -52,10 +84,10 @@ export function TemplateC({
   completePillLabel = 'Meets criteria',
   onAIDraft,
 }: TemplateCProps) {
-  const set = (k: string, v: unknown) => onChange({ ...data, [k]: v })
+  const setPath = (path: string, v: unknown) => onChange(writePath(data, path, v))
 
   const total = criteria.length
-  const decided = criteria.filter((c) => isDecided(data[c.decisionField])).length
+  const decided = criteria.filter((c) => isDecided(readPath(data, c.decisionField))).length
   const complete = total > 0 && decided === total
 
   return (
@@ -95,10 +127,10 @@ export function TemplateC({
             number={String(i + 1).padStart(2, '0')}
             title={c.title}
             definition={c.definition}
-            decision={asDecision(data[c.decisionField])}
-            onDecisionChange={(v) => set(c.decisionField, v)}
-            justification={asString(data[c.justificationField])}
-            onJustificationChange={(v) => set(c.justificationField, v)}
+            decision={asDecision(readPath(data, c.decisionField))}
+            onDecisionChange={(v) => setPath(c.decisionField, v)}
+            justification={asString(readPath(data, c.justificationField))}
+            onJustificationChange={(v) => setPath(c.justificationField, v)}
             evidence={c.evidence}
             onAIDraft={onAIDraft ? () => onAIDraft(c.key) : undefined}
           />
