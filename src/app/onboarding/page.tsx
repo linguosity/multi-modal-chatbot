@@ -1,19 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { DomainTreePicker } from '@/components/domain-picker/DomainTreePicker'
+import { ASHA_PRESETS, ASHA_DEFAULT_PRESET_ID } from '@/lib/asha-scope'
 
-/** Post-signup onboarding — 5-step wizard matching wireframe onboarding.jsx.
- * State is local-only for this sprint; future work will persist the selections
- * into user settings and profile columns. */
+/** Post-signup onboarding wizard. Step 2 (Domains) drives every downstream
+ * scope decision: which sections appear, which tools surface, which findings
+ * the AI is asked to extract. The domain picker is the highest-leverage
+ * onboarding gesture, so it sits early in the flow and persists on advance. */
 
 const STEPS = [
   { num: '01', title: 'Your role',        sub: 'Sets defaults for templates + rubric' },
   { num: '02', title: 'Your caseload',    sub: 'Ages, languages, settings' },
-  { num: '03', title: 'Your templates',   sub: 'Pick a base template to start' },
-  { num: '04', title: 'Privacy settings', sub: 'How identifying info is handled' },
-  { num: '05', title: 'First report',     sub: 'Optional — jump straight in' },
+  { num: '03', title: 'Your domains',     sub: 'Which areas do you typically assess?' },
+  { num: '04', title: 'Your templates',   sub: 'Pick a base template to start' },
+  { num: '05', title: 'Privacy settings', sub: 'How identifying info is handled' },
+  { num: '06', title: 'First report',     sub: 'Optional — jump straight in' },
 ] as const
 
 const ROLE_OPTIONS = [
@@ -40,15 +44,62 @@ export default function OnboardingPage() {
   const [ages, setAges] = useState<Record<string, boolean>>({ preschool: true, 'k-5': true })
   const [langs, setLangs] = useState<Record<string, boolean>>({ english: true, spanish: true })
   const [settings, setSettings] = useState<Record<string, boolean>>({ school: true })
+  // Domains — pre-checked from the school-based-pediatric preset since it's
+  // the most common SLP role. The user can clear via the "Custom" preset and
+  // pick from scratch, or apply a different preset. Persisted on advance.
+  const [domains, setDomains] = useState<string[]>([
+    ...ASHA_PRESETS[ASHA_DEFAULT_PRESET_ID].leaves,
+  ])
+  const [domainsSaving, setDomainsSaving] = useState(false)
   const [template, setTemplate] = useState<string>('comprehensive-eval')
   const [pii, setPii] = useState({ onDevice: true, hideDefault: true, audit: true })
 
-  const last = STEPS.length - 1
-  const next = () => setStep(s => Math.min(last, s + 1))
-  const back = () => setStep(s => Math.max(0, s - 1))
+  // Hydrate from server on mount so a returning user sees their previous
+  // selection rather than the preset default.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/user/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        const persisted = d?.settings?.default_domains
+        if (Array.isArray(persisted) && persisted.length > 0) {
+          setDomains(persisted.filter((x: unknown): x is string => typeof x === 'string'))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  const finish = () => {
-    // TODO: persist onboarding state via /api/user/settings once schema is ready.
+  const persistDomains = async () => {
+    setDomainsSaving(true)
+    try {
+      await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_domains: domains }),
+      })
+    } catch (e) {
+      console.warn('Failed to persist default_domains:', e)
+    } finally {
+      setDomainsSaving(false)
+    }
+  }
+
+  const last = STEPS.length - 1
+  const next = async () => {
+    // Persist domains when leaving the Domains step. Best-effort; errors
+    // don't block forward navigation since the user can always edit later.
+    if (step === 2) await persistDomains()
+    setStep((s) => Math.min(last, s + 1))
+  }
+  const back = () => setStep((s) => Math.max(0, s - 1))
+
+  const finish = async () => {
+    // Persist any pending state before leaving. Domains again, defensively.
+    await persistDomains()
     router.push('/dashboard')
   }
 
@@ -185,6 +236,33 @@ export default function OnboardingPage() {
 
           {step === 2 && (
             <div className="wf-onb-body">
+              <h2 className="wf-onb-h2">Which areas do you typically assess?</h2>
+              <p className="wf-onb-lede">
+                These are the ASHA-scope domains your reports will default to. Pick a preset
+                that matches your role, or expand the categories and check exactly the leaves
+                you cover. You can change this any time, and adjust per-report when you create
+                a new evaluation.
+              </p>
+              <p className="wf-sm" style={{ marginTop: -4, color: 'var(--ink-3)' }}>
+                Just starting out? Pick a few that interest you, or skip — your defaults will
+                fill themselves as you write reports.
+              </p>
+              <DomainTreePicker
+                value={domains}
+                onChange={setDomains}
+                showPresets
+                showSearch
+              />
+              {domainsSaving && (
+                <div className="wf-sm" style={{ color: 'var(--ink-4)', marginTop: 4 }}>
+                  Saving…
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="wf-onb-body">
               <h2 className="wf-onb-h2">Pick a starting template</h2>
               <p className="wf-onb-lede">
                 You can edit any template and save custom ones later. This is just your default.
@@ -222,7 +300,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="wf-onb-body">
               <h2 className="wf-onb-h2">Privacy defaults</h2>
               <p className="wf-onb-lede">
@@ -256,7 +334,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="wf-onb-body center">
               <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
                 <circle cx="36" cy="36" r="34" stroke="var(--line)" strokeWidth="1.5" fill="#fff5ee" />

@@ -8,6 +8,8 @@ type UpsertSettingsBody = {
   asha_number?: string
   state_license_number?: string
   show_toast_notifications?: boolean
+  /** ASHA-canonical domain leaves (see src/lib/asha-scope.ts ASHA_LEAVES). */
+  default_domains?: string[]
   schoolSites?: Array<{ id?: string; name: string; is_default?: boolean }>
   defaultSiteId?: string | null
 }
@@ -56,6 +58,16 @@ export async function POST(req: NextRequest) {
   ] as const
   for (const k of allowed) {
     if (body[k] !== undefined) settingsPayload[k] = body[k]
+  }
+
+  // default_domains: validate every entry is an ASHA leaf so callers can't
+  // silently inject arbitrary strings into a column that downstream prompts
+  // and renderers treat as canonical.
+  if (Array.isArray(body.default_domains)) {
+    const { ASHA_LEAVES } = await import('@/lib/asha-scope')
+    const allowedLeaves = new Set<string>(ASHA_LEAVES)
+    const cleaned = body.default_domains.filter((d): d is string => typeof d === 'string' && allowedLeaves.has(d))
+    settingsPayload.default_domains = cleaned
   }
 
   if (Object.keys(settingsPayload).length > 1) {

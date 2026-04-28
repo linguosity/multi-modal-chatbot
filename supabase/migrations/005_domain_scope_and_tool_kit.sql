@@ -1,11 +1,11 @@
 -- Migration 005: domain scope + user tool kit
 --
 -- Adds the schema for the onboarding-driven preferences:
---   1. profiles.default_domains — ASHA leaves the clinician typically
+--   1. user_settings.default_domains — ASHA leaves the clinician typically
 --      assesses; populated during onboarding step 1; serves as the default
 --      for new reports' target_domains.
 --   2. reports.target_domains — per-report ASHA-leaf scope; copy-on-create
---      from profiles.default_domains, editable per report. Drives matrix
+--      from user_settings.default_domains, editable per report. Drives matrix
 --      rows, per-domain card visibility, and the tool-catalog filter inside
 --      assessment_tools.
 --   3. user_tool_kit — clinician-curated subset of the global tool catalog
@@ -17,13 +17,13 @@
 -- All three are addressable per-user — RLS enforces ownership via auth.uid().
 -- Review and apply via `supabase db push` or the Supabase Studio SQL editor.
 
--- ─── 1. profiles.default_domains ─────────────────────────────────────────
+-- ─── 1. user_settings.default_domains ─────────────────────────────────────────
 
-ALTER TABLE profiles
+ALTER TABLE public.user_settings
   ADD COLUMN IF NOT EXISTS default_domains JSONB
     NOT NULL DEFAULT '[]'::JSONB;
 
-COMMENT ON COLUMN profiles.default_domains IS
+COMMENT ON COLUMN user_settings.default_domains IS
   'JSON array of ASHA-canonical domain leaf names (see src/lib/asha-scope.ts ASHA_LEAVES). Populated during onboarding step 1. Used as the default for new reports.target_domains. Empty array means the user has not completed onboarding step 1; the empty-state behavior in the UI ships the school_based_pediatric preset.';
 
 -- ─── 2. reports.target_domains ───────────────────────────────────────────
@@ -33,7 +33,7 @@ ALTER TABLE reports
     NOT NULL DEFAULT '[]'::JSONB;
 
 COMMENT ON COLUMN reports.target_domains IS
-  'JSON array of ASHA-canonical domain leaf names scoped to this report. Copy-on-create from profiles.default_domains; editable per report via the new-report substep, the assessment_results sidebar, or the inline "+ Add domain" affordance. Drives matrix rows, per-domain card visibility, and tool-catalog filtering inside the report.';
+  'JSON array of ASHA-canonical domain leaf names scoped to this report. Copy-on-create from user_settings.default_domains; editable per report via the new-report substep, the assessment_results sidebar, or the inline "+ Add domain" affordance. Drives matrix rows, per-domain card visibility, and tool-catalog filtering inside the report.';
 
 -- ─── 3. user_tool_kit ────────────────────────────────────────────────────
 
