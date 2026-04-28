@@ -51,13 +51,45 @@ export async function POST(request: Request) {
   }
 
   const json = await request.json()
-  const { title, studentId, type, template_id, sections: providedSections } = json
+  const {
+    title,
+    studentId,
+    type,
+    template_id,
+    sections: providedSections,
+    target_domains: providedTargetDomains,
+  } = json
   console.log({ title, studentId, type, template_id, hasProvidedSections: !!providedSections }, 'POST /api/reports received body.');
 
   // Basic validation
   if (!title || !studentId || !type || (!template_id && !providedSections)) {
     console.warn('Missing required fields for report creation.', { title, studentId, type, template_id, hasProvidedSections: !!providedSections });
     return safeJsonResponse({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  // Resolve the report's target_domains scope. Priority:
+  //   1. Explicit target_domains passed in the request body (the new-report
+  //      substep sends this when the clinician edits the picker before
+  //      Create). Validated against ASHA leaves so callers can't inject
+  //      arbitrary strings.
+  //   2. user_settings.default_domains — the profile default the user set
+  //      during onboarding step 03. Copy-on-create.
+  //   3. Empty array — the empty-state UI renders the school_based_pediatric
+  //      preset for clinicians who skipped onboarding entirely.
+  const { ASHA_LEAVES } = await import('@/lib/asha-scope')
+  const ashaLeafSet = new Set<string>(ASHA_LEAVES)
+  const sanitizeDomains = (input: unknown): string[] => {
+    if (!Array.isArray(input)) return []
+    return input.filter((d): d is string => typeof d === 'string' && ashaLeafSet.has(d))
+  }
+  let targetDomains = sanitizeDomains(providedTargetDomains)
+  if (targetDomains.length === 0) {
+    const { data: settingsRow } = await supabase
+      .from('user_settings')
+      .select('default_domains')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    targetDomains = sanitizeDomains((settingsRow as any)?.default_domains)
   }
 
   let sections: any[];
@@ -143,6 +175,7 @@ export async function POST(request: Request) {
       type,
       status: 'draft',
       student_id: studentId,
+      target_domains: targetDomains,
       created_at: now,
       updated_at: now,
     })

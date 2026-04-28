@@ -193,6 +193,12 @@ export interface SectionType {
 export interface ReportContext {
   reportId: string
   reportTitle: string
+  /** ASHA-canonical leaf names this report is scoped to. Empty array means
+   *  the report has no explicit scope (legacy reports created before
+   *  migration 005, or a clinician who deliberately cleared the picker).
+   *  When non-empty, the AI directive uses this to constrain which
+   *  domain_summary[] entries Claude is allowed to emit. */
+  targetDomains: string[]
   sections: ReportSection[]
   sectionTypes: Map<string, SectionType>
   targetSectionIds: string[]
@@ -231,7 +237,7 @@ export class ReportContextBuilder {
       // Step 1: Fetch report basic info
       const { data: report, error: reportError } = await this.supabase
         .from('reports')
-        .select('id, title, template_id')
+        .select('id, title, template_id, target_domains')
         .eq('id', reportId)
         .single()
 
@@ -332,10 +338,21 @@ export class ReportContextBuilder {
         return section
       })
 
-      // Step 6: Build final context
+      // Step 6: Build final context. target_domains is sanitized against
+      // ASHA leaves at write-time in /api/reports, but defensively re-filter
+      // here so a stale row (pre-migration-005) doesn't surface garbage.
+      const { ASHA_LEAVES } = await import('./asha-scope')
+      const ashaLeafSet = new Set<string>(ASHA_LEAVES)
+      const targetDomains = Array.isArray(report.target_domains)
+        ? (report.target_domains as unknown[]).filter(
+            (d): d is string => typeof d === 'string' && ashaLeafSet.has(d),
+          )
+        : []
+
       const context: ReportContext = {
         reportId: report.id,
         reportTitle: report.title,
+        targetDomains,
         sections: cleanedSections,
         sectionTypes: sectionTypesMap,
         targetSectionIds: validTargetSectionIds,
@@ -431,6 +448,29 @@ export class ReportContextBuilder {
 
     const validIdsList = targetSections.map(s => `- ${s.id} (${s.title})`).join('\n')
 
+    // Report scope — the ASHA leaves the clinician selected for this report.
+    // Empty array means no scope was set (legacy report or deliberately
+    // wide-open); skip the scoping block in that case so the AI doesn't
+    // see contradictory guidance.
+    const scopeBlock = context.targetDomains.length > 0
+      ? `
+REPORT SCOPE — ASHA domains selected for this evaluation:
+${context.targetDomains.map((d) => `  • ${d}`).join('\n')}
+
+Scope rules:
+- Every assessment_results.domain_summary[] entry's \`domain\` MUST be one
+  of the leaves above. Do NOT emit entries for domains outside this list.
+- If a source mentions a domain outside the scope, ignore that content
+  rather than invent a domain_summary row for it.
+- Tools that primarily target out-of-scope domains may still be inventoried
+  in assessment_tools.tools[] (they were used in the eval), but their
+  evidence[].tool_id citations only land on in-scope domain rows.
+- The ASHA-canonical leaf names above are the ONLY allowed values for the
+  \`domain\` field. Do not abbreviate or re-cast (e.g. emit "Articulation"
+  not "Speech Sounds").
+`
+      : ''
+
     return `You are an expert Speech-Language Pathologist with advanced data extraction capabilities.
 
 CRITICAL FIELD PATH RULES:
@@ -443,7 +483,7 @@ REPORT CONTEXT:
 - Report: ${context.reportTitle} (ID: ${context.reportId})
 - Total Sections: ${context.metadata.totalSections}
 - Target Sections: ${context.metadata.targetSections}
-
+${scopeBlock}
 AVAILABLE REPORT SECTIONS (use these EXACT IDs):
 ${sectionSummaries}
 
