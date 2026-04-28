@@ -17,7 +17,7 @@
 import type { TemplateBField } from './TemplateB'
 import type { TemplateCCriterion } from './TemplateC'
 
-export type TemplateKind = 'A' | 'B' | 'C' | 'D' | 'E' | 'outline'
+export type TemplateKind = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'outline'
 
 export interface TemplateConfig {
   template: TemplateKind
@@ -269,7 +269,7 @@ export const SECTION_TEMPLATE_MAP: Record<string, TemplateConfig> = {
 
   assessment_tools: { template: 'D' },
 
-  assessment_results: { template: 'outline' },
+  assessment_results: { template: 'F' },
   conclusion: { template: 'B', fields: CONCLUSION_FIELDS },
 
   validity_statement: {

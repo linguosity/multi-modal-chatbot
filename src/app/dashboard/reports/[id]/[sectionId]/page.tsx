@@ -20,6 +20,7 @@ import TemplateB from '@/components/section-templates/TemplateB'
 import TemplateC from '@/components/section-templates/TemplateC'
 import TemplateD from '@/components/section-templates/TemplateD'
 import TemplateE from '@/components/section-templates/TemplateE'
+import TemplateF from '@/components/section-templates/TemplateF'
 
 import { useToast } from '@/lib/context/ToastContext'
 
@@ -351,8 +352,11 @@ function SectionRenderer(props: SectionRendererProps) {
       />
     )
   }
+  if (config.template === 'F') {
+    return <TemplateF data={data} onChange={onStructuredDataChange} />
+  }
 
-  // 'outline' (assessment_results / conclusion / fallback) — outline-prose editor.
+  // 'outline' (conclusion / fallback) — outline-prose editor.
   if (!proseTree) return null
   return (
     <SectionEditor
