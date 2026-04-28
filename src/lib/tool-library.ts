@@ -923,4 +923,383 @@ export const TOOL_LIBRARY_SEED: ToolLibraryEntry[] = [
       'Expressive Language',
     ],
   },
+
+  // --- Adult / cognitive / voice / resonance / hearing / AAC / feeding (Source: ASHA scope expansion) ---
+
+  // Cognition / cognitive-communication / aphasia / dementia
+  {
+    id: 'wab_r',
+    title: 'WAB-R',
+    full_name: 'Western Aphasia Battery - Revised',
+    age_range: 'Adults',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The WAB-R is a norm-referenced aphasia battery that evaluates spontaneous speech, auditory comprehension, repetition, naming, reading, and writing to classify aphasia type and quantify severity via the Aphasia Quotient in adults with acquired language impairment.',
+    default_domains_assessed: [
+      'Receptive Language',
+      'Expressive Language',
+      'Cognitive-Communication',
+      'Motor Speech / Apraxia / Dysarthria',
+    ],
+  },
+  {
+    id: 'bdae_3',
+    title: 'BDAE-3',
+    full_name: 'Boston Diagnostic Aphasia Examination - Third Edition',
+    age_range: 'Adults',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The BDAE-3 is a norm-referenced aphasia battery that evaluates conversational and expository speech, auditory comprehension, oral expression, reading, and writing to localize and characterize aphasia syndromes in adults with neurogenic language disorders.',
+    default_domains_assessed: [
+      'Receptive Language',
+      'Expressive Language',
+      'Cognitive-Communication',
+    ],
+  },
+  {
+    id: 'clqt_plus',
+    title: 'CLQT+',
+    full_name: 'Cognitive Linguistic Quick Test Plus',
+    age_range: '18-89',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The CLQT+ is a norm-referenced screener that evaluates attention, memory, executive function, language, and visuospatial skills across five cognitive domains to identify cognitive-communication impairment in adults aged 18 to 89.',
+    default_domains_assessed: [
+      'Attention',
+      'Memory',
+      'Executive Function',
+      'Cognitive-Communication',
+      'Receptive Language',
+      'Expressive Language',
+    ],
+  },
+  {
+    id: 'asha_facs',
+    title: 'ASHA FACS',
+    full_name: 'ASHA Functional Assessment of Communication Skills for Adults',
+    age_range: 'Adults',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The ASHA FACS is a clinician-rated functional communication measure that evaluates social communication, communication of basic needs, reading/writing/number concepts, and daily planning across qualitative dimensions to document everyday communicative effectiveness in adults with aphasia or cognitive-communication disorders.',
+    default_domains_assessed: [
+      'Cognitive-Communication',
+      'Social Communication / Pragmatics',
+      'Receptive Language',
+      'Expressive Language',
+    ],
+  },
+  {
+    id: 'cadl_3',
+    title: 'CADL-3',
+    full_name: 'Communication Activities of Daily Living - Third Edition',
+    age_range: 'Adults',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The CADL-3 is a norm-referenced measure that uses simulated real-life scenarios to evaluate functional communication skills — reading, writing, using numbers, social interactions, and contextual communication — in adults with aphasia or other neurogenic communication disorders.',
+    default_domains_assessed: [
+      'Cognitive-Communication',
+      'Receptive Language',
+      'Expressive Language',
+      'Social Communication / Pragmatics',
+    ],
+  },
+  {
+    id: 'ripa_2',
+    title: 'RIPA-2',
+    full_name: 'Ross Information Processing Assessment - Second Edition',
+    age_range: '15-90',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The RIPA-2 is a norm-referenced measure that evaluates immediate memory, recent memory, temporal/spatial orientation, organization, problem solving, and abstract reasoning to quantify cognitive-communication impairment following traumatic brain injury or neurological disease in individuals aged 15 to 90.',
+    default_domains_assessed: [
+      'Attention',
+      'Memory',
+      'Executive Function',
+      'Problem Solving',
+      'Cognitive-Communication',
+    ],
+  },
+  {
+    id: 'aba_2',
+    title: 'ABA-2',
+    full_name: 'Apraxia Battery for Adults - Second Edition',
+    age_range: 'Adults',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The ABA-2 is a norm-referenced battery that uses diadochokinetic rate, increasing word length, limb/oral apraxia, latency/utterance time, and repeated trials to quantify the presence and severity of acquired apraxia of speech in adults.',
+    default_domains_assessed: [
+      'Motor Speech / Apraxia / Dysarthria',
+      'Articulation',
+    ],
+  },
+  {
+    id: 'mmse_2',
+    title: 'MMSE-2',
+    full_name: 'Mini-Mental State Examination - Second Edition',
+    age_range: '18-100',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The MMSE-2 is a norm-referenced brief cognitive screener that evaluates orientation, registration, attention, recall, language, and visuospatial skills to identify and track global cognitive impairment in adults aged 18 to 100.',
+    default_domains_assessed: [
+      'Attention',
+      'Memory',
+      'Cognitive-Communication',
+    ],
+  },
+  {
+    id: 'moca',
+    title: 'MoCA',
+    full_name: 'Montreal Cognitive Assessment',
+    age_range: 'Adults',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The MoCA is a brief norm-referenced cognitive screener that evaluates visuospatial/executive function, naming, attention, language, abstraction, delayed recall, and orientation to detect mild cognitive impairment and dementia in adults.',
+    default_domains_assessed: [
+      'Attention',
+      'Memory',
+      'Executive Function',
+      'Cognitive-Communication',
+    ],
+  },
+
+  // Voice (broader coverage beyond CAPE-V/GRBAS/VHI)
+  {
+    id: 'vrqol',
+    title: 'V-RQOL',
+    full_name: 'Voice-Related Quality of Life',
+    age_range: 'Adolescents & adults',
+    measure_type: 'Questionnaire',
+    default_purpose:
+      'The V-RQOL is a 10-item self-report questionnaire that measures the impact of voice problems on physical functioning and social-emotional functioning, yielding domain and total scores to track voice-related quality of life in adolescents and adults.',
+    default_domains_assessed: ['Vocal Function', 'Quality'],
+  },
+  {
+    id: 's_z_ratio',
+    title: 's/z Ratio',
+    full_name: 's/z Ratio (Maximum Phonation of /s/ vs /z/)',
+    age_range: 'All ages',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The s/z ratio is an informal clinician-administered procedure that compares maximum sustained phonation time of voiceless /s/ to voiced /z/, with ratios above approximately 1.4 suggesting laryngeal pathology or vocal-fold inefficiency across all ages.',
+    default_domains_assessed: ['Vocal Function', 'Quality'],
+  },
+  {
+    id: 'mpt',
+    title: 'MPT',
+    full_name: 'Maximum Phonation Time',
+    age_range: 'All ages',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'Maximum phonation time is an informal clinician-administered procedure in which the client sustains a vowel as long as possible following maximal inhalation, providing a measure of respiratory-laryngeal coordination and glottal efficiency across all ages.',
+    default_domains_assessed: ['Vocal Function', 'Loudness'],
+  },
+
+  // Resonance
+  {
+    id: 'nasometry',
+    title: 'Nasometry',
+    full_name: 'Nasometer / Nasalance Score Index (NSI)',
+    age_range: 'All ages',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'Nasometry is an instrumental procedure that uses a head-mounted microphone array to compute nasalance — the ratio of nasal to total acoustic energy — during standardized passages, providing an objective index of velopharyngeal function and resonance imbalance across all ages.',
+    default_domains_assessed: [
+      'Hypernasality',
+      'Hyponasality',
+      'Velopharyngeal Function',
+    ],
+  },
+  {
+    id: 'snap_nasality',
+    title: 'SNAP Test for Nasality',
+    full_name: 'Simplified Nasometric Assessment Procedures (SNAP) Test for Nasality',
+    age_range: 'All ages',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The SNAP Test is an auditory-perceptual and nasometric procedure that uses syllable repetition, sentence, and paragraph stimuli to characterize hypernasality, hyponasality, and nasal air emission, supporting differential diagnosis of resonance disorders across all ages.',
+    default_domains_assessed: [
+      'Hypernasality',
+      'Hyponasality',
+      'Velopharyngeal Function',
+    ],
+  },
+  {
+    id: 'pittsburgh_wsss',
+    title: 'Pittsburgh WSSS',
+    full_name: 'Pittsburgh Weighted Speech Score',
+    age_range: 'Pediatric & adult (cleft palate / VPI)',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The Pittsburgh Weighted Speech Score is a clinician-rated perceptual scale that assigns weighted points to nasal emission, facial grimace, hypernasality, hyponasality, and articulatory placement to quantify velopharyngeal competence in individuals with cleft palate or VPI.',
+    default_domains_assessed: [
+      'Velopharyngeal Function',
+      'Hypernasality',
+      'Hyponasality',
+      'Articulation',
+    ],
+  },
+
+  // Hearing-Related Communication
+  {
+    id: 'scan_3_c',
+    title: 'SCAN-3:C',
+    full_name: 'SCAN-3:C Tests for Auditory Processing Disorders in Children',
+    age_range: '5;0-12;11',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The SCAN-3:C is a norm-referenced battery of screening, diagnostic, and supplementary subtests that evaluates auditory processing skills — filtered words, auditory figure-ground, competing words, and competing sentences — to identify auditory processing disorders in children aged 5 to 12.',
+    default_domains_assessed: [
+      'Auditory Processing Support',
+      'Receptive Language',
+    ],
+  },
+  {
+    id: 'scan_3_a',
+    title: 'SCAN-3:A',
+    full_name: 'SCAN-3:A Tests for Auditory Processing Disorders in Adolescents and Adults',
+    age_range: '13;0-50;11',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The SCAN-3:A is a norm-referenced battery that evaluates auditory processing through filtered words, auditory figure-ground, competing words, competing sentences, and time-compressed sentences to identify auditory processing disorders in adolescents and adults aged 13 to 50.',
+    default_domains_assessed: [
+      'Auditory Processing Support',
+      'Receptive Language',
+    ],
+  },
+  {
+    id: 'pure_tone_screening',
+    title: 'Pure-Tone Audiometric Screening',
+    full_name: 'Pure-Tone Audiometric Screening',
+    age_range: 'All ages',
+    measure_type: 'Hearing Screening',
+    default_purpose:
+      'A pure-tone audiometric screening is a clinician-administered procedure that presents pure-tone stimuli at preset frequencies and intensities (typically 500-4000 Hz at 20-25 dB HL) to identify individuals who pass or fail and require further audiologic evaluation across all ages.',
+    default_domains_assessed: [
+      'Auditory Processing Support',
+      'Communication Access',
+    ],
+  },
+
+  // AAC
+  {
+    id: 'tasp',
+    title: 'TASP',
+    full_name: 'Test of Aided-Communication Symbol Performance',
+    age_range: '3;0+',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The TASP is a norm-referenced assessment that evaluates symbol size and number, grammatical encoding, categorization, and syntactic performance to inform graphic-symbol AAC system selection and layout for individuals aged 3 and older who use or are candidates for aided communication.',
+    default_domains_assessed: [
+      'Low-Tech AAC',
+      'High-Tech AAC',
+      'Expressive Language',
+      'Semantics / Vocabulary',
+    ],
+  },
+  {
+    id: 'aac_profile',
+    title: 'AAC Profile',
+    full_name: 'AAC Profile: A Continuum of Learning',
+    age_range: 'All ages',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The AAC Profile is a criterion-referenced rating scale that evaluates operational, linguistic, social, and strategic communicative competencies along a continuum to guide AAC intervention planning and progress monitoring across all ages of AAC users and candidates.',
+    default_domains_assessed: [
+      'Unaided Communication',
+      'Low-Tech AAC',
+      'High-Tech AAC',
+      'Social Communication / Pragmatics',
+    ],
+    _uncertain: true,
+    _uncertain_note:
+      'Substituted for COACH (Communication Outcomes After Cochlear Implantation), which is narrowly scoped to cochlear-implant outcomes rather than general AAC. AAC Profile is the better fit for the AAC scope branch.',
+  },
+  {
+    id: 'communication_matrix',
+    title: 'Communication Matrix',
+    full_name: 'Communication Matrix',
+    age_range: 'All ages (functional levels preintentional to symbolic)',
+    measure_type: 'Parent/Caregiver Report',
+    default_purpose:
+      'The Communication Matrix is a caregiver-completed criterion-referenced profile that charts communicative behaviors across seven levels from preintentional to symbolic and four reasons (refuse, obtain, social, information), informing AAC candidacy and intervention for individuals at any age operating at early communication levels.',
+    default_domains_assessed: [
+      'Unaided Communication',
+      'Low-Tech AAC',
+      'High-Tech AAC',
+      'Expressive Language',
+      'Social Communication / Pragmatics',
+    ],
+  },
+
+  // Feeding / Swallowing
+  {
+    id: 'masa',
+    title: 'MASA',
+    full_name: 'Mann Assessment of Swallowing Ability',
+    age_range: 'Adults',
+    measure_type: 'Standardized Test',
+    default_purpose:
+      'The MASA is a norm-referenced bedside dysphagia evaluation that rates 24 clinical parameters — alertness, cooperation, oral preparation, lingual/labial control, gag, palate, bolus clearance, and pharyngeal response — to quantify aspiration risk and dysphagia severity in adult patients.',
+    default_domains_assessed: [
+      'Dysphagia',
+      'Oral Feeding',
+      'Mealtime Participation / Safety',
+    ],
+  },
+  {
+    id: 'misa',
+    title: 'MISA',
+    full_name: 'McGill Ingestive Skills Assessment',
+    age_range: 'Adults',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The MISA is a clinician-administered observational assessment that rates positioning, self-feeding, liquid ingestion, solid ingestion, and texture management across 43 items to characterize functional ingestive skills and guide rehabilitation planning in adults with dysphagia.',
+    default_domains_assessed: [
+      'Dysphagia',
+      'Oral Feeding',
+      'Mealtime Participation / Safety',
+    ],
+  },
+  {
+    id: 'soma',
+    title: 'SOMA',
+    full_name: 'Schedule for Oral-Motor Assessment',
+    age_range: '8-24 mo',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The SOMA is a criterion-referenced observational protocol that evaluates oral-motor skills across textures (puree, semi-solid, solid, cracker, liquid via bottle/cup/spoon) to identify oral-motor dysfunction contributing to feeding difficulties in infants and toddlers aged 8 to 24 months.',
+    default_domains_assessed: [
+      'Oral-Motor Feeding Skills',
+      'Oral Feeding',
+      'Feeding Behaviors',
+    ],
+  },
+  {
+    id: 'pedieat',
+    title: 'PediEAT',
+    full_name: 'Pediatric Eating Assessment Tool',
+    age_range: '6 mo-7;0',
+    measure_type: 'Parent/Caregiver Report',
+    default_purpose:
+      'The PediEAT is a norm-referenced caregiver-rated questionnaire that measures symptoms of problematic feeding across physiologic, processing, mealtime behavior, and selectivity domains to identify children aged 6 months to 7 years who warrant further feeding evaluation.',
+    default_domains_assessed: [
+      'Feeding Behaviors',
+      'Oral Feeding',
+      'Mealtime Participation / Safety',
+    ],
+  },
+  {
+    id: 'doss',
+    title: 'DOSS',
+    full_name: 'Dysphagia Outcome and Severity Scale',
+    age_range: 'Adults',
+    measure_type: 'Informal Assessment',
+    default_purpose:
+      'The DOSS is a 7-point clinician-rated outcome scale that classifies dysphagia severity and corresponding diet/independence levels based on instrumental swallow study findings, supporting documentation and progress tracking in adults with dysphagia.',
+    default_domains_assessed: [
+      'Dysphagia',
+      'Oral Feeding',
+      'Mealtime Participation / Safety',
+    ],
+  },
 ]
