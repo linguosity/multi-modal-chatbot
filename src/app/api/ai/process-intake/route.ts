@@ -37,6 +37,7 @@ import { reportContextBuilder } from '@/lib/report-context-builder'
 // PDF text extraction disabled to avoid native 'canvas' dependency
 import { validatePathAgainstSchema, coerceValueToSchema } from '@/lib/value-normalizer'
 import { SectionSchema, ASSESSMENT_RESULTS_SECTION, ASSESSMENT_TOOLS_SECTION, VALIDITY_STATEMENT_SECTION, REASON_FOR_REFERRAL_SECTION, LANGUAGE_SAMPLE_SECTION, CONCLUSION_SECTION, RECOMMENDATIONS_SECTION, ACCOMMODATIONS_SECTION } from '@/lib/structured-schemas'
+import { reconcileDomainSummary } from '@/lib/assessment-results/convergence'
 import { z } from 'zod'
 import { parseWithZod } from '@/lib/ai/structured'
 import { StructuredFieldPathResolver } from '@/lib/field-path-resolver'
@@ -937,6 +938,19 @@ export async function POST(request: NextRequest) {
         const err = `Field path not in schema: ${cleanedUpdate.field_path}${pathCheck.errors.length ? ` (${pathCheck.errors.join('; ')})` : ''}`
         console.warn(`⚠️ Step 18.${i + 1}: ${err}`)
         results.push({ sectionId: cleanedUpdate.section_id, success: false, error: err })
+        // Pair the earlier `pending` event so the toast doesn't stick.
+        try {
+          emitEvent(operationId, {
+            kind: 'field',
+            sectionId: cleanedUpdate.section_id,
+            sectionLabel: sectionMetaById.get(cleanedUpdate.section_id)?.title,
+            fieldPath: cleanedUpdate.field_path,
+            slotLabel: slotLabelFor(cleanedUpdate.field_path),
+            mergeStrategy: ((cleanedUpdate.merge_strategy ?? 'replace') as MergeStrategy),
+            status: 'failed',
+            error: err,
+          })
+        } catch {}
         continue
       }
 
@@ -999,21 +1013,91 @@ export async function POST(request: NextRequest) {
           const meta = sectionMetaById.get(cleanedUpdate.section_id)
           const sectionType = meta?.section_type || sectionSchema?.key
           if (sectionType === 'assessment_tools' && cleanedUpdate.field_path.startsWith('tools')) {
-            const toolsVal = resolver.getFieldValue(updatedData, 'tools')
+            // Unwrap Russian-doll payloads: Claude sometimes emits the tools
+            // array as `{ "0": <tool>, "1": <tool> }` (object with numeric
+            // string keys) instead of `[ <tool>, <tool> ]`. The array
+            // coercion above wraps that whole object as `[ {"0": ...} ]`,
+            // so each "tool" is really a wrapper containing one numeric
+            // key. Detect and flatten.
+            const isNumericKeyWrapper = (t: any): boolean => {
+              if (!t || typeof t !== 'object' || Array.isArray(t)) return false
+              const numericKeys = Object.keys(t).filter((k) => /^\d+$/.test(k))
+              if (numericKeys.length === 0) return false
+              // If ANY numeric-string key holds a tool-shaped object (id /
+              // title / measure_type), treat the parent as a wrapper. The
+              // sibling fields (`title: "Observation"` etc.) are the
+              // normalizer's placeholder-default injection — we want to drop
+              // them, not let them suppress unwrap.
+              return numericKeys.some((k) => {
+                const v = t[k]
+                if (!v || typeof v !== 'object' || Array.isArray(v)) return false
+                const vv = v as Record<string, unknown>
+                return (
+                  typeof vv.id === 'string' ||
+                  typeof vv.title === 'string' ||
+                  typeof vv.measure_type === 'string'
+                )
+              })
+            }
+            const unwrap = (t: any): any[] => {
+              if (!isNumericKeyWrapper(t)) return [t]
+              const ordered = Object.keys(t)
+                .filter(k => /^\d+$/.test(k))
+                .sort((a, b) => Number(a) - Number(b))
+                .map(k => t[k])
+                .filter(v => v && typeof v === 'object')
+              return ordered.length > 0 ? ordered : [t]
+            }
+
+            let toolsVal = resolver.getFieldValue(updatedData, 'tools')
+            if (toolsVal && !Array.isArray(toolsVal) && typeof toolsVal === 'object' && isNumericKeyWrapper(toolsVal)) {
+              toolsVal = unwrap(toolsVal)
+            }
             if (Array.isArray(toolsVal)) {
-              const normalized = toolsVal.map((t: any) => {
+              const flattened = toolsVal.flatMap(unwrap)
+              const normalized = flattened.map((t: any) => {
                 if (!t || typeof t !== 'object') return t
                 const measure_type = t.measure_type || t.tool_type || ''
                 const purpose = t.purpose || t.description || t.qualitative_description || ''
                 const date = t.administered_date || t.date || ''
                 const title = t.title || t.tool_name || t.context_label || 'Observation'
                 const target_population = t.target_population || ''
-                return { ...t, title, administered_date: date, measure_type, purpose, target_population }
+                // Backfill `id` from title if Claude forgot to emit one — the
+                // matrix and evidence[].tool_id citations need a stable slug
+                // to function. Strip non-alnum, collapse runs, lowercase.
+                const id = typeof t.id === 'string' && t.id.trim()
+                  ? t.id.trim()
+                  : (title || 'tool')
+                      .toString()
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, '_')
+                      .replace(/^_+|_+$/g, '') || 'tool'
+                return { ...t, id, title, administered_date: date, measure_type, purpose, target_population }
               })
               updatedData = resolver.setFieldValue(updatedData, 'tools', normalized)
             }
           }
         } catch {}
+
+        // Assessment results: reconcile domain_summary[] after every update
+        // touching that field. Flattens nested arrays, merges duplicate
+        // canonical-domain rows (so adding a second source appends evidence
+        // rather than creating a parallel row), and re-derives convergence.
+        // Idempotent — safe to run on every update.
+        try {
+          const meta = sectionMetaById.get(cleanedUpdate.section_id)
+          const sectionType = meta?.section_type || sectionSchema?.key
+          if (
+            sectionType === 'assessment_results' &&
+            cleanedUpdate.field_path.startsWith('domain_summary')
+          ) {
+            const dsVal = resolver.getFieldValue(updatedData, 'domain_summary')
+            const reconciled = reconcileDomainSummary(dsVal)
+            updatedData = resolver.setFieldValue(updatedData, 'domain_summary', reconciled)
+          }
+        } catch (e) {
+          console.warn('⚠️ domain_summary reconcile failed:', e instanceof Error ? e.message : String(e))
+        }
 
         // Persist provenance if provided.
         //
@@ -1022,6 +1106,11 @@ export async function POST(request: NextRequest) {
         // with the artifactId. If source_reference was just a page marker
         // (no filename, common when only one file was uploaded), fall back
         // to the first uploaded file's name.
+        //
+        // Dedup: drop any existing entry that matches the new one on
+        // (field_path, artifactId, page). Also collapse same-(path,artifact,page)
+        // duplicates accumulated across earlier runs — re-running the same
+        // PDF used to multiply provenance entries indefinitely.
         try {
           if (update.source_reference || typeof update.confidence === 'number') {
             const refStr = String(update.source_reference || '').trim()
@@ -1039,9 +1128,21 @@ export async function POST(request: NextRequest) {
             }
             if (pageNum) prov.page = pageNum
             const provKey = '__provenance'
+            const provKeyOf = (p: Record<string, unknown>) =>
+              `${p.field_path ?? ''}::${p.artifactId ?? ''}::${p.page ?? ''}`
+            const newKey = provKeyOf(prov)
             const currentProv = (updatedData && typeof updatedData === 'object') ? (updatedData[provKey] || []) : []
-            const nextProv = Array.isArray(currentProv) ? [...currentProv, prov] : [prov]
-            updatedData = { ...(updatedData || {}), [provKey]: nextProv }
+            const seen = new Set<string>()
+            const dedupedExisting = (Array.isArray(currentProv) ? currentProv : [])
+              .filter((p: any) => {
+                if (!p || typeof p !== 'object') return false
+                const k = provKeyOf(p as Record<string, unknown>)
+                if (k === newKey) return false           // drop earlier dupes; replace below
+                if (seen.has(k)) return false            // collapse legacy duplicates
+                seen.add(k)
+                return true
+              })
+            updatedData = { ...(updatedData || {}), [provKey]: [...dedupedExisting, prov] }
           }
         } catch {}
 
@@ -1061,66 +1162,11 @@ export async function POST(request: NextRequest) {
           delete updatedData.structured_data
         }
 
-        // If this update is a domain notes field in Assessment Results, propagate a copy into the Tools section under matching context
-        try {
-          const domainKeyMap: Record<string, string> = {
-            'expressive_language_notes': 'Expressive',
-            'receptive_language_notes': 'Receptive',
-            'pragmatic_language_notes': 'Pragmatics',
-            'articulation_notes': 'Articulation',
-            'voice_notes': 'Voice',
-            'fluency_notes': 'Fluency'
-          }
-          const domainKey = Object.keys(domainKeyMap).find(k => cleanedUpdate.field_path === k)
-          const meta = sectionMetaById.get(cleanedUpdate.section_id)
-          if (domainKey && meta && meta.section_type === 'assessment_results' && toolsSectionId && update.source_reference) {
-            const { data: toolsRow } = await supabase
-              .from('report_sections')
-              .select('structured_data')
-              .eq('id', toolsSectionId)
-              .single()
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const toolsData: any = (toolsRow?.structured_data && typeof toolsRow.structured_data === 'object') ? toolsRow.structured_data : {}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const list: any[] = Array.isArray(toolsData.tools) ? toolsData.tools : []
-            // crude context title from source_reference
-            const ref = (update.source_reference as string).toLowerCase()
-            const ctxMap: Record<string, string> = {
-              'lunch': 'Lunch',
-              'reading circle': 'Classroom Reading Circle',
-              'recess': 'Recess',
-              'math': 'Math Small Group',
-              'art': 'Art Class',
-              'hallway': 'Hallway',
-              'transition': 'Transition to Speech Room',
-              'speech': 'Speech Task',
-              'retell': 'Frog Story Retell'
-            }
-            let contextTitle = 'Observation'
-            for (const k of Object.keys(ctxMap)) { if (ref.includes(k)) { contextTitle = ctxMap[k]; break } }
-            let target = list.find((t: any) => (t.title || t.tool_name || '').toString().toLowerCase() === contextTitle.toLowerCase())
-            if (!target) {
-              target = { title: contextTitle, completed: true, tool_type: 'Observation' }
-              list.push(target)
-            }
-            target.domain_notes = target.domain_notes || {}
-            const dLabel = domainKeyMap[domainKey]
-            const noteText = typeof cleanedUpdate.value === 'string' ? cleanedUpdate.value : JSON.stringify(cleanedUpdate.value)
-            // append or set
-            if (target.domain_notes[dLabel]) {
-              const existing = target.domain_notes[dLabel]
-              target.domain_notes[dLabel] = existing.includes(noteText) ? existing : `${existing} ${noteText}`.trim()
-            } else {
-              target.domain_notes[dLabel] = noteText
-            }
-            toolsData.tools = list
-            await supabase
-              .from('report_sections')
-              .upsert({ id: toolsSectionId, report_id: reportId, title: 'Assessment Tools', section_type: 'assessment_tools', structured_data: toolsData }, { onConflict: 'id' })
-          }
-        } catch (e) {
-          console.warn('⚠️ Propagation to tools failed:', e instanceof Error ? e.message : String(e))
-        }
+        // Cross-section propagation removed (2026-04-27). The previous logic
+        // mirrored every assessment_results domain note into a manufactured
+        // "Observation" entry on assessment_tools.tools[], which duplicated
+        // data the UI already shows in assessment_results and created spurious
+        // tool entries with no real measure type. Join at render time instead.
 
         if (dryRun) {
           console.log(`🟡 Step 18.${i + 1}: Dry run — skipping DB write for section ${update.section_id}`)

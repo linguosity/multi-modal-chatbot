@@ -179,47 +179,270 @@ export const VALIDITY_STATEMENT_SECTION: SectionSchema = {
   ]
 };
 
+// Allowed measure types for an assessment tool entry. Controlled vocabulary so
+// the by-tool view groups consistently across reports. Add new entries here
+// (and only here) when SLPs need a new category.
+export const ASSESSMENT_MEASURE_TYPES = [
+  'Standardized Test',
+  'Criterion-Referenced',
+  'Informal Assessment',
+  'Observation',
+  'Interview',
+  'Questionnaire',
+  'Parent/Caregiver Report',
+  'Teacher Report',
+  'Language Sample',
+  'Narrative Assessment',
+  'Dynamic Assessment',
+  'Records Review',
+  'Oral Mechanism Examination',
+  'Hearing Screening',
+] as const;
+
+// Population the tool is *designed for*. Distinct from how a single
+// administration happened (that goes in `notes`). Snapped server-side to the
+// closest enum value, so misses like "school-aged" → "School-Age (6–12)".
+export const ASSESSMENT_TARGET_POPULATIONS = [
+  'Birth–2',
+  'Early Childhood (3–5)',
+  'School-Age (6–12)',
+  'Adolescent (13–18)',
+  'Adult',
+  'Geriatric',
+  'General',
+] as const;
+
+// Per-source, per-domain finding glyph for the convergence matrix and the
+// per-finding source-marker chips. Distinct enum from measure_type — this is
+// what a single source SAID about a single domain, not what kind of source it
+// is.
+export const ASSESSMENT_FINDING_TYPES = [
+  'concern',    // ●  source flagged this domain as a concern
+  'mixed',      // ◐  partial / qualified concern
+  'wnl',        // ○  within expected range (null result, no flag)
+  'strength',   // ◎  source actively identified above-expectation skill
+  'na',         // —  this source did not assess this domain
+] as const;
+export type AssessmentFinding = (typeof ASSESSMENT_FINDING_TYPES)[number];
+
+// Convergence level on a per-domain finding — derived from the agreement
+// pattern across evidence[] entries, but stored explicitly so clinicians can
+// override and so the AI can carry the claim through extraction.
+export const ASSESSMENT_CONVERGENCE_LEVELS = [
+  'high',           // ≥3 sources agree, no conflicts
+  'moderate',       // 2 sources agree, no conflicts
+  'low',            // sources conflict — rationale REQUIRED
+  'single_source',  // only 1 source has data on this domain
+] as const;
+export type AssessmentConvergenceLevel = (typeof ASSESSMENT_CONVERGENCE_LEVELS)[number];
+
+// Coarse bucket used as the *visual axis* on the convergence matrix. Derived
+// from measure_type via bucketFor() — never stored on the tool entity. Adding
+// a bucket here is a UI-axis decision; the editorial enum stays at 14 values.
+export const MATRIX_BUCKETS = [
+  'standardized',
+  'informant_report',
+  'observation',
+  'language_sample',
+] as const;
+export type MatrixBucket = (typeof MATRIX_BUCKETS)[number];
+
+// Static map locked in during the schema pass on 2026-04-27. Records Review,
+// Oral Mechanism Examination, Hearing Screening, and Informal Assessment have
+// imperfect homes; revisit once real reports show whether the matrix reads
+// well in practice. The map is exhaustive over ASSESSMENT_MEASURE_TYPES — if
+// you add a new measure type, add it here too or bucketFor will return
+// undefined.
+const MATRIX_BUCKET_MAP: Record<(typeof ASSESSMENT_MEASURE_TYPES)[number], MatrixBucket> = {
+  'Standardized Test': 'standardized',
+  'Criterion-Referenced': 'standardized',
+  'Dynamic Assessment': 'standardized',
+  'Narrative Assessment': 'standardized',
+  'Oral Mechanism Examination': 'standardized',
+  'Hearing Screening': 'standardized',
+  'Informal Assessment': 'standardized',
+  'Parent/Caregiver Report': 'informant_report',
+  'Teacher Report': 'informant_report',
+  'Interview': 'informant_report',
+  'Questionnaire': 'informant_report',
+  'Records Review': 'informant_report',
+  'Observation': 'observation',
+  'Language Sample': 'language_sample',
+};
+
+/** Map the 14-value editorial measure_type to one of 4 matrix-axis buckets.
+ *  Returns undefined for unrecognized values so the caller can decide how to
+ *  surface that — typically as an "Other" column with a flag for the SLP. */
+export function bucketFor(measureType: string | undefined | null): MatrixBucket | undefined {
+  if (!measureType) return undefined
+  return MATRIX_BUCKET_MAP[measureType as keyof typeof MATRIX_BUCKET_MAP]
+}
+
+/** Canonical TypeScript shapes used by renderers and the AI route. The
+ *  SectionSchema below is the source of truth for AI extraction; these
+ *  interfaces mirror it for type-safe consumption in client code. Keep them
+ *  in sync — a mismatch shows up as a renderer crash or an AI miss.
+ *
+ *  Tools live in assessment_tools.tools[]; per-domain rows live in
+ *  assessment_results.domain_summary[]; evidence[] inside each domain row
+ *  cites tools by id. */
+export interface AssessmentTool {
+  /** Stable slug used by evidence[].tool_id refs. AI generates from title
+   *  (snake_case); server fills if missing. */
+  id: string
+  title: string
+  measure_type?: (typeof ASSESSMENT_MEASURE_TYPES)[number] | string
+  administered_date?: string
+  target_population?: (typeof ASSESSMENT_TARGET_POPULATIONS)[number] | string
+  /** "What it consists of and what it evaluates" — single sentence. */
+  purpose?: string
+  /** Notes about THIS administration only (who completed it, conditions). */
+  notes?: string
+  domains_assessed?: string[]
+  completed?: boolean
+}
+
+export interface AssessmentEvidence {
+  /** References AssessmentTool.id. */
+  tool_id: string
+  finding: AssessmentFinding
+  /** Optional one-sentence detail; not a re-statement of the rubric. */
+  note?: string
+}
+
+export interface AssessmentConvergence {
+  level: AssessmentConvergenceLevel
+  agreeing_tool_ids: string[]
+  conflicting_tool_ids?: string[]
+  /** REQUIRED when level === 'low'. */
+  rationale?: string
+}
+
+export interface AssessmentDomainSummary {
+  domain: string
+  can_do: string[]
+  support_needed: string[]
+  contexts: string[]
+  evidence: AssessmentEvidence[]
+  convergence: AssessmentConvergence
+  /** Clinician-authored prose override. When absent, the renderer derives a
+   *  paragraph deterministically from the rubric + convergence. */
+  narrative_override?: string
+}
+
 export const ASSESSMENT_RESULTS_SECTION: SectionSchema = {
   key: 'assessment_results',
   title: 'Assessment Results',
   fields: [
     {
-      key: 'articulation_notes',
-      label: 'Articulation Notes',
-      type: 'string',
-      placeholder: 'Summarize articulation findings...'
+      key: 'summary_of_results',
+      label: 'Summary of Results',
+      type: 'paragraph',
+      placeholder:
+        'Headline cross-domain synthesis — overall pattern of strengths and concerns, integrating formal scores and informant data. 3-5 sentences. Lead with the primary concern domain. Do NOT restate per-domain detail; that lives in domain_summary[].',
     },
     {
-      key: 'receptive_language_notes',
-      label: 'Receptive Language Notes',
-      type: 'string',
-      placeholder: 'Summarize receptive language findings...'
+      key: 'domain_summary',
+      label: 'Per-domain rubric',
+      type: 'array',
+      children: [
+        {
+          key: 'domain',
+          label: 'Domain',
+          type: 'string',
+          required: true,
+          placeholder:
+            'e.g. "Articulation", "Receptive Language", "Expressive Language", "Pragmatics", "Fluency", "Voice"',
+        },
+        {
+          key: 'can_do',
+          label: 'Strengths (can_do)',
+          type: 'array',
+          placeholder: 'Bullet list of specific things the child can do, with rating/score where applicable',
+        },
+        {
+          key: 'support_needed',
+          label: 'Concerns (support_needed)',
+          type: 'array',
+          placeholder: 'Bullet list of specific things the child needs support with',
+        },
+        {
+          key: 'contexts',
+          label: 'Contexts observed',
+          type: 'array',
+          placeholder: 'e.g. ["Home", "Classroom", "Outside the family"]',
+        },
+        {
+          key: 'evidence',
+          label: 'Evidence (per-source findings)',
+          type: 'array',
+          children: [
+            {
+              key: 'tool_id',
+              label: 'Tool ID',
+              type: 'string',
+              required: true,
+              placeholder: 'Must match an id in assessment_tools.tools[].id',
+            },
+            {
+              key: 'finding',
+              label: 'Finding',
+              type: 'enum',
+              options: [...ASSESSMENT_FINDING_TYPES],
+              required: true,
+              placeholder: "What this source said about this domain — pick one of the enum values.",
+            },
+            {
+              key: 'note',
+              label: 'Note (optional)',
+              type: 'string',
+              placeholder: 'One sentence of detail beyond the finding glyph. Do NOT re-state the rubric.',
+            },
+          ],
+        },
+        {
+          key: 'convergence',
+          label: 'Convergence',
+          type: 'object',
+          children: [
+            {
+              key: 'level',
+              label: 'Level',
+              type: 'enum',
+              options: [...ASSESSMENT_CONVERGENCE_LEVELS],
+              required: true,
+              placeholder: 'high (≥3 agree), moderate (2 agree), low (conflict — rationale required), single_source',
+            },
+            {
+              key: 'agreeing_tool_ids',
+              label: 'Agreeing tool IDs',
+              type: 'array',
+              placeholder: 'Tool IDs whose finding aligns with the rubric verdict',
+            },
+            {
+              key: 'conflicting_tool_ids',
+              label: 'Conflicting tool IDs',
+              type: 'array',
+              placeholder: 'Tool IDs whose finding disagrees — populate when level=low',
+            },
+            {
+              key: 'rationale',
+              label: 'Rationale',
+              type: 'string',
+              placeholder: 'REQUIRED when level=low. One sentence on why the sources disagree and which one to weight.',
+            },
+          ],
+        },
+        {
+          key: 'narrative_override',
+          label: 'Narrative override (clinician-authored)',
+          type: 'paragraph',
+          placeholder:
+            'Leave blank in the default path — the renderer derives prose from the rubric + convergence at view time. Only populate when a clinician edits the auto-prose. AI must NOT emit this field.',
+        },
+      ],
     },
-    {
-      key: 'expressive_language_notes',
-      label: 'Expressive Language Notes',
-      type: 'string',
-      placeholder: 'Summarize expressive language findings...'
-    },
-    {
-      key: 'pragmatic_language_notes',
-      label: 'Pragmatic Language Notes',
-      type: 'string',
-      placeholder: 'Summarize pragmatic language findings...'
-    },
-    {
-      key: 'voice_notes',
-      label: 'Voice Notes',
-      type: 'string',
-      placeholder: 'Summarize voice findings...'
-    },
-    {
-      key: 'fluency_notes',
-      label: 'Fluency Notes',
-      type: 'string',
-      placeholder: 'Summarize fluency findings...'
-    }
-  ]
+  ],
 };
 
 // Assessment Tools Section
@@ -232,14 +455,39 @@ export const ASSESSMENT_TOOLS_SECTION: SectionSchema = {
       label: 'Tools',
       type: 'array',
       children: [
+        {
+          key: 'id',
+          label: 'ID (slug)',
+          type: 'string',
+          required: true,
+          placeholder: 'snake_case slug derived from title — used by evidence[].tool_id citations. Server fills if missing.',
+        },
         { key: 'title', label: 'Title', type: 'string', required: true },
-        { key: 'administered_date', label: 'Administered Date', type: 'date' },
-        { key: 'measure_type', label: 'Measure Type', type: 'string', placeholder: 'Standardized, Observation, Interview, Narrative...' },
-        { key: 'target_population', label: 'Target Population', type: 'string', placeholder: 'Age range / setting' },
-        { key: 'purpose', label: 'Purpose / Notes', type: 'string', placeholder: 'Brief description of tool purpose' },
+        { key: 'administered_date', label: 'Administered Date', type: 'date', placeholder: 'YYYY-MM-DD — extract from any "Date:" header on the source' },
+        {
+          key: 'measure_type',
+          label: 'Measure Type',
+          type: 'enum',
+          options: [...ASSESSMENT_MEASURE_TYPES],
+          placeholder: 'Pick the closest measure type',
+        },
+        {
+          key: 'target_population',
+          label: 'Target Population',
+          type: 'enum',
+          options: [...ASSESSMENT_TARGET_POPULATIONS],
+          placeholder: 'Age band the tool is designed for — short label only, never a description',
+        },
+        {
+          key: 'purpose',
+          label: 'Purpose',
+          type: 'string',
+          placeholder:
+            'ONE sentence using this template: "The [title] is a [formal | informal] [tool type] that [screens | evaluates | assesses] [a child | an adult | a school-age student]\'s [domains]." Example: "The Parent Communication Questionnaire is an informal caregiver-rated screening tool that evaluates a child\'s receptive language, expressive language, social communication, and speech intelligibility."',
+        },
         { key: 'completed', label: 'Completed', type: 'boolean' },
         { key: 'domains_assessed', label: 'Domains Assessed', type: 'array' },
-        { key: 'notes', label: 'Notes', type: 'string' }
+        { key: 'notes', label: 'Notes (this administration)', type: 'string', placeholder: 'Notes about THIS administration only — who completed it, conditions, observations. Not a re-description of the tool.' }
       ]
     }
   ]

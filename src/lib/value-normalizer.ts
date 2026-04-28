@@ -47,9 +47,31 @@ export function coerceValueToSchema(value: any, fieldSchema: FieldSchema): any {
       }
       case 'select':
       case 'enum': {
-        if (typeof value === 'string') return value
-        if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-        return value
+        const raw = typeof value === 'string'
+          ? value
+          : (typeof value === 'number' || typeof value === 'boolean')
+            ? String(value)
+            : value
+        if (typeof raw !== 'string') return raw
+        const opts = fieldSchema.options
+        if (!opts || opts.length === 0) return raw
+        // Exact match wins.
+        if (opts.includes(raw)) return raw
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+        const target = norm(raw)
+        if (!target) return raw
+        // Case- and punctuation-insensitive match (e.g. "questionnaire" ↔ "Questionnaire").
+        const ci = opts.find(o => norm(o) === target)
+        if (ci) return ci
+        // Bidirectional substring (e.g. "Parent Q" ↔ "Parent/Caregiver Report",
+        // "questionnaires" ↔ "Questionnaire"). Picks the shortest option that
+        // matches, which biases toward the most specific allowed entry.
+        const includes = opts
+          .map(o => ({ o, n: norm(o) }))
+          .filter(({ n }) => n.includes(target) || target.includes(n))
+          .sort((a, b) => a.n.length - b.n.length)
+        if (includes.length > 0) return includes[0].o
+        return raw
       }
       case 'object':
         // Leave objects as-is; upstream merge strategy should handle shape

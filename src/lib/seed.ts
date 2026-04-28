@@ -41,7 +41,7 @@ export const seedReportTemplates: ReportTemplate[] = [
         isGenerated: true,
         isCompleted: false,
         generationPrompt: "Generate an assessment tools section. List and briefly describe each formal and informal assessment measure used in the evaluation. Crucially, if the unstructured notes describe any assessment procedures (e.g., 'language sample analysis', 'oral mechanism exam', 'clinical observation', 'parent/caregiver interview', 'questionnaire', 'survey', 'classroom observation'), infer and list them here, even if no formal test names are explicitly given.",
-        ai_directive: "List tests with full names and acronyms. Briefly describe what each test measures."
+        ai_directive: "Emit ONE entry in tools[] for every distinct measure used — formal AND informal. This is mandatory: any uploaded parent questionnaire, caregiver interview, teacher report, classroom observation, language sample, oral mechanism exam, or hearing screening must appear here as its own tools[] entry, even if no standardized test name is given. For each entry: title is the measure's name (e.g. 'Parent Questionnaire — Communication Concerns', 'Classroom Observation', 'CELF-5'); measure_type MUST be one of the enum options in the schema (Standardized Test, Criterion-Referenced, Informal Assessment, Observation, Interview, Questionnaire, Parent/Caregiver Report, Teacher Report, Language Sample, Narrative Assessment, Dynamic Assessment, Records Review, Oral Mechanism Examination, Hearing Screening); purpose briefly describes what the measure assessed."
       },
       {
         id: "sec-assessment-results",
@@ -169,7 +169,7 @@ export const seedReports: Report[] = [
         isGenerated: true,
         isCompleted: true,
         generationPrompt: "Generate an assessment tools section. List and briefly describe each formal and informal assessment measure used in the evaluation. Crucially, if the unstructured notes describe any assessment procedures (e.g., 'language sample analysis', 'oral mechanism exam', 'clinical observation', 'parent/caregiver interview', 'questionnaire', 'survey', 'classroom observation'), infer and list them here, even if no formal test names are explicitly given.",
-        ai_directive: "List tests with full names and acronyms. Briefly describe what each test measures."
+        ai_directive: "Emit ONE entry in tools[] for every distinct measure used — formal AND informal. This is mandatory: any uploaded parent questionnaire, caregiver interview, teacher report, classroom observation, language sample, oral mechanism exam, or hearing screening must appear here as its own tools[] entry, even if no standardized test name is given. For each entry: title is the measure's name (e.g. 'Parent Questionnaire — Communication Concerns', 'Classroom Observation', 'CELF-5'); measure_type MUST be one of the enum options in the schema (Standardized Test, Criterion-Referenced, Informal Assessment, Observation, Interview, Questionnaire, Parent/Caregiver Report, Teacher Report, Language Sample, Narrative Assessment, Dynamic Assessment, Records Review, Oral Mechanism Examination, Hearing Screening); purpose briefly describes what the measure assessed."
       },
       {
         id: "sec-assessment-results",
