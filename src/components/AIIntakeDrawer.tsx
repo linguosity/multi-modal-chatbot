@@ -436,14 +436,13 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button 
-          variant="default" 
-          size="sm"
-          className="flex items-center gap-2"
+        <button
+          type="button"
+          className="wf-btn sm primary"
         >
-          <Brain className="h-4 w-4" />
+          <Brain className="h-3.5 w-3.5" />
           AI Intake
-        </Button>
+        </button>
       </SheetTrigger>
       
       <SheetContent side="right" className="w-[600px] sm:max-w-[600px] bg-[var(--paper)]" aria-describedby="ai-intake-desc">
@@ -496,9 +495,29 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
           {/* Queue */}
           {files.length > 0 && (
             <div>
-              <div className="flex items-baseline justify-between">
+              <div className="flex items-baseline justify-between flex-wrap gap-x-4 gap-y-1">
                 <div className="wf-label bold">Queued · {files.length} file{files.length === 1 ? '' : 's'}</div>
-                <span className="wf-sm">Est. analysis time ~{Math.max(15, files.length * 6)} s</span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ fontFamily: 'var(--font-mono)' }}>
+                    <input
+                      type="checkbox"
+                      checked={replaceMode}
+                      onChange={(e) => setReplaceMode(e.target.checked)}
+                      className="accent-[var(--terracotta)]"
+                    />
+                    Replace existing
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ fontFamily: 'var(--font-mono)' }}>
+                    <input
+                      type="checkbox"
+                      checked={dryRun}
+                      onChange={(e) => setDryRun(e.target.checked)}
+                      className="accent-[var(--terracotta)]"
+                    />
+                    Preview only
+                  </label>
+                  <span className="wf-sm">~{Math.max(15, files.length * 6)} s</span>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2 mt-2">
                 {files.map((fileMeta) => (
@@ -523,66 +542,52 @@ export const AIIntakeDrawer: React.FC<AIIntakeDrawerProps> = ({
 
           <div className="wf-divider" />
 
-          {/* Context note */}
-          <div className="flex flex-col gap-1">
-            <div className="wf-label bold">Tell Linguosity the context (optional)</div>
-            <Textarea
-              id="raw-notes"
-              rows={4}
-              value={rawText}
-              onChange={(e) => setRawText(e.target.value)}
-              placeholder='e.g., "Initial eval, 2nd grade, referred by teacher for intelligibility concerns."'
-              className="resize-none font-mono text-sm bg-[var(--card-surface)] border-[var(--line)] rounded-[3px]"
-              style={{ fontFamily: 'var(--font-mono)' }}
-            />
-          </div>
-
-          {/* Target sections */}
-          {report?.sections && report.sections.length > 0 && (
-            <div>
-              <div className="wf-label bold mb-2">Target sections</div>
-              <div className="wf-box max-h-48 overflow-auto space-y-0.5">
-                {report.sections.map((s) => (
-                  <label key={s.id} className="flex items-start gap-2 text-xs py-0.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 shrink-0 accent-[var(--terracotta)]"
-                      checked={selectedSectionIds.includes(s.id)}
-                      onChange={(e) => {
-                        setSelectedSectionIds(prev => e.target.checked ? Array.from(new Set([...prev, s.id])) : prev.filter(id => id !== s.id))
-                      }}
-                    />
-                    <span className="text-xs leading-tight" style={{ fontFamily: 'var(--font-mono)' }}>{s.title}</span>
-                  </label>
-                ))}
-              </div>
+          {/* Context + Target sections on one row so the form fits in the
+              drawer without scrolling on most viewports. Falls back to a
+              single column on narrow widths. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Context note */}
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="wf-label bold">Tell Linguosity the context (optional)</div>
+              <Textarea
+                id="raw-notes"
+                rows={6}
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+                placeholder='e.g., "Initial eval, 2nd grade, referred by teacher for intelligibility concerns."'
+                className="resize-none font-mono text-sm bg-[var(--card-surface)] border-[var(--line)] rounded-[3px] h-full"
+                style={{ fontFamily: 'var(--font-mono)' }}
+              />
             </div>
-          )}
+
+            {/* Target sections */}
+            {report?.sections && report.sections.length > 0 && (
+              <div className="flex flex-col gap-1 min-w-0">
+                <div className="wf-label bold">Target sections</div>
+                <div className="wf-box flex-1 overflow-auto space-y-0.5" style={{ minHeight: 0, maxHeight: 200 }}>
+                  {report.sections.map((s) => (
+                    <label key={s.id} className="flex items-start gap-2 text-xs py-0.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 shrink-0 accent-[var(--terracotta)]"
+                        checked={selectedSectionIds.includes(s.id)}
+                        onChange={(e) => {
+                          setSelectedSectionIds(prev => e.target.checked ? Array.from(new Set([...prev, s.id])) : prev.filter(id => id !== s.id))
+                        }}
+                      />
+                      <span className="text-xs leading-tight truncate" style={{ fontFamily: 'var(--font-mono)' }}>{s.title}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="wf-divider" />
 
-          {/* Section controls */}
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
-              <input
-                type="checkbox"
-                checked={replaceMode}
-                onChange={(e) => setReplaceMode(e.target.checked)}
-                className="accent-[var(--terracotta)]"
-              />
-              Replace existing content
-            </label>
-
-            <label className="flex items-center gap-2 text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
-              <input
-                type="checkbox"
-                checked={dryRun}
-                onChange={(e) => setDryRun(e.target.checked)}
-                className="accent-[var(--terracotta)]"
-              />
-              Preview only (dry run)
-            </label>
-
+          {/* Action buttons (Replace / Preview toggles moved up to the
+              queued-files row to save vertical space). */}
+          <div>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"

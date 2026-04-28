@@ -1,6 +1,6 @@
 'use client'
 
-import { Save, FileDown, X, Trash2, Mic, Square, Settings as SettingsIcon } from "lucide-react";
+import { Save, FileDown, FileJson, ClipboardCopy, X, Trash2, Mic, Square, Settings as SettingsIcon } from "lucide-react";
 import Link from 'next/link'
 import { BaseModal } from '@/components/ui/base-modal'
 import { Button } from '@/components/ui/button'
@@ -88,6 +88,31 @@ export default function Header() {
   };
 
   const [isExporting, setIsExporting] = useState(false)
+
+  const safeFileBase = () =>
+    (report?.title || 'report').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+
+  const handleDownloadJson = () => {
+    if (!report) return
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${safeFileBase()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCopyJson = async () => {
+    if (!report) return
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(report, null, 2))
+    } catch (e) {
+      console.error('Copy JSON failed', e)
+    }
+  }
 
   const handleExportReport = async (format: 'pdf' | 'docx') => {
     if (!report?.id) return
@@ -226,10 +251,12 @@ export default function Header() {
   const progressPct = totalSections > 0 ? Math.round((completeSections / totalSections) * 100) : 0
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between
+    <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-y-2
                        bg-[#f7f5f0] border-b-[1.5px] border-[#1a1a1a] px-7 py-[18px]">
-      <div className="flex items-center gap-5 min-w-0">
-        <Breadcrumb items={breadcrumbItems} />
+      <div className="flex items-center gap-5 min-w-0 flex-1">
+        <div className="min-w-0 flex-1 truncate">
+          <Breadcrumb items={breadcrumbItems} />
+        </div>
         {/* Progress indicator — only render when we're inside a report.
             User's "compass" for where they are in the work. */}
         {report && totalSections > 0 && (
@@ -250,7 +277,7 @@ export default function Header() {
         )}
       </div>
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
         {report && <StatusPill status={report.status} />}
         {isViewMode && (
           <>
@@ -372,6 +399,16 @@ export default function Header() {
               label: isExporting ? "Exporting..." : "Export as Word",
               icon: <FileDown className="h-4 w-4" />,
               onClick: () => handleExportReport('docx'),
+            },
+            {
+              label: "Export JSON",
+              icon: <FileJson className="h-4 w-4" />,
+              onClick: handleDownloadJson,
+            },
+            {
+              label: "Copy JSON to clipboard",
+              icon: <ClipboardCopy className="h-4 w-4" />,
+              onClick: handleCopyJson,
             },
             {
               label: "Delete Report",

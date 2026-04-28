@@ -46,3 +46,10 @@ wireframes/
 test-case-study/
 test_input/
 scripts/out/
+
+# GitNexus index + cloned source (local-only knowledge graph)
+/.gitnexus/
+/gitnexus/
+
+# Pre-tool backups (e.g. CLAUDE.md.pre-gitnexus)
+*.pre-gitnexus

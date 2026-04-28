@@ -138,9 +138,31 @@ class ProgressToastDispatcher {
       this.notifyHandlers()
     }
 
-    const sectionId = id.split('.')[0]
+    // Section ID is the prefix before the first '.'. The fieldPath itself
+    // can contain dots (e.g. "tools.0.title"), so don't take split[0] when
+    // the id was already a coalesced one.
+    const sectionId = event.sectionId ?? id.split('.')[0]
     const currentCount = this.sectionCounts.get(sectionId) || 0
-    if (currentCount > 0) this.sectionCounts.set(sectionId, currentCount - 1)
+    const nextCount = Math.max(0, currentCount - 1)
+    this.sectionCounts.set(sectionId, nextCount)
+
+    // The individual field-level toast may have been deleted when the
+    // section crossed the coalesce threshold. Once every in-flight update
+    // for that section has completed, mark the coalesced card success
+    // (or surface a failure) and auto-clear it — otherwise it stays
+    // spinning forever.
+    if (nextCount === 0) {
+      const coalescedId = `${sectionId}.coalesced`
+      const coalesced = this.toasts.get(coalescedId)
+      if (coalesced && coalesced.status === 'processing') {
+        coalesced.status = success ? 'success' : 'error'
+        if (!success && event.errors) coalesced.errors = event.errors
+        if (success) {
+          setTimeout(() => this.removeToast(coalescedId), 2500)
+        }
+        this.notifyHandlers()
+      }
+    }
   }
 
   private handleProcessingError(event: ProcessingErrorEvent): void {
